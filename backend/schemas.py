@@ -21,7 +21,8 @@ class Mobility(str, Enum):
 
 class RecoveryRequest(BaseModel):
     trouble: TroubleKind
-    note: str = ""
+    # プロンプトへそのまま渡るため、トークン量が青天井にならないよう上限を設ける
+    note: str = Field(default="", max_length=200)
     area: str = "kyoto-higashiyama"
     minutes_left: int = Field(default=180, ge=15, le=720)
     budget_yen: int = Field(default=6000, ge=0, le=200000)
@@ -67,3 +68,17 @@ class VerifiedPlan(BaseModel):
     total_yen: int
     passed: bool
     issues: list[str]
+
+
+class AdoptRequest(BaseModel):
+    """どの案が実際に採用されたかの記録。
+
+    要件定義書のKPI「トラブル解決率（採用率70%以上）」と
+    「Time to Recovery」を計測するための唯一の導線。
+    """
+
+    request_id: str = Field(max_length=64)
+    plan_index: int = Field(ge=0, le=9)
+    plan_title: str = Field(max_length=100)
+    trouble: TroubleKind
+    time_to_recovery_ms: int = Field(ge=0)

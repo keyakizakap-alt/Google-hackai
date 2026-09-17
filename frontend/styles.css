@@ -309,6 +309,34 @@ li.done .dot { background: var(--ok); }
   border: 1px dashed var(--line); border-radius: var(--r);
 }
 
+.timing {
+  margin: 0; text-align: center;
+  font-size: .78rem; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.adopt {
+  width: 100%; margin-top: 13px; padding: 12px;
+  font: inherit; font-size: .89rem; font-weight: 600;
+  color: var(--ink);
+  background: var(--card-2);
+  border: 1.5px solid var(--dawn);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+
+.adopt:hover:not([disabled]) { background: rgba(255, 154, 92, .14); }
+
+.adopt[disabled] { cursor: default; opacity: .4; }
+
+.adopt.is-on {
+  opacity: 1;
+  color: #2a1608;
+  background: linear-gradient(135deg, var(--dawn-2), var(--dawn));
+  border-color: transparent;
+}
+
 /* ---- footer ---- */
 .foot { margin: 34px auto 30px; text-align: center; color: var(--ink-3); font-size: .78rem; }
 .foot p { margin: 2px 0; }

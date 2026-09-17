@@ -1,12 +1,14 @@
 const $ = (id) => document.getElementById(id);
 
-const state = { trouble: "rain" };
+const state = { trouble: "rain", requestId: null, startedAt: 0, adopted: false };
 
 const STEP_LABEL = {
   assess: "状況把握",
   discover: "候補探索",
   compose: "プラン構成",
   verify: "自己検証",
+  repair: "自己修正",
+  reverify: "再検証",
 };
 
 /* ---------- 入力 ---------- */
@@ -43,6 +45,9 @@ async function run() {
   $("raw-body").innerHTML = "";
   $("plans").innerHTML = "";
   $("trace-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  state.startedAt = performance.now();
+  state.adopted = false;
 
   const body = {
     trouble: state.trouble,
@@ -101,6 +106,7 @@ async function consume(stream, onEvent) {
 
 function handle(name, data) {
   if (name === "start") {
+    state.requestId = data.request_id;
     const el = $("mode");
     el.hidden = false;
     el.textContent =
@@ -158,7 +164,7 @@ function renderDetail(id, detail) {
 
 /* ---------- 結果 ---------- */
 
-function renderPlans({ plans, rejected }) {
+function renderPlans({ plans, rejected, repaired, elapsed_ms }) {
   const host = $("plans");
 
   if (!plans.length) {
@@ -166,7 +172,16 @@ function renderPlans({ plans, rejected }) {
     return;
   }
 
-  host.innerHTML = plans.map(card).join("");
+  // デモモードはミリ秒未満で終わるため、秒表示だと 0.0 秒になってしまう
+  const took = elapsed_ms < 100 ? `${Math.round(elapsed_ms)}ミリ秒` : `${(elapsed_ms / 1000).toFixed(1)}秒`;
+  const repairNote = repaired ? ` / ${repaired}案は自己修正で成立させました` : "";
+  host.innerHTML =
+    `<p class="timing">${took}で${plans.length}案を提示${esc(repairNote)}</p>` +
+    plans.map(card).join("");
+
+  host.querySelectorAll("[data-adopt]").forEach((btn) => {
+    btn.addEventListener("click", () => adopt(btn, plans[Number(btn.dataset.adopt)]));
+  });
 
   const caught = rejected.flatMap((r) => r.issues);
   if (caught.length) {
@@ -179,7 +194,7 @@ function renderPlans({ plans, rejected }) {
   }
 }
 
-function card(p) {
+function card(p, i) {
   return `
     <article class="plan">
       <h3>${esc(p.title)}</h3>
@@ -203,7 +218,35 @@ function card(p) {
           .join("")}
       </ol>
       <p class="why"><strong>今だからこそ</strong>${esc(p.why_now)}</p>
+      <button class="adopt" data-adopt="${i}">このプランにする</button>
     </article>`;
+}
+
+/* ---------- 採用の記録（KPI計測の入口） ---------- */
+
+async function adopt(btn, plan) {
+  if (state.adopted) return;
+  state.adopted = true;
+
+  document.querySelectorAll(".adopt").forEach((b) => (b.disabled = true));
+  btn.textContent = "このプランで向かいます";
+  btn.classList.add("is-on");
+
+  try {
+    await fetch("/api/adopt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        request_id: state.requestId,
+        plan_index: Number(btn.dataset.adopt),
+        plan_title: plan.title,
+        trouble: state.trouble,
+        time_to_recovery_ms: Math.round(performance.now() - state.startedAt),
+      }),
+    });
+  } catch {
+    // 記録は計測用途なので、失敗してもユーザーの行動は妨げない
+  }
 }
 
 function esc(s) {

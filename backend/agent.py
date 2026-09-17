@@ -6,8 +6,11 @@ LLM が担うのは assess と compose のみで、discover と verify は決定
 ハルシネーションした提案がユーザーに届かない構造にしている。
 """
 
+import asyncio
 import json
 import os
+import time
+import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 
@@ -15,9 +18,13 @@ from google import genai
 from google.genai import types
 
 import catalog
+import obs
 from schemas import Constraints, PlanSet, RecoveryRequest
 
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+# 非機能要件の応答3秒/最大5秒に合わせ、1呼び出しあたりで打ち切る
+LLM_TIMEOUT_SEC = float(os.environ.get("LLM_TIMEOUT_SEC", "5"))
+MAX_REPAIR_ROUNDS = 1
 JST = timezone(timedelta(hours=9))
 
 TROUBLE_JA = {
@@ -72,9 +79,51 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-async def _assess(client: genai.Client | None, req: RecoveryRequest) -> Constraints:
+async def _llm_json(
+    client: genai.Client,
+    contents: str,
+    system: str,
+    schema: type,
+    temperature: float,
+    request_id: str,
+):
+    """Gemini を構造化出力で呼ぶ。失敗時は None を返して呼び出し側でフォールバックさせる。
+
+    モデルが拒否したり JSON が壊れると resp.parsed が None になるため、
+    例外だけでなく None も明示的に失敗として扱う。
+    """
+    try:
+        resp = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                    temperature=temperature,
+                ),
+            ),
+            timeout=LLM_TIMEOUT_SEC,
+        )
+    except TimeoutError:
+        obs.warn("llm.timeout", request_id=request_id, timeout_sec=LLM_TIMEOUT_SEC)
+        return None
+    except Exception as e:
+        obs.warn("llm.error", request_id=request_id, error=type(e).__name__, detail=str(e)[:300])
+        return None
+
+    if resp.parsed is None:
+        obs.warn("llm.unparsable", request_id=request_id)
+    return resp.parsed
+
+
+async def _assess(
+    client: genai.Client | None, req: RecoveryRequest, request_id: str
+) -> tuple[Constraints, bool]:
+    """戻り値の bool は Gemini の結果を使えたか（False ならフォールバック）。"""
     if client is None:
-        return _assess_fallback(req)
+        return _assess_fallback(req), False
 
     prompt = f"""状況:
 - 発生したトラブル: {TROUBLE_JA.get(req.trouble.value, req.trouble.value)}
@@ -90,17 +139,8 @@ async def _assess(client: genai.Client | None, req: RecoveryRequest) -> Constrai
 賑やか, ゆったり, 休憩, 体験, 思い出, 予約推奨, 体を温める, 体調回復, ファミリー,
 写真映え, 無料, 散策, 夜, 食事, 交通結節点"""
 
-    resp = await client.aio.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=ASSESS_SYSTEM,
-            response_mime_type="application/json",
-            response_schema=Constraints,
-            temperature=0.3,
-        ),
-    )
-    return resp.parsed
+    parsed = await _llm_json(client, prompt, ASSESS_SYSTEM, Constraints, 0.3, request_id)
+    return (parsed, True) if parsed else (_assess_fallback(req), False)
 
 
 def _assess_fallback(req: RecoveryRequest) -> Constraints:
@@ -129,10 +169,14 @@ def _assess_fallback(req: RecoveryRequest) -> Constraints:
 
 
 async def _compose(
-    client: genai.Client | None, req: RecoveryRequest, c: Constraints, cands: list
-) -> PlanSet:
+    client: genai.Client | None,
+    req: RecoveryRequest,
+    c: Constraints,
+    cands: list,
+    request_id: str,
+) -> tuple[PlanSet, bool]:
     if client is None:
-        return _compose_fallback(cands)
+        return _compose_fallback(cands), False
 
     listing = "\n".join(
         f"- id={s.id} / {s.name} / {s.category} / 徒歩{s.walk_minutes}分 / "
@@ -149,17 +193,8 @@ async def _compose(
 使用可能な候補スポット(このリスト以外は使用禁止):
 {listing}"""
 
-    resp = await client.aio.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=COMPOSE_SYSTEM,
-            response_mime_type="application/json",
-            response_schema=PlanSet,
-            temperature=0.9,
-        ),
-    )
-    return resp.parsed
+    parsed = await _llm_json(client, prompt, COMPOSE_SYSTEM, PlanSet, 0.9, request_id)
+    return (parsed, True) if parsed else (_compose_fallback(cands), False)
 
 
 def _compose_fallback(cands: list) -> PlanSet:
@@ -193,6 +228,75 @@ def _compose_fallback(cands: list) -> PlanSet:
                     for s in picks
                 ],
                 "why_now": why,
+            }
+        )
+    return PlanSet.model_validate({"plans": plans})
+
+
+REPAIR_SYSTEM = """あなたは旅行コンシェルジュAIの「自己修正」担当です。
+先ほど作られたプランが検算で不合格になりました。指摘された理由を解消したプランを作り直してください。
+
+厳守事項:
+- spot_id は必ず候補リストにあるものだけを使う
+- 指摘された理由を確実に潰す。時間超過なら滞在時間を削るか立ち寄り先を減らす。
+  予算超過なら安いスポットに差し替える
+- 不合格になったプランの方向性はできるだけ保ったまま、成立する形に落とす"""
+
+
+async def _repair(
+    client: genai.Client | None,
+    req: RecoveryRequest,
+    c: Constraints,
+    cands: list,
+    failed: list[dict],
+    request_id: str,
+) -> tuple[PlanSet, bool]:
+    """検算に落ちたプランを、落ちた理由を添えて作り直させる。"""
+    if client is None:
+        return _repair_fallback(req, cands, failed), False
+
+    listing = "\n".join(
+        f"- id={s.id} / {s.name} / 徒歩{s.walk_minutes}分 / {s.price_yen}円 / "
+        f"{s.open_hour}-{s.close_hour}時 / tags={','.join(s.tags)}"
+        for s in cands
+    )
+    rejected = "\n".join(
+        f"- 「{f['title']}」不合格の理由: {' / '.join(f['issues'])}" for f in failed
+    )
+    prompt = f"""残り時間: {req.minutes_left}分 / 残予算: {req.budget_yen}円 / 現在{_now_hour()}時台
+状況把握担当の判断: {c.reasoning}
+
+作り直しが必要なプランと理由:
+{rejected}
+
+使用可能な候補スポット(このリスト以外は使用禁止):
+{listing}"""
+
+    parsed = await _llm_json(client, prompt, REPAIR_SYSTEM, PlanSet, 0.5, request_id)
+    return (parsed, True) if parsed else (_repair_fallback(req, cands, failed), False)
+
+
+def _repair_fallback(req: RecoveryRequest, cands: list, failed: list[dict]) -> PlanSet:
+    """デモモード用の自己修正。残り時間と予算に収まるよう機械的に詰め直す。"""
+    plans = []
+    for i, f in enumerate(failed):
+        spot = next((s for s in cands[i:] + cands if s.price_yen <= req.budget_yen), None)
+        if spot is None:
+            continue
+        stay = max(15, min(60, req.minutes_left - spot.walk_minutes))
+        plans.append(
+            {
+                "title": f["title"],
+                "concept": f["concept"],
+                "steps": [
+                    {
+                        "spot_id": spot.id,
+                        "arrive_after_minutes": spot.walk_minutes,
+                        "stay_minutes": stay,
+                        "note": spot.blurb,
+                    }
+                ],
+                "why_now": f["why_now"],
             }
         )
     return PlanSet.model_validate({"plans": plans})
@@ -247,17 +351,35 @@ def _verify(plan, req: RecoveryRequest, allowed: set[str], now_hour: int) -> dic
     }
 
 
-async def run(req: RecoveryRequest) -> AsyncIterator[str]:
+async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncIterator[str]:
     """エージェントループ本体。各段の開始と完了を SSE イベントとして流す。"""
+    request_id = request_id or uuid.uuid4().hex[:16]
+    started = time.perf_counter()
     client = _client()
     now_hour = _now_hour()
     mode = "gemini" if client else "demo"
 
-    yield _sse("start", {"mode": mode, "model": MODEL if client else None, "hour": now_hour})
+    obs.info(
+        "recover.start",
+        request_id=request_id,
+        mode=mode,
+        model=MODEL if client else None,
+        trouble=req.trouble.value,
+        minutes_left=req.minutes_left,
+        budget_yen=req.budget_yen,
+        mobility=req.mobility.value,
+    )
+
+    yield _sse(
+        "start",
+        {"mode": mode, "model": MODEL if client else None, "hour": now_hour, "request_id": request_id},
+    )
 
     # 1. 状況把握
     yield _sse("step", {"id": "assess", "state": "running", "label": "状況を読み解いています"})
-    constraints = await _assess(client, req)
+    with obs.stage("assess", request_id) as s:
+        constraints, by_llm = await _assess(client, req, request_id)
+        s["by_llm"] = by_llm
     yield _sse(
         "step",
         {
@@ -270,7 +392,9 @@ async def run(req: RecoveryRequest) -> AsyncIterator[str]:
 
     # 2. 候補探索（決定的・LLMを通さない）
     yield _sse("step", {"id": "discover", "state": "running", "label": "行ける場所を探しています"})
-    cands = catalog.search(constraints, req.mobility.value, now_hour)
+    with obs.stage("discover", request_id) as s:
+        cands = catalog.search(constraints, req.mobility.value, now_hour)
+        s["candidates"] = len(cands)
     yield _sse(
         "step",
         {
@@ -282,6 +406,7 @@ async def run(req: RecoveryRequest) -> AsyncIterator[str]:
     )
 
     if not cands:
+        obs.warn("recover.no_candidates", request_id=request_id)
         yield _sse(
             "error",
             {"message": "条件に合う候補が見つかりませんでした。時間や予算を広げてください。"},
@@ -290,24 +415,97 @@ async def run(req: RecoveryRequest) -> AsyncIterator[str]:
 
     # 3. プラン構成
     yield _sse("step", {"id": "compose", "state": "running", "label": "逆転プランを組み立て中"})
-    planset = await _compose(client, req, constraints, cands)
+    with obs.stage("compose", request_id) as s:
+        planset, by_llm = await _compose(client, req, constraints, cands, request_id)
+        s["by_llm"] = by_llm
+        s["plans"] = len(planset.plans)
     yield _sse(
         "step",
         {"id": "compose", "state": "done", "label": f"{len(planset.plans)}案を生成"},
     )
 
     # 4. 自己検証（決定的・LLMの出力を検算）
-    yield _sse("step", {"id": "verify", "state": "running", "label": "提案を検算しています"})
     allowed = {s.id for s in cands}
-    verified = [_verify(p, req, allowed, now_hour) for p in planset.plans]
-    caught = sum(len(v["issues"]) for v in verified)
+    yield _sse("step", {"id": "verify", "state": "running", "label": "提案を検算しています"})
+    with obs.stage("verify", request_id) as s:
+        verified = [_verify(p, req, allowed, now_hour) for p in planset.plans]
+        failed = [v for v in verified if not v["passed"]]
+        s["passed"] = len(verified) - len(failed)
+        s["failed"] = len(failed)
     yield _sse(
         "step",
         {
             "id": "verify",
             "state": "done",
-            "label": f"検算完了（{caught}件を補正）" if caught else "検算完了（問題なし）",
+            "label": f"{len(verified) - len(failed)}案が通過 / {len(failed)}案が不合格"
+            if failed
+            else "全案が検算を通過",
         },
     )
 
-    yield _sse("result", {"plans": [v for v in verified if v["passed"]], "rejected": [v for v in verified if not v["passed"]]})
+    # 5. 自己修正（検算に落ちた案だけを、落ちた理由を添えて作り直す）
+    repaired_count = 0
+    for _ in range(MAX_REPAIR_ROUNDS):
+        if not failed:
+            break
+
+        yield _sse(
+            "step",
+            {
+                "id": "repair",
+                "state": "running",
+                "label": f"{len(failed)}案が成立しないため作り直しています",
+            },
+        )
+        with obs.stage("repair", request_id) as s:
+            fixed_set, by_llm = await _repair(client, req, constraints, cands, failed, request_id)
+            s["by_llm"] = by_llm
+        yield _sse(
+            "step",
+            {"id": "repair", "state": "done", "label": f"{len(fixed_set.plans)}案を作り直し"},
+        )
+
+        yield _sse("step", {"id": "reverify", "state": "running", "label": "作り直した案を再検算"})
+        with obs.stage("reverify", request_id) as s:
+            rechecked = [_verify(p, req, allowed, now_hour) for p in fixed_set.plans]
+            recovered = [v for v in rechecked if v["passed"]]
+            failed = [v for v in rechecked if not v["passed"]]
+            s["recovered"] = len(recovered)
+            s["still_failed"] = len(failed)
+        repaired_count = len(recovered)
+        verified = [v for v in verified if v["passed"]] + recovered
+        yield _sse(
+            "step",
+            {
+                "id": "reverify",
+                "state": "done",
+                "label": f"{len(recovered)}案が成立する形に回復"
+                if recovered
+                else "回復できた案はありませんでした",
+            },
+        )
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+    passed = [v for v in verified if v["passed"]]
+
+    obs.info(
+        "recover.done",
+        request_id=request_id,
+        mode=mode,
+        trouble=req.trouble.value,
+        elapsed_ms=elapsed_ms,
+        plans_delivered=len(passed),
+        repaired=repaired_count,
+        rejected=len(failed),
+    )
+
+    yield _sse(
+        "result",
+        {
+            "plans": passed,
+            "rejected": failed,
+            "repaired": repaired_count,
+            "elapsed_ms": elapsed_ms,
+            "request_id": request_id,
+        },
+    )
