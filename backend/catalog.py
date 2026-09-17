@@ -1,13 +1,22 @@
-"""スポットカタログ。
+"""スポットの供給層。
 
-LLM はここに載っているスポットしか提案できない（ハルシネーション防止の要）。
-本番では Google Places API 等の実データに差し替える前提の、同じ形の疑似データ。
-営業時間・料金はデモ用の概算値。
+LLM はここが返したスポットしか提案できない（ハルシネーション防止の要）。
+
+供給元は環境変数 SPOT_SOURCE で切り替える:
+  static (既定) … 下の STATIC_CATALOG を使う
+  places        … Google Places API から取得し、失敗時は static に退避
+
+エージェント側は load() が返す SpotSet だけを見るので、
+供給元が変わっても検索・検算のロジックはそのまま使える。
 """
 
+import os
 from dataclasses import asdict, dataclass
 
+import obs
 from schemas import Constraints
+
+SPOT_SOURCE = os.environ.get("SPOT_SOURCE", "static")
 
 
 @dataclass(frozen=True)
@@ -24,7 +33,7 @@ class Spot:
     blurb: str
 
 
-CATALOG: tuple[Spot, ...] = (
+STATIC_CATALOG: tuple[Spot, ...] = (
     Spot(
         "kyoto-nat-museum",
         "京都国立博物館",
@@ -232,33 +241,68 @@ CATALOG: tuple[Spot, ...] = (
     ),
 )
 
-BY_ID: dict[str, Spot] = {s.id: s for s in CATALOG}
+class SpotSet:
+    """1リクエスト分のスポット集合。
+
+    Places API を使う場合、対象スポットはリクエストごとに変わるため、
+    検索対象と検算時のID照合は必ず同じこの集合を見る必要がある。
+    """
+
+    def __init__(self, spots: list[Spot], source: str):
+        self.spots = spots
+        self.source = source
+        self.by_id = {s.id: s for s in spots}
+
+    def search(self, c: Constraints, mobility: str, now_hour: int) -> list[Spot]:
+        """制約に合うスポットだけを決定的に絞り込む（LLM を通さない）。"""
+        # タクシー/車なら徒歩上限を実質的に緩める
+        reach = c.max_walk_minutes * (3 if mobility in ("taxi", "car") else 1)
+
+        hits = []
+        for s in self.spots:
+            if c.indoor_required and not s.indoor:
+                continue
+            if s.walk_minutes > reach:
+                continue
+            if s.price_yen > c.max_spend_yen:
+                continue
+            if not (s.open_hour <= now_hour < s.close_hour):
+                continue
+            if any(t in s.tags for t in c.avoid_tags):
+                continue
+            hits.append(s)
+
+        def score(s: Spot) -> tuple[int, int]:
+            pref = sum(1 for t in c.prefer_tags if t in s.tags)
+            return (-pref, s.walk_minutes)
+
+        return sorted(hits, key=score)
 
 
-def search(c: Constraints, mobility: str, now_hour: int) -> list[Spot]:
-    """制約に合うスポットだけを決定的に絞り込む（LLM を通さない）。"""
-    # タクシー/車なら徒歩上限を実質的に緩める
-    reach = c.max_walk_minutes * (3 if mobility in ("taxi", "car") else 1)
+async def load(area: str, request_id: str = "") -> SpotSet:
+    """供給元からスポットを取得する。Places が使えなければ static に退避する。"""
+    if SPOT_SOURCE != "places":
+        return SpotSet(list(STATIC_CATALOG), "static")
 
-    hits = []
-    for s in CATALOG:
-        if c.indoor_required and not s.indoor:
-            continue
-        if s.walk_minutes > reach:
-            continue
-        if s.price_yen > c.max_spend_yen:
-            continue
-        if not (s.open_hour <= now_hour < s.close_hour):
-            continue
-        if any(t in s.tags for t in c.avoid_tags):
-            continue
-        hits.append(s)
+    import places  # Places を使うときだけ読み込む
 
-    def score(s: Spot) -> tuple[int, int]:
-        pref = sum(1 for t in c.prefer_tags if t in s.tags)
-        return (-pref, s.walk_minutes)
+    try:
+        spots = await places.fetch(area, request_id)
+    except Exception as e:
+        obs.warn(
+            "spots.places_failed",
+            request_id=request_id,
+            error=type(e).__name__,
+            detail=str(e)[:300],
+        )
+        spots = []
 
-    return sorted(hits, key=score)
+    if not spots:
+        # 実データが取れなければ提案自体が止まるので、静的カタログで継続する
+        obs.warn("spots.fallback_to_static", request_id=request_id, area=area)
+        return SpotSet(list(STATIC_CATALOG), "static-fallback")
+
+    return SpotSet(spots, "places")
 
 
 def as_dict(s: Spot) -> dict:

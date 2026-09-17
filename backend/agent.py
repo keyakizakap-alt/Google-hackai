@@ -1,9 +1,12 @@
 """逆転コンシェルジュの自律エージェントループ。
 
-assess → discover → compose → verify の4段。
-LLM が担うのは assess と compose のみで、discover と verify は決定的に処理する。
+assess → discover → compose → verify →（不合格があれば）repair → reverify。
+LLM が担うのは assess / compose / repair で、discover と verify は決定的に処理する。
 「提案の材料」と「提案の検算」を LLM の外に置くことで、
 ハルシネーションした提案がユーザーに届かない構造にしている。
+
+スポットの供給元（静的カタログ / Places API）は catalog.load() が吸収するため、
+このモジュールは SpotSet だけを見ていればよい。
 """
 
 import asyncio
@@ -302,7 +305,7 @@ def _repair_fallback(req: RecoveryRequest, cands: list, failed: list[dict]) -> P
     return PlanSet.model_validate({"plans": plans})
 
 
-def _verify(plan, req: RecoveryRequest, allowed: set[str], now_hour: int) -> dict:
+def _verify(plan, req: RecoveryRequest, spots, allowed: set[str], now_hour: int) -> dict:
     """LLM の出力を決定的に検算する。ここを通らない提案はユーザーに出さない。"""
     issues: list[str] = []
     steps_out: list[dict] = []
@@ -310,7 +313,7 @@ def _verify(plan, req: RecoveryRequest, allowed: set[str], now_hour: int) -> dic
     spend = 0
 
     for st in plan.steps:
-        spot = catalog.BY_ID.get(st.spot_id)
+        spot = spots.by_id.get(st.spot_id)
         if spot is None:
             issues.append(f"存在しないスポットID({st.spot_id})を検出し除外しました")
             continue
@@ -390,10 +393,13 @@ async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncItera
         },
     )
 
-    # 2. 候補探索（決定的・LLMを通さない）
+    # 2. 候補探索（供給元から取得し、決定的に絞り込む。LLMを通さない）
     yield _sse("step", {"id": "discover", "state": "running", "label": "行ける場所を探しています"})
     with obs.stage("discover", request_id) as s:
-        cands = catalog.search(constraints, req.mobility.value, now_hour)
+        spots = await catalog.load(req.area, request_id)
+        cands = spots.search(constraints, req.mobility.value, now_hour)
+        s["source"] = spots.source
+        s["pool"] = len(spots.spots)
         s["candidates"] = len(cands)
     yield _sse(
         "step",
@@ -401,7 +407,7 @@ async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncItera
             "id": "discover",
             "state": "done",
             "label": f"候補{len(cands)}件を抽出",
-            "detail": {"spots": [catalog.as_dict(s) for s in cands]},
+            "detail": {"spots": [catalog.as_dict(s) for s in cands], "source": spots.source},
         },
     )
 
@@ -428,7 +434,7 @@ async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncItera
     allowed = {s.id for s in cands}
     yield _sse("step", {"id": "verify", "state": "running", "label": "提案を検算しています"})
     with obs.stage("verify", request_id) as s:
-        verified = [_verify(p, req, allowed, now_hour) for p in planset.plans]
+        verified = [_verify(p, req, spots, allowed, now_hour) for p in planset.plans]
         failed = [v for v in verified if not v["passed"]]
         s["passed"] = len(verified) - len(failed)
         s["failed"] = len(failed)
@@ -467,7 +473,7 @@ async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncItera
 
         yield _sse("step", {"id": "reverify", "state": "running", "label": "作り直した案を再検算"})
         with obs.stage("reverify", request_id) as s:
-            rechecked = [_verify(p, req, allowed, now_hour) for p in fixed_set.plans]
+            rechecked = [_verify(p, req, spots, allowed, now_hour) for p in fixed_set.plans]
             recovered = [v for v in rechecked if v["passed"]]
             failed = [v for v in rechecked if not v["passed"]]
             s["recovered"] = len(recovered)

@@ -58,13 +58,49 @@ Google Cloud Agentic AI Hackathon 応募用プロトタイプ。
 backend/
   main.py       FastAPI。SSEでエージェントの各段を逐次配信する
   agent.py      自律ループ本体（状況把握→候補探索→構成→検証→修正）
-  catalog.py    スポットカタログと決定的な絞り込み
+  catalog.py    スポット供給層。静的カタログと SpotSet、供給元の切り替え
+  places.py     Google Places API アダプタ（レスポンス→Spot の変換層）
   schemas.py    リクエスト/LLM構造化出力のスキーマ
   obs.py        構造化ログ（Cloud Logging の jsonPayload 形式）
   ratelimit.py  IP単位の簡易レート制限
 frontend/       スマホ前提の単一ページUI（依存ライブラリなし）
+tests/          実APIを叩かずに動かせる検証
 Dockerfile      Cloud Run 用
 ```
+
+## スポットの供給元を差し替える
+
+`SPOT_SOURCE` で切り替える。エージェント側は `catalog.load()` が返す `SpotSet`
+だけを見ているので、供給元が変わっても検索・検算のロジックは変わらない。
+
+```bash
+SPOT_SOURCE=places PLACES_API_KEY=... uvicorn main:app --app-dir backend
+```
+
+**Places API が落ちた場合や未設定の場合は静的カタログへ自動退避する。**
+旅先でトラブっている人に対して「データが取れないので提案できません」は
+成立しないため、提案を止めない方を優先している。退避したことは
+`spots.fallback_to_static` として構造化ログに残り、UIの候補一覧にも
+`source` が出る。
+
+### Places API だけでは Spot を埋められない3項目
+
+`places.py` で補っている。ここは実データ化の際に精度を詰める余地が残っている。
+
+| 項目 | 補い方 | 限界 |
+|---|---|---|
+| `indoor` | Places に屋内/屋外のフィールドが無いため `types` から推定 | 判断できない type は屋外扱い（雨天時に濡れる場所へ誘導する方が損害が大きいため安全側に倒している） |
+| `walk_minutes` | エリア中心からの直線距離に迂回係数1.3を掛けて徒歩分に換算 | 実経路ではない。精度が要るなら Routes API に差し替える |
+| `price_yen` | `priceLevel`（5段階の列挙型）を代表額にマッピング | 金額ではないので概算。飲食以外では未設定のことが多い |
+
+営業時間が取得できなかったスポットは除外せず「営業時間未確認」タグを付けて通す。
+
+### 課金上の注意
+
+`regularOpeningHours` と `priceLevel` は **Enterprise SKU**、`editorialSummary` は
+**Atmosphere SKU** を発生させる（フィールドマスクに含めた最上位のティアで課金される）。
+`PLACES_USE_SUMMARY=0` で `editorialSummary` を外すと1段安いSKUに落とせる。
+取得結果はエリア単位で TTL キャッシュし、リクエストごとに叩かないようにしている。
 
 - 実行基盤: **Cloud Run**
 - AI: **Gemini API**（`google-genai` SDK、構造化出力で `response_schema` にPydanticモデルを渡す）
@@ -89,6 +125,11 @@ http://localhost:8080 を開く。
 | `LLM_TIMEOUT_SEC` | `5` | Gemini 1呼び出しあたりの打ち切り時間。超過時はフォールバック |
 | `RATE_MAX_CALLS` | `10` | 1IPあたりの上限回数 |
 | `RATE_WINDOW_SEC` | `60` | レート制限の集計窓（秒） |
+| `SPOT_SOURCE` | `static` | `static` / `places` |
+| `PLACES_API_KEY` | なし | `SPOT_SOURCE=places` のとき必須 |
+| `PLACES_USE_SUMMARY` | `1` | `0` で editorialSummary を外し、安いSKUにする |
+| `PLACES_CACHE_TTL_SEC` | `3600` | Places 取得結果のキャッシュ保持秒数 |
+| `PLACES_RADIUS_M` | `1500` | 検索半径 |
 
 ### デモモード
 
@@ -164,10 +205,20 @@ Cloud Armor か Memorystore に寄せる。
 
 ## 検証済みの動作
 
-- 4種のトラブル（雨・運休・混雑・体調不良）で重複のない3案が生成される
+```bash
+python3 tests/test_places_mapping.py   # Places 変換層（実APIキー不要）
+```
+
+- 5種のトラブル × 残り時間2パターンの計10通りで、例外なく3案が生成される
 - 自己検証が弾く4パターン（存在しないスポットID・制約外スポット・時間超過・営業時間外）
 - 残り時間30分で初回3案が全て不合格になり、自己修正で3案とも成立する形に回復する
 - `note` が200文字を超えると422で拒否される
 - 同一IPから上限を超えると429を返す
 - Gemini呼び出しのタイムアウト・応答不正時にルールベースへフォールバックする
   （`resp.parsed` が `None` のケースを含む）
+- `SPOT_SOURCE=places` でキー未設定時、静的カタログへ退避して提案が止まらない
+- Places 変換層20項目（屋内判定・定休日除外・日跨ぎ営業・priceLevel換算など）
+
+**未検証**: Places API の実エンドポイントへの疎通。変換層はモックしたレスポンスで
+検証済みだが、実際のフィールド構成との突き合わせは `PLACES_API_KEY` を設定して
+確認する必要がある。
