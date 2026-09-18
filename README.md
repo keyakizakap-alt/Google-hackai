@@ -143,22 +143,24 @@ APIキーを設定すると1段目と3段目がGeminiに切り替わる。
 
 ## Cloud Run へのデプロイ
 
-APIキーは `--set-env-vars` で渡さないこと。シェル履歴とサービス設定に平文で残り、
-プロジェクトの閲覧権限を持つ全員から見える。Secret Manager 経由で渡す。
+ローカルに gcloud が無くても、**Cloud Shell なら認証済みの環境がブラウザで開く**ので
+そのままデプロイできる。
+
+[Cloud Shell で開く](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/keyakizakap-alt/Google-hackai&cloudshell_git_branch=claude/product-development-inquiry-616p0t)
 
 ```bash
-# 1. キーをSecret Managerに登録
-echo -n "$GEMINI_API_KEY" | gcloud secrets create gemini-api-key --data-file=-
+gcloud config set project YOUR_PROJECT_ID
 
-# 2. デプロイ（キーはシークレット参照、費用の上限として max-instances を必ず設定）
-gcloud run deploy reverse-concierge \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --max-instances 3 \
-  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
-  --set-env-vars GEMINI_MODEL=gemini-3.5-flash
+./deploy.sh                       # デモモード（Gemini なし）で公開
+GEMINI_API_KEY=xxx ./deploy.sh    # キーを Secret Manager に登録して公開
 ```
+
+`deploy.sh` は API の有効化、シークレットの登録、Cloud Run のランタイム
+サービスアカウントへの権限付与までを行う。
+
+APIキーを `--set-env-vars` で渡してはいけない。シェル履歴とサービス設定に平文で残り、
+プロジェクトの閲覧権限を持つ全員から見えるため、スクリプトは Secret Manager 経由で渡す。
+`--max-instances 3` は公開URLを第三者に叩かれたときの費用の上限なので外さないこと。
 
 ### 公開時のコスト保護
 
