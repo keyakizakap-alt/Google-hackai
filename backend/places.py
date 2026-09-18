@@ -7,7 +7,7 @@ Places API だけでは Spot を埋めきれない項目が3つあり、ここ�
   indoor        Places に屋内/屋外のフィールドが存在しないため types から推定する。
                 「屋内と判定を誤る」と雨天時に濡れる場所へ誘導してしまうので、
                 判断できない type は屋外扱いにする（安全側に倒す）。
-  walk_minutes  Places は座標しか返さないため、エリア中心からの直線距離を
+  travel_minutes  Places は座標しか返さないため、エリア中心からの直線距離を
                 徒歩分に換算している。実経路ではないので、正確な値が要る場合は
                 Routes API に差し替える。
   price_yen     Places の priceLevel は5段階の列挙型で金額ではない。
@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 import obs
+import spots_data
 from catalog import Spot
 
 ENDPOINT = "https://places.googleapis.com/v1/places:searchNearby"
@@ -37,9 +38,9 @@ CACHE_TTL_SEC = int(os.environ.get("PLACES_CACHE_TTL_SEC", "3600"))
 RADIUS_M = float(os.environ.get("PLACES_RADIUS_M", "1500"))
 TIMEOUT_SEC = float(os.environ.get("PLACES_TIMEOUT_SEC", "6"))
 
-# エリア中心。walk_minutes の起点にもなる
+# エリア中心。travel_minutes の起点にもなる。都道府県の拠点駅を使う
 AREAS: dict[str, tuple[float, float]] = {
-    "kyoto-higashiyama": (35.0036, 135.7788),
+    code: (lat, lng) for code, (_, _, lat, lng) in spots_data.AREAS.items()
 }
 
 # 取得対象。屋内で時間を潰せる業種を優先している
@@ -103,7 +104,7 @@ TAG_BY_TYPE = {
 _cache: dict[str, tuple[float, list[Spot]]] = {}
 
 
-def _walk_minutes(origin: tuple[float, float], lat: float, lng: float) -> int:
+def _travel_minutes(origin: tuple[float, float], lat: float, lng: float) -> int:
     """直線距離を徒歩分に換算する。実経路ではないので迂回係数を掛ける。"""
     r = 6371000.0
     p1, p2 = math.radians(origin[0]), math.radians(lat)
@@ -176,7 +177,7 @@ def _to_spot(place: dict, origin: tuple[float, float]) -> Spot | None:
         name=name,
         category=category,
         indoor=indoor,
-        walk_minutes=_walk_minutes(origin, loc["latitude"], loc["longitude"]),
+        travel_minutes=_travel_minutes(origin, loc["latitude"], loc["longitude"]),
         open_hour=open_h,
         close_hour=close_h,
         price_yen=price,

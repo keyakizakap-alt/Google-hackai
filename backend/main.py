@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import agent
 import obs
 import ratelimit
+import spots_data
 from schemas import AdoptRequest, RecoveryRequest
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
@@ -25,6 +26,15 @@ def _client_ip(request: Request) -> str:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok", "mode": "gemini" if os.environ.get("GEMINI_API_KEY") else "demo"}
+
+
+@app.get("/api/areas")
+def areas() -> list[dict]:
+    """UI のエリア選択に出す都道府県一覧。"""
+    return [
+        {"code": code, "name": name, "hub": hub}
+        for code, (name, hub, _, _) in spots_data.AREAS.items()
+    ]
 
 
 @app.post("/api/recover")

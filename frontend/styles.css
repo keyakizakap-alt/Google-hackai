@@ -128,6 +128,12 @@ h1 { font-size: 1.3rem; margin: 0; letter-spacing: .02em; }
   background: linear-gradient(135deg, rgba(255, 154, 92, .16), rgba(255, 196, 107, .07));
 }
 
+.area select { font-size: .95rem; padding: 12px; }
+
+.area-hint {
+  margin: 8px 0 0; font-size: .76rem; color: var(--ink-3);
+}
+
 .note { display: block; margin-top: 12px; }
 .note span { display: block; font-size: .76rem; color: var(--ink-3); margin-bottom: 5px; }
 

@@ -43,9 +43,12 @@ ASSESS_SYSTEM = """あなたは旅行中のトラブル対応を専門とする�
 ユーザーが今どういう状態に置かれているかを読み取り、代替プランを探すための制約条件を決めてください。
 
 判断の指針:
+- max_travel_minutes は「その都道府県の拠点駅からの移動時間の上限(分)」。
+  県内を公共交通で動く前提なので、30〜120分の範囲で決める
 - 雨・体調不良なら indoor_required を true にする
-- 体調不良なら max_walk_minutes を短く(10分以内)、予算も抑えめにする
-- 電車が止まっている場合、徒歩圏で時間を潰せる場所が要るので indoor_required を true 寄りにする
+- 体調不良なら max_travel_minutes を短く(30分以内)、予算も抑えめにする
+- 電車が止まっている場合は遠出できないので max_travel_minutes を45分以内にし、
+  indoor_required を true 寄りにする
 - 混雑が理由なら avoid_tags に "混雑しやすい" を入れる
 - prefer_tags には「その状況だからこそ価値が上がるタグ」を入れる(雨なら "雨でも快適" など)
 - max_spend_yen は残予算を全部使い切らず、1スポットあたりの上限として現実的な額にする
@@ -150,7 +153,8 @@ def _assess_fallback(req: RecoveryRequest) -> Constraints:
     """APIキーなしのデモモード用。ルールベースで同じ形の制約を作る。"""
     t = req.trouble.value
     indoor = t in ("rain", "unwell", "transit_down")
-    walk = 10 if t == "unwell" else (15 if t == "transit_down" else 25)
+    # 都道府県スケールの移動時間。体調不良ほど近場に、運休時は遠出させない
+    walk = 30 if t == "unwell" else (45 if t == "transit_down" else 90)
     avoid = ["混雑しやすい"] if t == "crowded" else []
     prefer = {
         "rain": ["雨でも快適", "屋内"],
@@ -161,13 +165,13 @@ def _assess_fallback(req: RecoveryRequest) -> Constraints:
     }.get(t, ["雨でも快適"])
     return Constraints(
         indoor_required=indoor,
-        max_walk_minutes=walk,
+        max_travel_minutes=walk,
         max_spend_yen=max(500, req.budget_yen // 2),
         avoid_tags=avoid,
         prefer_tags=prefer,
         reasoning=f"{TROUBLE_JA.get(t, t)}のため、"
         + ("屋内で" if indoor else "")
-        + f"徒歩{walk}分以内・1スポット{max(500, req.budget_yen // 2)}円以内に絞り込みました。",
+        + f"移動{walk}分以内・1スポット{max(500, req.budget_yen // 2)}円以内に絞り込みました。",
     )
 
 
@@ -182,7 +186,7 @@ async def _compose(
         return _compose_fallback(cands), False
 
     listing = "\n".join(
-        f"- id={s.id} / {s.name} / {s.category} / 徒歩{s.walk_minutes}分 / "
+        f"- id={s.id} / {s.name} / {s.category} / 移動{s.travel_minutes}分 / "
         f"{s.price_yen}円 / {s.open_hour}-{s.close_hour}時 / tags={','.join(s.tags)} / {s.blurb}"
         for s in cands
     )
@@ -224,7 +228,7 @@ def _compose_fallback(cands: list) -> PlanSet:
                 "steps": [
                     {
                         "spot_id": s.id,
-                        "arrive_after_minutes": s.walk_minutes,
+                        "arrive_after_minutes": s.travel_minutes,
                         "stay_minutes": 60,
                         "note": s.blurb,
                     }
@@ -259,7 +263,7 @@ async def _repair(
         return _repair_fallback(req, cands, failed), False
 
     listing = "\n".join(
-        f"- id={s.id} / {s.name} / 徒歩{s.walk_minutes}分 / {s.price_yen}円 / "
+        f"- id={s.id} / {s.name} / 移動{s.travel_minutes}分 / {s.price_yen}円 / "
         f"{s.open_hour}-{s.close_hour}時 / tags={','.join(s.tags)}"
         for s in cands
     )
@@ -286,7 +290,7 @@ def _repair_fallback(req: RecoveryRequest, cands: list, failed: list[dict]) -> P
         spot = next((s for s in cands[i:] + cands if s.price_yen <= req.budget_yen), None)
         if spot is None:
             continue
-        stay = max(15, min(60, req.minutes_left - spot.walk_minutes))
+        stay = max(15, min(60, req.minutes_left - spot.travel_minutes))
         plans.append(
             {
                 "title": f["title"],
@@ -294,7 +298,7 @@ def _repair_fallback(req: RecoveryRequest, cands: list, failed: list[dict]) -> P
                 "steps": [
                     {
                         "spot_id": spot.id,
-                        "arrive_after_minutes": spot.walk_minutes,
+                        "arrive_after_minutes": spot.travel_minutes,
                         "stay_minutes": stay,
                         "note": spot.blurb,
                     }

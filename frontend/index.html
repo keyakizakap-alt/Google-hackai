@@ -22,8 +22,16 @@
 </header>
 
 <main>
+  <section class="panel" aria-labelledby="t-area">
+    <h2 id="t-area">1 — いまどこにいますか</h2>
+    <label class="sel area" for="area">
+      <select id="area"></select>
+    </label>
+    <p class="area-hint" id="area-hint"></p>
+  </section>
+
   <section class="panel" aria-labelledby="t-trouble">
-    <h2 id="t-trouble">1 — 何が起きましたか</h2>
+    <h2 id="t-trouble">2 — 何が起きましたか</h2>
     <div class="troubles" role="group" aria-label="トラブルの種類">
       <button class="trouble is-on" data-trouble="rain"><span>☔</span>雨が降ってきた</button>
       <button class="trouble" data-trouble="transit_down"><span>🚫</span>電車が止まった</button>
@@ -38,7 +46,7 @@
   </section>
 
   <section class="panel" aria-labelledby="t-ctx">
-    <h2 id="t-ctx">2 — いまの条件</h2>
+    <h2 id="t-ctx">3 — いまの条件</h2>
     <div class="ctx">
       <label>
         <span>残り時間 <b id="v-time">180</b>分</span>

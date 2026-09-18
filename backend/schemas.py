@@ -23,7 +23,7 @@ class RecoveryRequest(BaseModel):
     trouble: TroubleKind
     # プロンプトへそのまま渡るため、トークン量が青天井にならないよう上限を設ける
     note: str = Field(default="", max_length=200)
-    area: str = "kyoto-higashiyama"
+    area: str = Field(default="kyoto", max_length=32)
     minutes_left: int = Field(default=180, ge=15, le=720)
     budget_yen: int = Field(default=6000, ge=0, le=200000)
     mobility: Mobility = Mobility.walk
@@ -34,7 +34,8 @@ class Constraints(BaseModel):
     """Step 1 の出力。エージェントが状況から導いた制約。"""
 
     indoor_required: bool
-    max_walk_minutes: int = Field(ge=0, le=60)
+    # 都道府県スケールの移動を含むため上限は広く取る（東山の徒歩圏前提ではない）
+    max_travel_minutes: int = Field(ge=0, le=240)
     max_spend_yen: int = Field(ge=0)
     avoid_tags: list[str]
     prefer_tags: list[str]

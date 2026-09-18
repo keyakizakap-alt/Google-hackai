@@ -56,17 +56,35 @@ Google Cloud Agentic AI Hackathon 応募用プロトタイプ。
 
 ```
 backend/
-  main.py       FastAPI。SSEでエージェントの各段を逐次配信する
-  agent.py      自律ループ本体（状況把握→候補探索→構成→検証→修正）
-  catalog.py    スポット供給層。静的カタログと SpotSet、供給元の切り替え
-  places.py     Google Places API アダプタ（レスポンス→Spot の変換層）
-  schemas.py    リクエスト/LLM構造化出力のスキーマ
-  obs.py        構造化ログ（Cloud Logging の jsonPayload 形式）
-  ratelimit.py  IP単位の簡易レート制限
-frontend/       スマホ前提の単一ページUI（依存ライブラリなし）
-tests/          実APIを叩かずに動かせる検証
-Dockerfile      Cloud Run 用
+  main.py        FastAPI。SSEでエージェントの各段を逐次配信する
+  agent.py       自律ループ本体（状況把握→候補探索→構成→検証→修正）
+  catalog.py     スポット供給層。SpotSet と供給元の切り替え
+  spots_data.py  全国のスポットデータ（47都道府県）
+  places.py      Google Places API アダプタ（レスポンス→Spot の変換層）
+  schemas.py     リクエスト/LLM構造化出力のスキーマ
+  obs.py         構造化ログ（Cloud Logging の jsonPayload 形式）
+  ratelimit.py   IP単位の簡易レート制限
+frontend/        スマホ前提の単一ページUI（依存ライブラリなし）
+tests/           実APIを叩かずに動かせる検証
+Dockerfile       Cloud Run 用
 ```
+
+## スポットデータ
+
+47都道府県 × 5件（定番の観光地 / 穴場 / ご飯どころ / 遊び場 / 拠点駅近くの休憩先）。
+京都はデモの主舞台として近距離帯を厚くしてあり、全体で248件。
+
+拠点駅近くの休憩先を全県に必ず1件置いているのは、**体調不良や運行停止で
+遠くへ動けないとき**に候補が空になるのを防ぐため。これが無いと、移動手段が徒歩
+のみの県で提案が成立しなくなる。
+
+`travel_minutes` は都道府県の拠点駅からの移動分数で、徒歩前提ではない
+（県内を公共交通で動く想定を含む）。移動手段によって到達範囲が変わる:
+徒歩 ×1 / 公共交通 ×2 / タクシー・車 ×3。
+
+**営業時間・料金・移動時間は概算のサンプル値**であり、実在の施設について
+正確な値を保証するものではない。実データが必要なら `SPOT_SOURCE=places` で
+Google Places API に切り替える。
 
 ## スポットの供給元を差し替える
 
@@ -211,7 +229,9 @@ Cloud Armor か Memorystore に寄せる。
 python3 tests/test_places_mapping.py   # Places 変換層（実APIキー不要）
 ```
 
-- 5種のトラブル × 残り時間2パターンの計10通りで、例外なく3案が生成される
+- 全47都道府県 × 6シナリオ（トラブル種別と移動手段の組み合わせ）の282通りで、
+  候補ゼロになるエリアが無い
+- 残り時間30分・徒歩の条件では全47都道府県で自己修正が発火し、成立する形に回復する
 - 自己検証が弾く4パターン（存在しないスポットID・制約外スポット・時間超過・営業時間外）
 - 残り時間30分で初回3案が全て不合格になり、自己修正で3案とも成立する形に回復する
 - `note` が200文字を超えると422で拒否される

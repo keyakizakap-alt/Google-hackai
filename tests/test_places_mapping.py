@@ -10,7 +10,7 @@ import places  # noqa: E402
 
 JST = timezone(timedelta(hours=9))
 TODAY = (datetime.now(JST).weekday() + 1) % 7  # Places の day は 0=日曜
-ORIGIN = places.AREAS["kyoto-higashiyama"]
+ORIGIN = places.AREAS["kyoto"]
 
 PAYLOAD = {
     "places": [
@@ -74,7 +74,7 @@ by_id = {s.id: s for s in spots}
 print(f"変換結果: {len(spots)}件 (入力6件)\n")
 for s in spots:
     print(f"  {s.name:12} indoor={str(s.indoor):5} {s.open_hour:2}-{s.close_hour:2}時 "
-          f"徒歩{s.walk_minutes:2}分 {s.price_yen:5}円 {s.category:10} {','.join(s.tags)}")
+          f"徒歩{s.travel_minutes:2}分 {s.price_yen:5}円 {s.category:10} {','.join(s.tags)}")
 
 print()
 fails = []
@@ -101,7 +101,7 @@ check("closeなし=24時間営業", (by_id["ChIJ_park"].open_hour, by_id["ChIJ_p
 check("日跨ぎ営業はclose=24に丸める", by_id["ChIJ_late_bar"].close_hour == 24)
 check("editorialSummaryがblurbに入る", by_id["ChIJ_museum"].blurb == "近代美術を集めた市立美術館。")
 check("summary無しでもblurbが埋まる", bool(by_id["ChIJ_park"].blurb))
-check("walk_minutesが正の整数", all(s.walk_minutes >= 1 for s in spots))
+check("travel_minutesが正の整数", all(s.travel_minutes >= 1 for s in spots))
 check("tagsに重複がない", all(len(s.tags) == len(set(s.tags)) for s in spots))
 
 # SpotSet と組み合わせて、検算のID照合が Places 由来のIDで動くか
@@ -109,7 +109,8 @@ import catalog  # noqa: E402
 from schemas import Constraints  # noqa: E402
 
 ss = catalog.SpotSet(spots, "places")
-c = Constraints(indoor_required=True, max_walk_minutes=30, max_spend_yen=5000,
+# 拠点駅起点の都道府県スケールに合わせた上限
+c = Constraints(indoor_required=True, max_travel_minutes=90, max_spend_yen=5000,
                 avoid_tags=[], prefer_tags=["雨でも快適"], reasoning="test")
 hits = ss.search(c, "walk", 14)
 print()

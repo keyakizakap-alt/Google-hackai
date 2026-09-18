@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 
-const state = { trouble: "rain", requestId: null, startedAt: 0, adopted: false };
+const state = { trouble: "rain", area: "kyoto", requestId: null, startedAt: 0, adopted: false };
 
 const STEP_LABEL = {
   assess: "状況把握",
@@ -30,6 +30,34 @@ const bind = (input, out, fmt) => {
 bind($("minutes"), $("v-time"), (v) => v);
 bind($("budget"), $("v-budget"), (v) => Number(v).toLocaleString("ja-JP"));
 
+/* ---------- エリア ---------- */
+
+let AREAS = [];
+
+(async function loadAreas() {
+  const sel = $("area");
+  try {
+    const res = await fetch("/api/areas");
+    AREAS = await res.json();
+  } catch {
+    // 一覧が取れなくても既定エリアで動かせるようにしておく
+    AREAS = [{ code: "kyoto", name: "京都府", hub: "京都" }];
+  }
+  sel.innerHTML = AREAS.map(
+    (a) => `<option value="${esc(a.code)}">${esc(a.name)}</option>`
+  ).join("");
+  sel.value = state.area;
+  syncArea();
+})();
+
+function syncArea() {
+  state.area = $("area").value;
+  const a = AREAS.find((x) => x.code === state.area);
+  $("area-hint").textContent = a ? `${a.hub}を起点に探します` : "";
+}
+
+$("area").addEventListener("change", syncArea);
+
 /* ---------- 実行 ---------- */
 
 $("go").addEventListener("click", run);
@@ -51,6 +79,7 @@ async function run() {
 
   const body = {
     trouble: state.trouble,
+    area: state.area,
     note: $("note").value.trim(),
     minutes_left: Number($("minutes").value),
     budget_yen: Number($("budget").value),
@@ -148,7 +177,7 @@ function renderDetail(id, detail) {
       <p>${esc(detail.reasoning)}</p>
       <ul class="chips">
         <li>${detail.indoor_required ? "屋内必須" : "屋外可"}</li>
-        <li>徒歩${detail.max_walk_minutes}分以内</li>
+        <li>移動${detail.max_travel_minutes}分以内</li>
         <li>1件${Number(detail.max_spend_yen).toLocaleString("ja-JP")}円以内</li>
         ${detail.prefer_tags.map((t) => `<li>優先: ${esc(t)}</li>`).join("")}
         ${detail.avoid_tags.map((t) => `<li>回避: ${esc(t)}</li>`).join("")}
