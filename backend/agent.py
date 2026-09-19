@@ -22,6 +22,7 @@ from google.genai import types
 
 import catalog
 import obs
+import signals
 from schemas import Constraints, PlanSet, RecoveryRequest
 
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
@@ -52,6 +53,8 @@ ASSESS_SYSTEM = """あなたは旅行中のトラブル対応を専門とする�
 - 混雑が理由なら avoid_tags に "混雑しやすい" を入れる
 - prefer_tags には「その状況だからこそ価値が上がるタグ」を入れる(雨なら "雨でも快適" など)
 - max_spend_yen は残予算を全部使い切らず、1スポットあたりの上限として現実的な額にする
+- 残り時間が短いときは max_travel_minutes をその1/3程度まで下げる。
+  移動で時間を使い切ると現地で何もできない
 
 reasoning には、なぜその制約にしたのかを日本語1〜2文で簡潔に書いてください。"""
 
@@ -67,6 +70,8 @@ COMPOSE_SYSTEM = """あなたは旅行中のトラブル対応を専門とする
 - title は15文字以内のキャッチーな日本語
 - 候補が少なく3案を作ると内容が重複する場合は、無理に3案にせず作れる数だけ返す
 - 同じスポットを複数のプランの主役にしない
+- 残り時間が60分を切る場合は立ち寄り先を1箇所に絞り、移動が短い候補を優先する。
+  「移動x分 + 滞在y分」が残り時間を超えないこと
 
 トラブルを我慢させるのではなく、それがあったから得られる体験に変換してください。"""
 
@@ -124,17 +129,30 @@ async def _llm_json(
     return resp.parsed
 
 
+def _situation_lines(sit: signals.Situation) -> str:
+    """外部シグナルをプロンプトに足す行。何も取れていなければ空。"""
+    lines = []
+    if sit.weather_text:
+        lines.append(f"- 外部APIが検知した天気: {sit.weather_text}")
+    if sit.transit_text:
+        lines.append(f"- 外部APIが検知した運行状況: {sit.transit_text}")
+    return ("\n" + "\n".join(lines)) if lines else ""
+
+
 async def _assess(
-    client: genai.Client | None, req: RecoveryRequest, request_id: str
+    client: genai.Client | None,
+    req: RecoveryRequest,
+    sit: signals.Situation,
+    request_id: str,
 ) -> tuple[Constraints, bool]:
     """戻り値の bool は Gemini の結果を使えたか（False ならフォールバック）。"""
     if client is None:
-        return _assess_fallback(req), False
+        return _assess_fallback(req, sit), False
 
     prompt = f"""状況:
 - 発生したトラブル: {TROUBLE_JA.get(req.trouble.value, req.trouble.value)}
 - ユーザーの補足: {req.note or "(なし)"}
-- 現在いるエリア: {req.area}
+- 現在いるエリア: {req.area}{_situation_lines(sit)}
 - 残り時間: {req.minutes_left}分
 - 残予算: {req.budget_yen}円
 - 使える移動手段: {req.mobility.value}
@@ -146,15 +164,20 @@ async def _assess(
 写真映え, 無料, 散策, 夜, 食事, 交通結節点"""
 
     parsed = await _llm_json(client, prompt, ASSESS_SYSTEM, Constraints, 0.3, request_id)
-    return (parsed, True) if parsed else (_assess_fallback(req), False)
+    return (parsed, True) if parsed else (_assess_fallback(req, sit), False)
 
 
-def _assess_fallback(req: RecoveryRequest) -> Constraints:
+def _assess_fallback(req: RecoveryRequest, sit: signals.Situation | None = None) -> Constraints:
     """APIキーなしのデモモード用。ルールベースで同じ形の制約を作る。"""
     t = req.trouble.value
     indoor = t in ("rain", "unwell", "transit_down")
+    # 申告が「雨」以外でも、外部APIが雨雪を検知していれば屋内に寄せる
+    if sit and sit.weather in ("rain", "snow"):
+        indoor = True
     # 都道府県スケールの移動時間。体調不良ほど近場に、運休時は遠出させない
-    walk = 30 if t == "unwell" else (45 if t == "transit_down" else 90)
+    base = 30 if t == "unwell" else (45 if t == "transit_down" else 90)
+    # 残り時間の大半を移動に使うと現地で何もできない。1/3を上限の目安にする
+    walk = min(base, max(5, req.minutes_left // 3))
     avoid = ["混雑しやすい"] if t == "crowded" else []
     prefer = {
         "rain": ["雨でも快適", "屋内"],
@@ -183,7 +206,7 @@ async def _compose(
     request_id: str,
 ) -> tuple[PlanSet, bool]:
     if client is None:
-        return _compose_fallback(cands), False
+        return _compose_fallback(req, cands), False
 
     listing = "\n".join(
         f"- id={s.id} / {s.name} / {s.category} / 移動{s.travel_minutes}分 / "
@@ -201,25 +224,47 @@ async def _compose(
 {listing}"""
 
     parsed = await _llm_json(client, prompt, COMPOSE_SYSTEM, PlanSet, 0.9, request_id)
-    return (parsed, True) if parsed else (_compose_fallback(cands), False)
+    return (parsed, True) if parsed else (_compose_fallback(req, cands), False)
 
 
-def _compose_fallback(cands: list) -> PlanSet:
+def _fit_stay(minutes_left: int, picks: list) -> int:
+    """残り時間に収まる滞在分数。立ち寄り先が増えるほど1件あたりは短くなる。"""
+    travel = max((s.travel_minutes for s in picks), default=0)
+    room = minutes_left - travel
+    if room <= 0:
+        return 0
+    return max(5, min(60, room // max(1, len(picks))))
+
+
+def _compose_fallback(req: RecoveryRequest, cands: list) -> PlanSet:
     """APIキーなしのデモモード用。候補を重複させずに振り分ける。
 
     候補が少ないときに同じ内容のプランを3つ並べると提案として無価値なので、
-    作れる数だけ返す。
+    作れる数だけ返す。残り時間が短いときは立ち寄り先を1件に絞る。
     """
     themes = [
         ("すぐ退避プラン", "とにかく濡れずに落ち着ける場所へ", "最短で退避できます。"),
         ("体験でとり返すプラン", "予定が崩れた時間を体験に変える", "屋内体験は天候に左右されません。"),
         ("ゆったり立て直しプラン", "休憩しながら次の判断をする", "無理に動かず状況を見極められます。"),
     ]
+    # 1時間を切ると2箇所は回れないので、近い順に1件ずつ割り当てる
+    tight = req.minutes_left < 60
+    if tight:
+        cands = sorted(cands, key=lambda s: s.travel_minutes)
+
     n = min(len(themes), len(cands))
     plans = []
     for i in range(n):
-        # i番目のプランは i, i+n 番目の候補を使う（プラン間でスポットが重複しない）
-        picks = [cands[j] for j in (i, i + n) if j < len(cands)]
+        picks = (
+            [cands[i]]
+            if tight
+            # i番目のプランは i, i+n 番目の候補を使う（プラン間でスポットが重複しない）
+            else [cands[j] for j in (i, i + n) if j < len(cands)]
+        )
+        stay = _fit_stay(req.minutes_left, picks)
+        if stay == 0:
+            continue  # そこへ行くだけで時間が尽きる
+
         title, concept, why = themes[i]
         plans.append(
             {
@@ -229,7 +274,7 @@ def _compose_fallback(cands: list) -> PlanSet:
                     {
                         "spot_id": s.id,
                         "arrive_after_minutes": s.travel_minutes,
-                        "stay_minutes": 60,
+                        "stay_minutes": stay,
                         "note": s.blurb,
                     }
                     for s in picks
@@ -284,13 +329,23 @@ async def _repair(
 
 
 def _repair_fallback(req: RecoveryRequest, cands: list, failed: list[dict]) -> PlanSet:
-    """デモモード用の自己修正。残り時間と予算に収まるよう機械的に詰め直す。"""
+    """デモモード用の自己修正。残り時間と予算に収まるよう機械的に詰め直す。
+
+    時間が足りずに落ちた案が多いので、近い順に並べ直してから割り当てる。
+    """
+    reachable = sorted(
+        (s for s in cands if s.price_yen <= req.budget_yen and s.travel_minutes < req.minutes_left),
+        key=lambda s: s.travel_minutes,
+    )
     plans = []
     for i, f in enumerate(failed):
-        spot = next((s for s in cands[i:] + cands if s.price_yen <= req.budget_yen), None)
+        # 案ごとに別のスポットを充てる。尽きたら近いものを再利用する
+        spot = reachable[i] if i < len(reachable) else (reachable[0] if reachable else None)
         if spot is None:
             continue
-        stay = max(15, min(60, req.minutes_left - spot.travel_minutes))
+        stay = _fit_stay(req.minutes_left, [spot])
+        if stay == 0:
+            continue
         plans.append(
             {
                 "title": f["title"],
@@ -382,10 +437,28 @@ async def run(req: RecoveryRequest, request_id: str | None = None) -> AsyncItera
         {"mode": mode, "model": MODEL if client else None, "hour": now_hour, "request_id": request_id},
     )
 
+    # 0. 外部シグナルの検知（設定されている場合だけ）
+    sit = signals.Situation()
+    if signals.is_enabled():
+        yield _sse("step", {"id": "detect", "state": "running", "label": "現地の状況を確認しています"})
+        with obs.stage("detect", request_id) as s:
+            sit = await signals.detect(req.area, request_id)
+            s["sources"] = sit.sources
+        detected = " / ".join(x for x in (sit.weather_text, sit.transit_text) if x)
+        yield _sse(
+            "step",
+            {
+                "id": "detect",
+                "state": "done",
+                "label": detected or "外部APIからは取得できませんでした",
+                "detail": {"situation": sit.as_dict()},
+            },
+        )
+
     # 1. 状況把握
     yield _sse("step", {"id": "assess", "state": "running", "label": "状況を読み解いています"})
     with obs.stage("assess", request_id) as s:
-        constraints, by_llm = await _assess(client, req, request_id)
+        constraints, by_llm = await _assess(client, req, sit, request_id)
         s["by_llm"] = by_llm
     yield _sse(
         "step",

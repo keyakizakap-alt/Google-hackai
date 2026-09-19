@@ -24,7 +24,7 @@ class RecoveryRequest(BaseModel):
     # プロンプトへそのまま渡るため、トークン量が青天井にならないよう上限を設ける
     note: str = Field(default="", max_length=200)
     area: str = Field(default="kyoto", max_length=32)
-    minutes_left: int = Field(default=180, ge=15, le=720)
+    minutes_left: int = Field(default=180, ge=10, le=720)
     budget_yen: int = Field(default=6000, ge=0, le=200000)
     mobility: Mobility = Mobility.walk
     party: str = "couple"

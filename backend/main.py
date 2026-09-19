@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 import agent
 import obs
 import ratelimit
+import signals
 import spots_data
 from schemas import AdoptRequest, RecoveryRequest
 
@@ -26,6 +27,17 @@ def _client_ip(request: Request) -> str:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok", "mode": "gemini" if os.environ.get("GEMINI_API_KEY") else "demo"}
+
+
+@app.get("/api/signals")
+async def signal_status(area: str = "kyoto") -> dict:
+    """外部API（気象・運行情報）が検知している状況。UIの事前表示に使う。"""
+    if not signals.is_enabled():
+        return {"enabled": False}
+    if not signals.known_area(area):
+        return {"enabled": True, "error": "未登録のエリアです"}
+    sit = await signals.detect(area)
+    return {"enabled": True, **sit.as_dict()}
 
 
 @app.get("/api/areas")

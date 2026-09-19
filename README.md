@@ -18,7 +18,9 @@ Google Cloud Agentic AI Hackathon 応募用プロトタイプ。
 候補の供給（2段目）と提案の検算（4段目）はコードで決定的に処理する。
 
 ```
-[1] 状況把握   Gemini    トラブル+文脈 → 制約条件(屋内必須/徒歩上限/予算上限/優先タグ)
+[0] 状況検知   外部API   気象・運行情報を取得（設定時のみ。F-01に相当）
+      ↓
+[1] 状況把握   Gemini    トラブル+文脈 → 制約条件(屋内必須/移動上限/予算上限/優先タグ)
       ↓
 [2] 候補探索   コード     カタログから制約を満たすスポットだけを抽出
       ↓
@@ -64,6 +66,7 @@ backend/
   schemas.py     リクエスト/LLM構造化出力のスキーマ
   obs.py         構造化ログ（Cloud Logging の jsonPayload 形式）
   ratelimit.py   IP単位の簡易レート制限
+  signals.py     外部シグナル（気象・運行情報）の取り込み層
 frontend/        スマホ前提の単一ページUI（依存ライブラリなし）
 tests/           実APIを叩かずに動かせる検証
 Dockerfile       Cloud Run 用
@@ -85,6 +88,41 @@ Dockerfile       Cloud Run 用
 **営業時間・料金・移動時間は概算のサンプル値**であり、実在の施設について
 正確な値を保証するものではない。実データが必要なら `SPOT_SOURCE=places` で
 Google Places API に切り替える。
+
+## 外部APIを足す（気象・運行情報）
+
+`backend/signals.py` が外部シグナルの取り込み層。**新しいAPIを足すときに書くのは
+「レスポンス → Situation の変換関数」だけ**で、エージェント側は触らない。
+
+```python
+# 1. 変換関数を書く（取得できなければ None を返す）
+async def _weather_myapi(area: str) -> Situation | None: ...
+
+# 2. レジストリに登録する
+PROVIDERS = {"weather": {"jma": _weather_jma, "myapi": _weather_myapi, ...}}
+
+# 3. 環境変数で選ぶ
+#    WEATHER_SOURCE=myapi
+```
+
+```bash
+WEATHER_SOURCE=mock TRANSIT_SOURCE=mock uvicorn main:app --app-dir backend  # デモ用
+WEATHER_SOURCE=jma uvicorn main:app --app-dir backend                       # 気象庁（キー不要）
+```
+
+検知結果は `GET /api/signals?area=kyoto` で取れ、エージェントの1段目としても走る。
+**取得に失敗しても提案は止めない。** シグナルは補助情報で、無ければユーザーの
+申告だけで動く。失敗は `signal.weather_failed` として構造化ログに残る。
+
+| 種別 | 実装済み | 備考 |
+|---|---|---|
+| 気象 | `mock` / `jma` | 気象庁のJSONはAPIキー不要。47都道府県の予報区コードを同梱 |
+| 運行情報 | `mock` | 実APIは事業者ごとに認証方式と利用規約が異なるため、取得部分だけ差し替える形にしてある |
+
+**気象庁のエンドポイントは公式APIとしての提供ではなく、仕様変更の可能性がある。**
+またこの開発環境からは到達できなかったため、パーサは公開仕様どおりに組んだ
+モックレスポンスでのみ検証している（`tests/test_signals.py`）。
+実レスポンスとの突き合わせは `WEATHER_SOURCE=jma` で確認が必要。
 
 ## スポットの供給元を差し替える
 
@@ -108,7 +146,7 @@ SPOT_SOURCE=places PLACES_API_KEY=... uvicorn main:app --app-dir backend
 | 項目 | 補い方 | 限界 |
 |---|---|---|
 | `indoor` | Places に屋内/屋外のフィールドが無いため `types` から推定 | 判断できない type は屋外扱い（雨天時に濡れる場所へ誘導する方が損害が大きいため安全側に倒している） |
-| `walk_minutes` | エリア中心からの直線距離に迂回係数1.3を掛けて徒歩分に換算 | 実経路ではない。精度が要るなら Routes API に差し替える |
+| `travel_minutes` | エリア中心からの直線距離に迂回係数1.3を掛けて分に換算 | 実経路ではない。精度が要るなら Routes API に差し替える |
 | `price_yen` | `priceLevel`（5段階の列挙型）を代表額にマッピング | 金額ではないので概算。飲食以外では未設定のことが多い |
 
 営業時間が取得できなかったスポットは除外せず「営業時間未確認」タグを付けて通す。
@@ -148,6 +186,8 @@ http://localhost:8080 を開く。
 | `PLACES_USE_SUMMARY` | `1` | `0` で editorialSummary を外し、安いSKUにする |
 | `PLACES_CACHE_TTL_SEC` | `3600` | Places 取得結果のキャッシュ保持秒数 |
 | `PLACES_RADIUS_M` | `1500` | 検索半径 |
+| `WEATHER_SOURCE` | `none` | `none` / `mock` / `jma` |
+| `TRANSIT_SOURCE` | `none` | `none` / `mock` |
 
 ### デモモード
 
@@ -198,11 +238,13 @@ Cloud Armor か Memorystore に寄せる。
 
 プロトタイプとして、以下は意図的に未実装。
 
-- **スポット情報は `catalog.py` のサンプルデータ**（京都・東山周辺、営業時間と料金は概算）。
-  本番では Google Places API 等の実データに差し替える前提で、同じ形に揃えてある
-- 気象・運行情報APIとの連携（F-01の自動検知）は未接続。現在はユーザーのワンタップ申告で起動する
+- **スポット情報は `spots_data.py` のサンプルデータ**（営業時間・料金・移動時間は概算）。
+  `SPOT_SOURCE=places` で実データに切り替えられる
+- **F-01の自動検知は「仕組みだけ」実装済み**。気象は気象庁アダプタがあるが、
+  運行情報の実APIは未接続で、既定ではどちらも無効（`WEATHER_SOURCE=none`）。
+  検知が走ってもユーザーの申告を上書きはせず、制約の補強に使うに留めている
 - 予約・配車の実行（F-04）は未実装。提案までを対象範囲としている
-- 移動時間はカタログ上の固定値で、経路探索は行っていない
+- 移動時間はカタログ上の固定値で、経路探索は行っていない（Routes API 未接続）
 
 ## 可観測性とKPI計測
 
@@ -227,6 +269,7 @@ Cloud Armor か Memorystore に寄せる。
 
 ```bash
 python3 tests/test_places_mapping.py   # Places 変換層（実APIキー不要）
+python3 tests/test_signals.py          # 外部シグナル層（実API不要）
 ```
 
 - 全47都道府県 × 6シナリオ（トラブル種別と移動手段の組み合わせ）の282通りで、
@@ -240,6 +283,8 @@ python3 tests/test_places_mapping.py   # Places 変換層（実APIキー不要�
   （`resp.parsed` が `None` のケースを含む）
 - `SPOT_SOURCE=places` でキー未設定時、静的カタログへ退避して提案が止まらない
 - Places 変換層20項目（屋内判定・定休日除外・日跨ぎ営業・priceLevel換算など）
+- 外部シグナル層（天気文言の分類・気象庁レスポンスのパース・取得失敗時の継続）
+- 残り時間10〜60分で、全47都道府県が時間内に収まるプランを返す
 
 **未検証**: Places API の実エンドポイントへの疎通。変換層はモックしたレスポンスで
 検証済みだが、実際のフィールド構成との突き合わせは `PLACES_API_KEY` を設定して

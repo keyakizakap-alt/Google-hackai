@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 const state = { trouble: "rain", area: "kyoto", requestId: null, startedAt: 0, adopted: false };
 
 const STEP_LABEL = {
+  detect: "状況検知",
   assess: "状況把握",
   discover: "候補探索",
   compose: "プラン構成",
@@ -29,6 +30,26 @@ const bind = (input, out, fmt) => {
 
 bind($("minutes"), $("v-time"), (v) => v);
 bind($("budget"), $("v-budget"), (v) => Number(v).toLocaleString("ja-JP"));
+
+/* ---------- 残り時間のプリセット ---------- */
+
+const presets = [...document.querySelectorAll(".presets button")];
+
+function syncPresets() {
+  const v = $("minutes").value;
+  presets.forEach((b) => b.classList.toggle("is-on", b.dataset.min === v));
+}
+
+presets.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const el = $("minutes");
+    el.value = btn.dataset.min;
+    el.dispatchEvent(new Event("input"));
+  });
+});
+
+$("minutes").addEventListener("input", syncPresets);
+syncPresets();
 
 /* ---------- エリア ---------- */
 

@@ -48,9 +48,16 @@
   <section class="panel" aria-labelledby="t-ctx">
     <h2 id="t-ctx">3 — いまの条件</h2>
     <div class="ctx">
-      <label>
+      <label class="span2" for="minutes">
         <span>残り時間 <b id="v-time">180</b>分</span>
-        <input id="minutes" type="range" min="30" max="480" step="30" value="180">
+        <input id="minutes" type="range" min="10" max="480" step="5" value="180">
+        <div class="presets" role="group" aria-label="残り時間のプリセット">
+          <button type="button" data-min="15">15分</button>
+          <button type="button" data-min="30">30分</button>
+          <button type="button" data-min="60">1時間</button>
+          <button type="button" data-min="180">3時間</button>
+          <button type="button" data-min="480">8時間</button>
+        </div>
       </label>
       <label>
         <span>残予算 <b id="v-budget">6,000</b>円</span>
