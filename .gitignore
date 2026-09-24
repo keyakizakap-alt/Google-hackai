@@ -1,0 +1,7 @@
+# 認証情報
+.env
+.env.*
+!.env.example
+*-key.json
+service-account*.json
+credentials*.json
