@@ -11,13 +11,14 @@ import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
+import type { OshiEvent } from "@/lib/agent/types";
 import { formatJst } from "@/lib/time";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** チケット型ヒーロー: 左にステージ、右の半券に開演までのライブカウントダウン */
-function TicketHero() {
-  const { event, eventImage } = useStore();
+function TicketHero({ event }: { event: OshiEvent }) {
+  const { eventImage } = useStore();
   const cd = useCountdown(event.startAt);
   const [liked, setLiked] = useState(true);
   return (
@@ -105,6 +106,85 @@ function TicketHero() {
   );
 }
 
+/** 登録済みイベントの切り替え（カレンダー取り込み分にはバッジ） */
+function EventSwitcher() {
+  const { events, event, selectEvent, lastImport, busy } = useStore();
+  if (events.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-[10px] font-bold tracking-[0.25em] text-mute">MY LIVES · {events.length}</p>
+        {lastImport && lastImport.added > 0 && busy !== "importing" && (
+          <p className="pop-in text-[11px] text-ink-soft">
+            {lastImport.source === "google" ? "Google カレンダー" : "デモカレンダー"}から <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
+          </p>
+        )}
+      </div>
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="登録イベント">
+        {events.map((e) => {
+          const active = e.id === event?.id;
+          return (
+            <button
+              key={e.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => selectEvent(e.id)}
+              className={`group flex min-h-[44px] shrink-0 items-center gap-2.5 rounded-full border px-4 py-2 text-left transition ${active ? "border-transparent bg-night text-white shadow-float" : "border-line bg-white text-ink hover:border-rose-300"}`}
+            >
+              <span className={`h-2 w-2 rounded-full ${active ? "bg-rose-400 shadow-[0_0_10px_2px_rgb(var(--oshi-glow))]" : "bg-lav-200"}`} />
+              <span className="text-[13px] font-bold">{e.artist}</span>
+              <span className={`text-[11px] ${active ? "text-white/60" : "text-mute"}`}>{formatJst(e.startAt, { date: true })}</span>
+              {e.source === "calendar" && <GoogleG className="h-3.5 w-3.5" />}
+            </button>
+          );
+        })}
+        <Link href="/events" className="flex min-h-[44px] shrink-0 items-center rounded-full border border-dashed border-lav-200 px-4 text-[13px] text-ink-soft hover:border-rose-300">
+          ＋ 追加
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function EmptyHero() {
+  const { session, busy, importFromCalendar } = useStore();
+  const importing = busy === "importing";
+  return (
+    <Reveal as="section" className="relative grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_1fr]">
+      <StageScene className="relative min-h-[240px]" />
+      <div className="flex flex-col justify-center gap-4 p-7 sm:p-9">
+        <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">NO LIVE YET</p>
+        <h2 className="text-2xl font-bold leading-snug">
+          {importing ? "カレンダーからライブを探しています…" : "まだイベントが登録されていません"}
+        </h2>
+        <p className="text-sm leading-relaxed text-white/65">
+          Google カレンダーを連携すると、予定からアーティスト名・公演名・会場を読み取って自動で登録します。
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {session?.googleOAuthConfigured && !session.calendarConnected ? (
+            <a href="/api/auth/google" className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
+              <GoogleG className="h-4 w-4" /> Google カレンダーを連携
+            </a>
+          ) : (
+            <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
+              {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+              カレンダーから取り込む
+            </button>
+          )}
+          <Link href="/events" className="rounded-xl border border-white/20 px-5 py-3 text-sm font-bold text-white/85 hover:bg-white/10">
+            手動で登録
+          </Link>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+function Hero() {
+  const { event } = useStore();
+  return event ? <TicketHero key={event.id} event={event} /> : <EmptyHero />;
+}
+
 function CalendarCard() {
   const { session, availability, busy, extractAvailability, event } = useStore();
   const connected = session?.calendarConnected;
@@ -121,7 +201,7 @@ function CalendarCard() {
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "デモ"}</span>
       </div>
-      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">予定の中身は読まず、時間帯だけから推し活に使える空き時間を抽出します。</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間帯」だけから計算します。ライブの取り込み時のみタイトル・場所を一時的に読み、保存はしません。</p>
 
       <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[1fr_1.15fr]">
         <div className="flex flex-col justify-between gap-3">
@@ -143,7 +223,11 @@ function CalendarCard() {
             <p className="text-[11px] leading-relaxed text-mute">{connected ? "権限は閲覧のみ・タイトルは受信しません" : "未連携のためデモカレンダーで体験できます"}</p>
           )}
         </div>
-        <MiniCalendar availability={availability} eventDate={event.startAt} scanning={scanning} />
+        {event ? (
+          <MiniCalendar availability={availability} eventDate={event.startAt} scanning={scanning} />
+        ) : (
+          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録するとヒートマップが表示されます</div>
+        )}
       </div>
 
       <button onClick={() => void extractAvailability()} disabled={busy !== null} className="btn-primary mt-5 flex w-full items-center justify-center gap-3 rounded-xl py-3.5 text-[15px] font-bold">
@@ -243,7 +327,8 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <Greeting />
-      <TicketHero />
+      <EventSwitcher />
+      <Hero />
       <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
         <CalendarCard />
         <PlanSummaryCard />

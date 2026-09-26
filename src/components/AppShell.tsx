@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, CalendarDays, ClipboardList, House, MapPin, Settings, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { formatJst } from "@/lib/time";
 import { Logo } from "./brand";
-import { useCountdown } from "./motion";
+import { useNow } from "./motion";
 import { OSHI_COLORS, useStore } from "./store";
 
 const NAV = [
@@ -61,32 +61,45 @@ function OshiColorPicker() {
   );
 }
 
-/** 画面上部を流れる「次のライブ」ティッカー */
+/** 画面上部を流れるティッカー。登録済みイベントを開催日順に流す（登録内容に連動） */
 function LiveTicker() {
-  const { event } = useStore();
-  const { days, ready } = useCountdown(event.startAt);
-  const items = [
-    "NEXT LIVE",
-    event.title,
-    formatJst(event.startAt),
-    event.venue,
-    ready ? `D-${days}` : "D-—",
-    "推しに会う日は、もっと特別に ♡",
-    "Good Travel, Good Live",
-  ];
+  const { events, event, busy } = useStore();
+  const now = useNow();
+  const upcoming = events.filter((e) => now === null || Date.parse(e.startAt) >= now - 6 * 3_600_000);
+  const dday = (iso: string) => (now === null ? "D-—" : `D-${Math.max(0, Math.floor((Date.parse(iso) - now) / 86_400_000))}`);
+
+  const items: { text: string; strong?: boolean }[] =
+    upcoming.length === 0
+      ? [
+          { text: busy === "importing" ? "カレンダーからライブを探しています…" : "イベント未登録", strong: true },
+          { text: "Google カレンダーを連携すると、ライブ・公演を自動で取り込みます" },
+          { text: "推しに会う日は、もっと特別に ♡" },
+        ]
+      : upcoming.flatMap((e, i) => [
+          { text: i === 0 ? "NEXT LIVE" : "COMING UP", strong: true },
+          { text: e.title.toLowerCase().includes(e.artist.toLowerCase()) ? e.title : `${e.artist}｜${e.title}`, strong: e.id === event?.id },
+          { text: `${formatJst(e.startAt)}${e.timeUnknown ? "（時刻未定）" : ""}` },
+          { text: e.venue },
+          { text: dday(e.startAt), strong: true },
+        ]);
+  // 流れる帯が短すぎないよう、少ない場合は繰り返す
+  const repeated = items.length < 8 ? [...items, { text: "Good Travel, Good Live" }, ...items] : items;
   const row = (
     <div className="flex shrink-0 items-center">
-      {items.map((t, i) => (
-        <span key={i} className="flex items-center whitespace-nowrap px-5 text-[11px] font-bold tracking-[0.18em]">
-          {t}
+      {repeated.map((t, i) => (
+        <span key={i} className={`flex items-center whitespace-nowrap px-5 text-[11px] tracking-[0.18em] ${t.strong ? "font-bold text-white" : "text-white/70"}`}>
+          {t.text}
           <span className="ml-10 h-1 w-1 rounded-full bg-rose-400" />
         </span>
       ))}
     </div>
   );
+  const label = upcoming.length
+    ? `登録イベント: ${upcoming.map((e) => `${e.title} ${formatJst(e.startAt)}`).join("、")}`
+    : "イベント未登録";
   return (
-    <div className="relative overflow-hidden bg-night py-2 text-white/85" aria-label={`次のライブ: ${event.title} ${formatJst(event.startAt)}`}>
-      <div className="marquee" aria-hidden>
+    <div className="relative overflow-hidden bg-night py-2" aria-label={label}>
+      <div key={upcoming.map((e) => e.id).join("|")} className="marquee" style={{ "--marquee-duration": `${Math.max(30, repeated.length * 4)}s` } as CSSProperties} aria-hidden>
         {row}
         {row}
       </div>

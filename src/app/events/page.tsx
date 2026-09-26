@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, ImagePlus, LoaderCircle, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
-import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService } from "@/lib/agent/types";
+import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
+import { GoogleG } from "@/components/brand";
+import { formatJst } from "@/lib/time";
 
 /** 顔画像はブラウザ内で縮小（長辺 1024px）してからメモリ上の data URL として保持する */
 async function downscale(file: File): Promise<string> {
@@ -21,36 +23,124 @@ async function downscale(file: File): Promise<string> {
 
 const field = "mt-1.5 w-full rounded-xl border border-line bg-cloud px-3 py-2.5 text-sm outline-none focus:border-lav-400 focus:bg-white";
 
-export default function EventsPage() {
-  const { event, setEvent, eventImage, setEventImage, selfie, setSelfie, generatePlan, busy, session } = useStore();
-  const router = useRouter();
-  const [form, setForm] = useState({
-    artist: event.artist,
-    title: event.title,
-    venue: event.venue,
-    venueStation: event.venueStation,
-    date: event.startAt.slice(0, 10),
-    time: event.startAt.slice(11, 16),
-    homeStation: event.homeStation,
-    beautyServices: event.beautyServices as BeautyService[],
-    arriveEarlyForGoods: event.arriveEarlyForGoods,
-  });
-  const [consent, setConsent] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+type FormState = {
+  artist: string;
+  title: string;
+  venue: string;
+  venueStation: string;
+  date: string;
+  time: string;
+  homeStation: string;
+  beautyServices: BeautyService[];
+  arriveEarlyForGoods: boolean;
+};
 
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+/** 登録済みイベント一覧 + カレンダー取り込み */
+function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onEdit: (id: string | null) => void }) {
+  const { events, event, selectEvent, removeEvent, importFromCalendar, lastImport, busy, session } = useStore();
+  const importing = busy === "importing";
+  return (
+    <section className="card p-5 sm:p-6" aria-labelledby="registered">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="font-display text-sm italic text-mute">My Lives</p>
+          <h2 id="registered" className="text-[17px] font-bold text-ink">登録イベント</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {session?.googleOAuthConfigured && !session.calendarConnected && (
+            <a href="/api/auth/google" className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50">
+              <GoogleG className="h-4 w-4" /> Google カレンダーを連携
+            </a>
+          )}
+          <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold">
+            {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            カレンダーから取り込む
+          </button>
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-mute">
+        {session?.calendarConnected ? "Google カレンダー" : "デモカレンダー"}の今後 6 か月の予定から、ライブ・公演らしい予定だけを抽出して登録します。
+        それ以外の予定のタイトルは読み取った直後に破棄し、どこにも保存しません。
+      </p>
+      {lastImport && (
+        <p className="pop-in mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-ink">
+          {lastImport.scanned} 件の予定を確認 → ライブ <b>{lastImport.found}</b> 件を検出（新規登録 {lastImport.added} 件）
+        </p>
+      )}
+
+      <ul className="mt-4 divide-y divide-line">
+        {events.length === 0 && <li className="py-6 text-center text-sm text-mute">{importing ? "取り込み中…" : "まだイベントはありません"}</li>}
+        {events.map((e, i) => {
+          const active = e.id === event?.id;
+          return (
+            <li key={e.id} className="pop-in flex flex-wrap items-center gap-3 py-3.5" style={{ "--delay": `${i * 70}ms` } as CSSProperties}>
+              <button onClick={() => selectEvent(e.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={active}>
+                <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full font-display text-lg font-semibold ${active ? "bg-night text-white" : "bg-lav-50 text-lav-600"}`}>
+                  {Number(e.startAt.slice(8, 10))}
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-bold text-ink">{e.title}</span>
+                    {e.source === "calendar" && (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">
+                        <GoogleG className="h-3 w-3" /> 自動取り込み
+                      </span>
+                    )}
+                    {active && <span className="shrink-0 rounded-full bg-rose-400 px-2 py-0.5 text-[10px] font-bold text-white">選択中</span>}
+                  </span>
+                  <span className="block truncate text-xs text-mute">
+                    {e.artist} ・ {formatJst(e.startAt)}
+                    {e.timeUnknown && "（時刻未定）"} ・ {e.venue}（{e.venueStation}）
+                  </span>
+                </span>
+              </button>
+              <button onClick={() => onEdit(e.id)} className={`min-h-[40px] rounded-lg px-3 text-xs font-bold ${editingId === e.id ? "bg-lav-100 text-lav-700" : "text-ink-soft hover:bg-lav-50"}`}>
+                編集
+              </button>
+              <button onClick={() => { removeEvent(e.id); if (editingId === e.id) onEdit(null); }} className="grid h-10 w-10 place-items-center rounded-lg text-mute hover:bg-rose-50 hover:text-rose-500" aria-label={`${e.title} を削除`}>
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <button onClick={() => onEdit(null)} className="mt-2 min-h-[44px] w-full rounded-xl border border-dashed border-lav-200 text-sm text-ink-soft hover:border-rose-300">
+        ＋ 手動でイベントを追加
+      </button>
+    </section>
+  );
+}
+
+function EventForm({ editing }: { editing: OshiEvent | null }) {
+  const { saveEvent, generatePlan, busy, profile, setProfile } = useStore();
+  const router = useRouter();
+  const [form, setForm] = useState<FormState>(() => ({
+    artist: editing?.artist ?? "",
+    title: editing?.title ?? "",
+    venue: editing?.venue ?? "",
+    venueStation: editing?.venueStation ?? "",
+    date: editing?.startAt.slice(0, 10) ?? "",
+    time: editing?.startAt.slice(11, 16) ?? "18:00",
+    homeStation: editing?.homeStation ?? profile.homeStation,
+    beautyServices: (editing?.beautyServices ?? profile.beautyServices) as BeautyService[],
+    arriveEarlyForGoods: editing?.arriveEarlyForGoods ?? profile.arriveEarlyForGoods,
+  }));
+  const [err, setErr] = useState<string | null>(null);
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = () => {
     const parsed = OshiEventSchema.safeParse({
-      id: event.id,
+      id: editing?.id ?? `manual-${Math.random().toString(36).slice(2, 10)}`,
       artist: form.artist,
       title: form.title,
       venue: form.venue,
-      venueStation: form.venueStation,
+      venueStation: form.venueStation || form.venue,
       startAt: `${form.date}T${form.time}:00+09:00`,
       homeStation: form.homeStation,
       beautyServices: form.beautyServices,
       arriveEarlyForGoods: form.arriveEarlyForGoods,
+      source: editing?.source ?? "manual",
+      timeUnknown: false,
     });
     if (!parsed.success) {
       setErr("未入力の項目があります");
@@ -61,20 +151,18 @@ export default function EventsPage() {
       return null;
     }
     setErr(null);
-    setEvent(parsed.data);
+    saveEvent(parsed.data);
+    // 出発駅・美容メニューは次回以降の取り込みにも使う既定値として記憶（メモリ上のみ）
+    setProfile({ homeStation: parsed.data.homeStation, beautyServices: parsed.data.beautyServices, arriveEarlyForGoods: parsed.data.arriveEarlyForGoods });
     return parsed.data;
   };
 
   return (
-    <div className="space-y-5 px-1">
-      <div>
-        <h1 className="text-xl font-bold text-ink">イベント設定</h1>
-        <p className="mt-1 text-sm text-ink-soft">推しに会う日の情報を入力すると、そこから逆算して準備プランを作ります。</p>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
-        <section className="card p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
+    <section className="card p-5 sm:p-6" aria-labelledby="event-form">
+      <p className="font-display text-sm italic text-mute">{editing ? "Edit" : "New"}</p>
+      <h2 id="event-form" className="text-[17px] font-bold text-ink">{editing ? `「${editing.title}」を編集` : "イベントを手動で追加"}</h2>
+      {editing?.source === "calendar" && <p className="mt-1 text-xs text-mute">カレンダーから自動で読み取った内容です。違っていれば修正してください。</p>}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink-soft">
               アーティスト
               <input className={field} value={form.artist} onChange={(e) => set("artist", e.target.value)} maxLength={60} />
@@ -100,7 +188,7 @@ export default function EventsPage() {
               <input className={field} value={form.venueStation} onChange={(e) => set("venueStation", e.target.value)} maxLength={40} />
             </label>
             <label className="text-xs font-semibold text-ink-soft sm:col-span-2">
-              出発駅（自宅最寄り・サロンもこの周辺で探します）
+              出発駅（自宅最寄り・サロンもこの周辺で探します／全イベント共通）
               <input className={field} value={form.homeStation} onChange={(e) => set("homeStation", e.target.value)} maxLength={40} />
             </label>
           </div>
@@ -152,7 +240,30 @@ export default function EventsPage() {
               保存して AI にプランを作ってもらう
             </button>
           </div>
-        </section>
+      </section>
+  );
+}
+
+export default function EventsPage() {
+  const { event, events, eventImage, setEventImage, selfie, setSelfie, session } = useStore();
+  const [editingId, setEditingId] = useState<string | null | undefined>(undefined);
+  const [consent, setConsent] = useState(false);
+  // 未指定なら選択中のイベントを編集、null なら新規追加
+  const targetId = editingId === undefined ? (event?.id ?? null) : editingId;
+  const editing = events.find((e) => e.id === targetId) ?? null;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="font-display text-xl italic text-mute">Events</p>
+        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">イベント</h1>
+        <p className="mt-1 text-sm text-ink-soft">Google カレンダーからライブを自動で取り込めます。取り込んだ内容は画面上部のティッカーやホームにすぐ反映されます。</p>
+      </div>
+
+      <RegisteredEvents editingId={targetId} onEdit={setEditingId} />
+
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+        <EventForm key={editing?.id ?? "new"} editing={editing} />
 
         <div className="space-y-5">
           <section className="card p-5">

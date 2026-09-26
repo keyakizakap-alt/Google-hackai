@@ -46,7 +46,7 @@ export default function SettingsPage() {
             icon={<GoogleG className="h-5 w-5" />}
             title="Google カレンダー"
             status={session?.calendarConnected ? "連携済み" : "デモモード"}
-            desc="権限は「予定の閲覧のみ」。取得するのは時間帯だけで、タイトル・場所・参加者は受信しません。"
+            desc="権限は「予定の閲覧のみ」。空き時間の計算は時間帯だけで行います。ライブの自動取り込み時はタイトル・場所・日時を一時的に読み、ライブ以外の予定は即破棄します（参加者・説明文は受信しません）。"
             action={
               session?.calendarConnected ? (
                 <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">

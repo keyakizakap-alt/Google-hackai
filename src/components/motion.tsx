@@ -85,3 +85,18 @@ export function CountUp({ to, duration = 900 }: { to: number; duration?: number 
   }, [to, duration]);
   return <>{v}</>;
 }
+
+/** 一定間隔で更新される現在時刻（初回レンダーは null＝SSR と一致させる） */
+export function useNow(intervalMs = 60_000) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, intervalMs);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [intervalMs]);
+  return now;
+}

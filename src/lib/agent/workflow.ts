@@ -31,7 +31,15 @@ export async function generatePlan(params: {
   history = advance(history, from, working, "user");
 
   // 2) カレンダー取得（メモリ上でマスク済み Busy に変換）
-  const { busy, source } = await getBusyBlocks({ days: 30, until: Date.parse(event.startAt) + MS_DAY, demoDayOff: jstDateKey(Date.parse(event.startAt)) });
+  const fetched = await getBusyBlocks({ days: 30, until: Date.parse(event.startAt) + MS_DAY, demoDayOff: jstDateKey(Date.parse(event.startAt)) });
+  const { source } = fetched;
+  // ライブ本体の予定（カレンダーから取り込んだイベント自身）は「埋まり」として扱わない
+  const evStart = Date.parse(event.startAt);
+  const busy = fetched.busy.filter((b) => {
+    const s = Date.parse(b.start);
+    const e = Date.parse(b.end);
+    return !(!b.allDay && s >= evStart - 3 * 3_600_000 && s <= evStart + 3_600_000 && e >= evStart && e <= evStart + 6 * 3_600_000);
+  });
 
   // 3) 顔画像があれば YouCam 解析（メモリ上のみ。処理後にバッファを zero-fill）
   let skin;

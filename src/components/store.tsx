@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BookingResult, OshiEvent, PlanEnvelope, TraceStep } from "@/lib/agent/types";
 
 /**
@@ -39,26 +39,36 @@ export const OSHI_COLORS = [
 ] as const;
 export type OshiColor = (typeof OSHI_COLORS)[number]["id"];
 
-type Busy = "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
+type Busy = "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
 
-function defaultEvent(): OshiEvent {
-  let start = "2026-10-30T18:00:00+09:00";
-  if (Date.parse(start) < Date.now() + 5 * 86_400_000) {
-    const d = new Date(Date.now() + 35 * 86_400_000 + 9 * 3600_000).toISOString().slice(0, 10);
-    start = `${d}T18:00:00+09:00`;
-  }
-  return {
-    id: "demo-ive-kyocera",
-    artist: "IVE",
-    title: "IVE 京セラドーム公演",
-    venue: "京セラドーム大阪",
-    venueStation: "ドーム前千代崎",
-    startAt: start,
-    homeStation: "長崎",
-    beautyServices: ["brow", "hair"],
-    arriveEarlyForGoods: true,
-  };
+export interface Profile {
+  homeStation: string;
+  beautyServices: OshiEvent["beautyServices"];
+  arriveEarlyForGoods: boolean;
 }
+
+export interface DetectedLiveEvent {
+  key: string;
+  artist: string;
+  title: string;
+  venue: string;
+  venueStation: string;
+  startAt: string;
+  timeUnknown: boolean;
+  confidence: "high" | "medium";
+  source: "gemini" | "rules";
+}
+
+export interface ImportResult {
+  source: "google" | "demo";
+  scanned: number;
+  found: number;
+  added: number;
+}
+
+const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true };
+
+const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
 
 async function api<T>(path: string, body?: unknown, action?: string): Promise<T> {
   const res = await fetch(path, {
@@ -83,8 +93,17 @@ interface Store {
   session: SessionInfo | null;
   oshiColor: OshiColor;
   setOshiColor: (c: OshiColor) => void;
-  event: OshiEvent;
-  setEvent: (e: OshiEvent) => void;
+  /** 登録済みイベント（開催日順） */
+  events: OshiEvent[];
+  /** 現在プランを作る対象のイベント */
+  event: OshiEvent | null;
+  selectEvent: (id: string) => void;
+  saveEvent: (e: OshiEvent) => void;
+  removeEvent: (id: string) => void;
+  profile: Profile;
+  setProfile: (p: Profile) => void;
+  importFromCalendar: () => Promise<ImportResult | null>;
+  lastImport: ImportResult | null;
   eventImage: string | null;
   setEventImage: (url: string | null) => void;
   selfie: string | null;
@@ -114,7 +133,15 @@ const Ctx = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [oshiColor, setOshiColor] = useState<OshiColor>("pink");
-  const [event, setEvent] = useState<OshiEvent>(defaultEvent);
+  const [events, setEvents] = useState<OshiEvent[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [lastImport, setLastImport] = useState<ImportResult | null>(null);
+  const event = events.find((e) => e.id === activeId) ?? events[0] ?? null;
+  const eventsRef = useRef(events);
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
   const [eventImage, setEventImageState] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
@@ -148,14 +175,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const importFromCalendar = useCallback(async (): Promise<ImportResult | null> => {
+    setBusy("importing");
+    setError(null);
+    try {
+      const r = await api<{ source: "google" | "demo"; scanned: number; events: DetectedLiveEvent[] }>("/api/calendar/detect-events", {});
+      const known = new Set(eventsRef.current.map((e) => e.id));
+      const fresh = r.events.filter((d) => !known.has(`cal-${d.key}`));
+      const added = fresh.length;
+      setEvents((prev) => {
+        const next = [...prev];
+        for (const d of fresh) {
+          const id = `cal-${d.key}`;
+          if (next.some((e) => e.id === id)) continue;
+          next.push({
+            id,
+            artist: d.artist,
+            title: d.title,
+            venue: d.venue,
+            venueStation: d.venueStation,
+            startAt: d.startAt,
+            homeStation: profile.homeStation,
+            beautyServices: profile.beautyServices,
+            arriveEarlyForGoods: profile.arriveEarlyForGoods,
+            source: "calendar",
+            timeUnknown: d.timeUnknown,
+          });
+        }
+        return next.sort(byDate);
+      });
+      const result = { source: r.source, scanned: r.scanned, found: r.events.length, added };
+      setLastImport(result);
+      return result;
+    } catch (e) {
+      setError((e as Error).message);
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }, [profile]);
+
+  // 起動時（＝Google 連携直後のリダイレクト含む）にカレンダーからライブを自動で取り込む
   useEffect(() => {
     let alive = true;
     api<SessionInfo>("/api/session")
       .then((s) => alive && setSession(s))
       .catch(() => undefined);
+    const t = setTimeout(() => {
+      if (alive) void importFromCalendar();
+    }, 0);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 起動時に 1 回だけ
   }, []);
 
   const setEventImage = useCallback((url: string | null) => {
@@ -178,12 +251,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       session,
       oshiColor,
       setOshiColor,
+      events,
       event,
-      setEvent: (e) => {
-        setEvent(e);
+      selectEvent: (id) => {
+        if (id === event?.id) return;
+        setActiveId(id);
+        setEnvelope(null);
+        setChat([]);
+        setAvailability(null);
+      },
+      saveEvent: (e) => {
+        setEvents((prev) => [...prev.filter((x) => x.id !== e.id), e].sort(byDate));
+        setActiveId(e.id);
         setEnvelope(null);
         setChat([]);
       },
+      removeEvent: (id) => {
+        setEvents((prev) => prev.filter((x) => x.id !== id));
+        if (event?.id === id) {
+          setActiveId(null);
+          setEnvelope(null);
+          setChat([]);
+        }
+      },
+      profile,
+      setProfile: (p) => {
+        setProfile(p);
+        // 取り込み済みイベントにも出発駅・美容メニューの既定値を反映
+        setEvents((prev) => prev.map((e) => ({ ...e, homeStation: p.homeStation, beautyServices: p.beautyServices, arriveEarlyForGoods: p.arriveEarlyForGoods })));
+        setEnvelope(null);
+      },
+      importFromCalendar,
+      lastImport,
       eventImage,
       setEventImage,
       selfie,
@@ -200,11 +299,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearError: () => setError(null),
       refreshSession,
       extractAvailability: async () => {
-        const r = await run("availability", () => api<Availability>("/api/calendar/availability", { until: event.startAt }));
+        const r = await run("availability", () => api<Availability>("/api/calendar/availability", { until: event?.startAt }));
         if (r) setAvailability(r);
       },
       generatePlan: async (eventOverride) => {
         const target = eventOverride ?? event;
+        if (!target) {
+          setError("先にイベントを登録してください");
+          return false;
+        }
         const r = await run("planning", () => api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined }));
         if (r) {
           applyPlan(r);
@@ -248,10 +351,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       disconnect: async () => {
         await run("availability", () => api("/api/auth/logout", {}));
         setAvailability(null);
+        setEvents((prev) => prev.filter((e) => e.source !== "calendar"));
         await refreshSession();
       },
     }),
-    [session, oshiColor, event, eventImage, setEventImage, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

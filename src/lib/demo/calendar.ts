@@ -25,3 +25,26 @@ export function demoBusyBlocks(from: number, to: number, dayOff?: string): BusyB
   }
   return blocks;
 }
+
+/**
+ * デモ用の「予定（タイトルあり）」。ライブ検出のデモに使う。
+ * ライブ以外の予定も混ぜ、検出側で除外されることを示す。
+ */
+export function demoCalendarItems(now: number) {
+  const at = (days: number, hour: number, fixed?: string) => {
+    const iso = fixed && Date.parse(fixed) > now + 5 * MS_DAY ? fixed : toJstIso(jstAt(jstDateKey(now + days * MS_DAY), hour));
+    return { dateTime: iso };
+  };
+  const plus = (s: { dateTime: string }, h: number) => ({ dateTime: toJstIso(Date.parse(s.dateTime) + h * 3_600_000) });
+  const ive = at(34, 18, "2026-10-30T18:00:00+09:00");
+  const lsf = at(52, 17);
+  const svt = at(80, 18);
+  return [
+    { id: "demo-1", summary: "IVE 京セラドーム公演", location: "京セラドーム大阪", start: ive, end: plus(ive, 3) },
+    { id: "demo-2", summary: "【参戦】LE SSERAFIM FAN MEETING", location: "横浜アリーナ", start: lsf, end: plus(lsf, 3) },
+    { id: "demo-3", summary: "SEVENTEEN TOUR 東京ドーム", location: "", start: svt, end: plus(svt, 3) },
+    { id: "demo-4", summary: "歯医者", location: "", start: at(3, 10), end: at(3, 11) },
+    { id: "demo-5", summary: "定例会議", location: "", start: at(5, 14), end: at(5, 15) },
+    { id: "demo-6", summary: "友達とランチ", location: "", start: at(9, 12), end: at(9, 14) },
+  ];
+}

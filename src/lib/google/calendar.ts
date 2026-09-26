@@ -4,7 +4,8 @@ import { logger } from "../logger";
 import { maskEvents, type BusyBlock, type RawCalendarEvent } from "../privacy/mask";
 import { readTokens, writeTokens } from "../session";
 import { MS_DAY } from "../time";
-import { demoBusyBlocks } from "../demo/calendar";
+import { demoBusyBlocks, demoCalendarItems } from "../demo/calendar";
+import type { CalendarItemForDetection } from "../eventDetection/detect";
 import { createOAuthClient } from "./oauth";
 
 const EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -82,4 +83,53 @@ export async function getBusyBlocks(opts: { days?: number; until?: number; demoD
   raw = []; // 参照を即座に破棄
   logger.info("calendar.masked", { busyCount: busy.length, mode: "google" });
   return { source: "google", busy, from, to };
+}
+
+/** ライブ検出用: タイトル・場所・日時だけを取得（参加者・説明文は受信しない） */
+const DETECT_FIELDS = "items(id,summary,location,start,end,status),nextPageToken";
+
+/**
+ * ライブ検出のために直近の予定（タイトル・場所・日時）を取得する。
+ * 呼び出し側で即座に「ライブ候補」だけに絞り、残りは破棄すること。保存・ログ出力はしない。
+ */
+export async function getItemsForDetection(days = 180): Promise<{ source: CalendarSource; items: CalendarItemForDetection[] }> {
+  const from = Date.now();
+  const to = from + days * MS_DAY;
+  const tokens = isGoogleOAuthConfigured() ? await readTokens() : null;
+  if (!tokens?.access_token && !tokens?.refresh_token) return { source: "demo", items: demoCalendarItems(from) };
+
+  const client = createOAuthClient();
+  client.setCredentials(tokens);
+  let accessToken: string | null | undefined;
+  try {
+    accessToken = (await client.getAccessToken()).token;
+  } catch {
+    throw new CalendarAuthError("Google 認証の有効期限が切れました。再連携してください。");
+  }
+  if (!accessToken) throw new CalendarAuthError("Google 認証が必要です。");
+  if (client.credentials.access_token !== tokens.access_token) await writeTokens(client.credentials);
+
+  const items: CalendarItemForDetection[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 4; page++) {
+    const params = new URLSearchParams({
+      timeMin: new Date(from).toISOString(),
+      timeMax: new Date(to).toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "250",
+      fields: DETECT_FIELDS,
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const started = Date.now();
+    const res = await fetch(`${EVENTS_ENDPOINT}?${params}`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+    logger.info("calendar.detect.list", { httpStatus: res.status, latencyMs: Date.now() - started });
+    if (res.status === 401 || res.status === 403) throw new CalendarAuthError("カレンダーへのアクセスが拒否されました。");
+    if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
+    const body = (await res.json()) as { items?: CalendarItemForDetection[]; nextPageToken?: string };
+    items.push(...(body.items ?? []));
+    pageToken = body.nextPageToken;
+    if (!pageToken) break;
+  }
+  return { source: "google", items };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
@@ -307,8 +308,8 @@ function EmptyPlan() {
         <div className="relative flex flex-col justify-center p-7 sm:p-10">
           <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">AI AGENT</p>
           <p className="mt-2 text-2xl font-bold leading-snug">
-            {event.title}
-            <span className="block text-base font-medium text-white/70">に向けたプランを逆算します</span>
+            {event ? event.title : "イベントが未登録です"}
+            <span className="block text-base font-medium text-white/70">{event ? "に向けたプランを逆算します" : "先にイベントを登録してください"}</span>
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/65">
             空き時間・美容の最適タイミング・混雑を避けた経路をエージェントが自分で調べ、承認待ちのタイムラインとして提案します。
@@ -318,6 +319,10 @@ function EmptyPlan() {
             <div className="mt-6">
               <AgentConsole running />
             </div>
+          ) : !event ? (
+            <Link href="/events" className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
+              イベントを登録する
+            </Link>
           ) : (
             <button onClick={() => void generatePlan()} disabled={busy !== null} className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
               <Sparkles className="h-5 w-5" />
