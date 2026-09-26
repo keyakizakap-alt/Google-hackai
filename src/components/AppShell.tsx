@@ -166,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <br />
               <span className="pl-5">Good Live ♡</span>
             </p>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">データはメモリ上でのみ処理。ページを閉じると消去されます。</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">予定や画像はこの画面の中だけで使い、閉じると消えます。</p>
           </div>
         </div>
       </aside>

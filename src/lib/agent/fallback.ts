@@ -67,7 +67,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     start: r.departure,
     end: r.arrival,
     route: { from: event.homeStation, to: event.venueStation, summary: r.summary, legs: r.legs, fareJpy: r.fareJpy, source: "mock" },
-    rationale: "開演直前の最混雑帯を避け、物販にも間に合う到着時刻から逆算しました。",
+    rationale: "開演直前のいちばん混む時間を避けて、グッズ販売にも間に合う時間から逆算しました。",
     requiresBooking: true,
   });
 

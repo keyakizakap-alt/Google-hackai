@@ -26,14 +26,14 @@ export function signEnvelope(env: Unsigned, now = Date.now()): PlanEnvelope {
 /** クライアントから戻ってきた封筒を検証する。改ざん・期限切れは GuardrailError */
 export function verifyEnvelope(input: unknown, now = Date.now()): PlanEnvelope {
   const parsed = PlanEnvelopeSchema.safeParse(input);
-  if (!parsed.success) throw new GuardrailError("プランの形式が不正です", "SIGNATURE_INVALID");
+  if (!parsed.success) throw new GuardrailError("プランを読み込めませんでした。もう一度作成してください", "SIGNATURE_INVALID");
   const env = parsed.data;
   const { sig, ...rest } = env;
   if (!verifyHmac(canonical(rest), sig, "plan")) {
-    throw new GuardrailError("プランの署名が一致しません（改ざんの可能性）", "SIGNATURE_INVALID");
+    throw new GuardrailError("プランの内容を確認できませんでした。もう一度作成してください", "SIGNATURE_INVALID");
   }
   if (Date.parse(env.expiresAt) < now) {
-    throw new GuardrailError("プランの有効期限が切れています。再生成してください", "EXPIRED");
+    throw new GuardrailError("プランの有効期限（2時間）が切れました。もう一度作成してください", "EXPIRED");
   }
   return env;
 }

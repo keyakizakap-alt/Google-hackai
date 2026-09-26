@@ -25,7 +25,7 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 function OAuthNotice() {
   const q = useSearchParams();
   if (q.get("error") !== "oauth_not_configured") return null;
-  return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-500">Google OAuth クライアントが未設定です（GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET）。デモカレンダーで体験できます。</p>;
+  return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-500">いまは Google カレンダーと連携できない状態です。お試し用の予定で体験できます。</p>;
 }
 
 export default function SettingsPage() {
@@ -45,8 +45,8 @@ export default function SettingsPage() {
           <Row
             icon={<GoogleG className="h-5 w-5" />}
             title="Google カレンダー"
-            status={session?.calendarConnected ? "連携済み" : "デモモード"}
-            desc="権限は「予定の閲覧のみ」。空き時間の計算は時間帯だけで行います。ライブの自動取り込み時はタイトル・場所・日時を一時的に読み、ライブ以外の予定は即破棄します（参加者・説明文は受信しません）。"
+            status={session?.calendarConnected ? "連携中" : "お試し中"}
+            desc="予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。"
             action={
               session?.calendarConnected ? (
                 <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
@@ -61,34 +61,34 @@ export default function SettingsPage() {
           />
           <Row
             icon={<Bot className="h-5 w-5" />}
-            title="AI エージェント"
-            status={session?.gemini.configured ? session.gemini.model : "ルールベース"}
-            desc={`${session?.gemini.platform ?? "Gemini API"} の Function Calling で、空き時間・サロン・混雑・経路のツールを自律的に呼び出して計画します。`}
+            title="AI プランナー"
+            status={session?.gemini.configured ? "利用中" : "かんたんモード"}
+            desc="Google の AI が、空き時間・サロンの空き・会場の混雑・移動ルートを自分で調べてプランを作ります。かんたんモードでは決まったルールで作ります。"
           />
           <Row
             icon={<TrainFront className="h-5 w-5" />}
-            title="駅すぱあと API MCP サーバー"
-            status={session?.ekispert.mode === "mcp" ? "MCP 接続" : "モック"}
-            desc="MCP の tools/list から経路探索ツールを動的に取得し、Gemini に公開します。"
+            title="乗換案内（駅すぱあと）"
+            status={session?.ekispert.mode === "mcp" ? "連携中" : "目安表示"}
+            desc="電車の時刻・乗り換え・運賃を調べます。連携していないときは所要時間と運賃の目安を表示します。"
           />
           <Row
             icon={<Camera className="h-5 w-5" />}
-            title="YouCam AI 肌解析"
-            status={session?.youcam.mode === "api" ? "API" : "モック"}
-            desc="顔画像はメモリ上でのみ処理し、解析直後に破棄します。"
+            title="AI 肌診断（YouCam）"
+            status={session?.youcam.mode === "api" ? "利用中" : "お試し版"}
+            desc="顔写真は診断のあとすぐに消去し、保存しません。"
           />
         </ul>
       </section>
 
       <section className="card p-5">
         <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
-          <ShieldCheck className="h-5 w-5 text-lav-600" /> プライバシーと安全設計
+          <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />カレンダー・顔画像はデータベースにもログにも保存しません（オンメモリ処理のみ）。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI には予約・決済のツールを渡していません。すべての提案は「承認待ち」で止まります。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />プランはサーバー署名付き。承認を飛ばした予約や改ざんはサーバーで拒否されます。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />OAuth トークンは暗号化 Cookie（24 時間で失効）にのみ保持します。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />カレンダーの予定や顔写真は、どこにも保存しません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約や支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>
         </ul>
       </section>
     </div>

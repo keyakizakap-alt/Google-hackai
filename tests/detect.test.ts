@@ -46,3 +46,14 @@ describe("live event detection", () => {
     expect(isLiveCandidate({ summary: "ネイルサロン（ライブ前）", start: { dateTime: future(3) } })).toBe(false);
   });
 });
+
+describe("venue dictionary", () => {
+  it("prefers the longest venue name", async () => {
+    const { matchVenue } = await import("@/lib/eventDetection/venues");
+    expect(matchVenue("東京ドームシティホール")?.station).toBe("水道橋");
+    expect(matchVenue("東京ドームシティホール")?.name).toBe("東京ドームシティホール");
+    expect(matchVenue("Kアリーナ横浜")?.station).toBe("新高島");
+    expect(matchVenue("GLION ARENA KOBE")?.station).toBe("三宮");
+    expect(matchVenue("LE SSERAFIM FAN MEETING")).toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { BookingResult, OshiEvent, PlanEnvelope, TraceStep } from "@/lib/agent/types";
+import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
 
 /**
  * クライアント状態はすべて React のメモリ上のみ（localStorage 等に保存しない）。
@@ -66,6 +66,27 @@ export interface ImportResult {
   added: number;
 }
 
+/** 予約の手続き状況（アプリ内の管理用メモ。実際の予約は各予約サイトで行う） */
+export type ReservationStatus = "todo" | "reserved" | "cancelled";
+export interface Reservation {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  kind: TimelineItem["kind"];
+  category?: string;
+  title: string;
+  start: string;
+  end: string;
+  place?: string;
+  priceJpy?: number;
+  url?: string;
+  note: string;
+  status: ReservationStatus;
+  confirmationNo?: string;
+  memo?: string;
+  updatedAt: string;
+}
+
 const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true };
 
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
@@ -104,8 +125,11 @@ interface Store {
   setProfile: (p: Profile) => void;
   importFromCalendar: () => Promise<ImportResult | null>;
   lastImport: ImportResult | null;
+  /** 選択中イベントの推し画像 */
   eventImage: string | null;
   setEventImage: (url: string | null) => void;
+  /** イベントごとの推し画像（端末のメモリ上のみ） */
+  oshiImages: Record<string, string>;
   selfie: string | null;
   setSelfie: (dataUrl: string | null) => void;
   availability: Availability | null;
@@ -114,7 +138,11 @@ interface Store {
   usage: PlanResponse["usage"] | null;
   engine: PlanResponse["engine"] | null;
   chat: ChatMessage[];
+  /** 直近に手続きを始めた予約（プラン画面からの遷移用） */
   bookings: BookingResult[];
+  reservations: Reservation[];
+  updateReservation: (id: string, patch: Partial<Pick<Reservation, "status" | "confirmationNo" | "memo">>) => void;
+  removeReservation: (id: string) => void;
   busy: Busy;
   error: string | null;
   clearError: () => void;
@@ -142,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
-  const [eventImage, setEventImageState] = useState<string | null>(null);
+  const [oshiImages, setOshiImages] = useState<Record<string, string>>({});
   const [selfie, setSelfie] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [envelope, setEnvelope] = useState<PlanEnvelope | null>(null);
@@ -151,6 +179,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [engine, setEngine] = useState<PlanResponse["engine"] | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [bookings, setBookings] = useState<BookingResult[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -231,12 +260,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 起動時に 1 回だけ
   }, []);
 
-  const setEventImage = useCallback((url: string | null) => {
-    setEventImageState((prev) => {
-      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      return url;
-    });
-  }, []);
+  const eventImage = event ? (oshiImages[event.id] ?? null) : null;
+  const eventId = event?.id;
+  const setEventImage = useCallback(
+    (url: string | null) => {
+      if (!eventId) return;
+      setOshiImages((prev) => {
+        const old = prev[eventId];
+        if (old?.startsWith("blob:") && old !== url) URL.revokeObjectURL(old);
+        const next = { ...prev };
+        if (url) next[eventId] = url;
+        else delete next[eventId];
+        return next;
+      });
+    },
+    [eventId],
+  );
 
   const applyPlan = useCallback((r: PlanResponse) => {
     setEnvelope(r.envelope);
@@ -285,6 +324,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       lastImport,
       eventImage,
       setEventImage,
+      oshiImages,
       selfie,
       setSelfie,
       availability,
@@ -294,6 +334,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engine,
       chat,
       bookings,
+      reservations,
+      updateReservation: (id, patch) =>
+        setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r))),
+      removeReservation: (id) => setReservations((prev) => prev.filter((r) => r.id !== id)),
       busy,
       error,
       clearError: () => setError(null),
@@ -346,6 +390,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (r) {
           setEnvelope(r.envelope);
           setBookings(r.results);
+          const plan = r.envelope.plan;
+          const now = new Date().toISOString();
+          const added: Reservation[] = r.results.flatMap((b) => {
+            const item = plan.items.find((i) => i.id === b.itemId);
+            if (!item) return [];
+            return [{
+              id: `${plan.event.id}:${plan.id}:${item.id}`,
+              eventId: plan.event.id,
+              eventTitle: plan.event.title,
+              kind: item.kind,
+              category: item.category,
+              title: b.title,
+              start: item.start,
+              end: item.end,
+              place: item.location ?? item.route?.to,
+              priceJpy: item.provider?.priceJpy ?? item.route?.fareJpy,
+              url: b.externalUrl,
+              note: b.note,
+              status: "todo" as const,
+              updatedAt: now,
+            }];
+          });
+          setReservations((prev) => [...prev.filter((x) => !added.some((a) => a.id === x.id)), ...added].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)));
         }
       },
       disconnect: async () => {
@@ -355,7 +422,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, oshiImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

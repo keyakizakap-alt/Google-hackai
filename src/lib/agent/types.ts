@@ -137,11 +137,11 @@ export interface SkinAnalysis {
   advice: string[];
 }
 
+/** 承認後に返す「予約サイトへの案内」（OshiReady は予約・決済を代行しない） */
 export interface BookingResult {
   itemId: string;
   title: string;
-  status: "reserved" | "handoff";
-  confirmationCode?: string;
+  status: "handoff";
   externalUrl?: string;
   note: string;
 }

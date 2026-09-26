@@ -40,10 +40,10 @@ export function canTransition(from: PlanStatus, to: PlanStatus, actor: Actor): b
 
 export function assertTransition(from: PlanStatus, to: PlanStatus, actor: Actor): void {
   if (!TRANSITIONS[from].includes(to)) {
-    throw new GuardrailError(`状態遷移 ${from} → ${to} は許可されていません`, "INVALID_TRANSITION");
+    throw new GuardrailError("この操作は今は実行できません。画面を更新してやり直してください", "INVALID_TRANSITION");
   }
   if (USER_ONLY.has(to) && actor !== "user") {
-    throw new GuardrailError(`${to} への遷移にはユーザーの明示的な操作が必要です`, "USER_ACTION_REQUIRED");
+    throw new GuardrailError("この操作にはあなたの確認が必要です", "USER_ACTION_REQUIRED");
   }
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, CalendarPlus, Heart, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
+import { ArrowUpRight, CalendarPlus, Heart, ImagePlus, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
 import { useState } from "react";
 import { PendingBell } from "@/components/AppShell";
 import { GoogleG } from "@/components/brand";
@@ -18,7 +18,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 /** チケット型ヒーロー: 左にステージ、右の半券に開演までのライブカウントダウン */
 function TicketHero({ event }: { event: OshiEvent }) {
-  const { eventImage } = useStore();
+  const { eventImage, setEventImage } = useStore();
   const cd = useCountdown(event.startAt);
   const [liked, setLiked] = useState(true);
   return (
@@ -26,7 +26,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
       <div className="relative min-h-[300px] overflow-hidden md:min-h-[340px]">
         {eventImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
-          <img src={eventImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={eventImage} alt={`${event.artist} の推し画像`} className="kenburns absolute inset-0 h-full w-full object-cover" />
         ) : (
           <StageScene className="absolute inset-0" />
         )}
@@ -34,6 +34,21 @@ function TicketHero({ event }: { event: OshiEvent }) {
         <div className="relative flex h-full flex-col justify-between p-6 sm:p-8">
           <div className="flex items-center justify-between">
             <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.3em] backdrop-blur">NEXT LIVE</span>
+            <div className="flex items-center gap-2">
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 text-xs font-bold backdrop-blur transition hover:bg-white/20">
+              <ImagePlus className="h-4 w-4" />
+              {eventImage ? "推し画像を変更" : "推し画像を入れる"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) setEventImage(URL.createObjectURL(f));
+                }}
+              />
+            </label>
             <button
               type="button"
               onClick={() => setLiked((v) => !v)}
@@ -43,6 +58,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
             >
               <Heart className={`h-5 w-5 transition ${liked ? "fill-rose-400" : ""}`} />
             </button>
+            </div>
           </div>
           <div>
             <p className="font-display text-lg italic text-white/70">{event.artist}</p>
@@ -108,7 +124,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
 
 /** 登録済みイベントの切り替え（カレンダー取り込み分にはバッジ） */
 function EventSwitcher() {
-  const { events, event, selectEvent, lastImport, busy } = useStore();
+  const { events, event, selectEvent, lastImport, busy, oshiImages } = useStore();
   if (events.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -116,7 +132,7 @@ function EventSwitcher() {
         <p className="text-[10px] font-bold tracking-[0.25em] text-mute">MY LIVES · {events.length}</p>
         {lastImport && lastImport.added > 0 && busy !== "importing" && (
           <p className="pop-in text-[11px] text-ink-soft">
-            {lastImport.source === "google" ? "Google カレンダー" : "デモカレンダー"}から <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
+            {lastImport.source === "google" ? "Google カレンダー" : "お試し用カレンダー"}から <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
           </p>
         )}
       </div>
@@ -131,7 +147,12 @@ function EventSwitcher() {
               onClick={() => selectEvent(e.id)}
               className={`group flex min-h-[44px] shrink-0 items-center gap-2.5 rounded-full border px-4 py-2 text-left transition ${active ? "border-transparent bg-night text-white shadow-float" : "border-line bg-white text-ink hover:border-rose-300"}`}
             >
-              <span className={`h-2 w-2 rounded-full ${active ? "bg-rose-400 shadow-[0_0_10px_2px_rgb(var(--oshi-glow))]" : "bg-lav-200"}`} />
+              {oshiImages[e.id] ? (
+                // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
+                <img src={oshiImages[e.id]} alt="" className={`h-7 w-7 rounded-full object-cover ${active ? "ring-2 ring-rose-400" : ""}`} />
+              ) : (
+                <span className={`h-2 w-2 rounded-full ${active ? "bg-rose-400 shadow-[0_0_10px_2px_rgb(var(--oshi-glow))]" : "bg-lav-200"}`} />
+              )}
               <span className="text-[13px] font-bold">{e.artist}</span>
               <span className={`text-[11px] ${active ? "text-white/60" : "text-mute"}`}>{formatJst(e.startAt, { date: true })}</span>
               {e.source === "calendar" && <GoogleG className="h-3.5 w-3.5" />}
@@ -193,25 +214,25 @@ function CalendarCard() {
     <Reveal delay={120} as="section" aria-labelledby="gcal" className="card card-lift flex flex-col p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-display text-sm italic text-mute">Free / Busy</p>
+          <p className="font-display text-sm italic text-mute">Free time</p>
           <h2 id="gcal" className="flex items-center gap-2 text-[17px] font-bold text-ink">
             <GoogleG className="h-5 w-5" />
             Googleカレンダーと連携
           </h2>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "デモ"}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "お試し中"}</span>
       </div>
-      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間帯」だけから計算します。ライブの取り込み時のみタイトル・場所を一時的に読み、保存はしません。</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間」だけから計算します。予定の中身はライブを探すときだけ確認し、保存はしません。</p>
 
       <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[1fr_1.15fr]">
         <div className="flex flex-col justify-between gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-cloud p-3">
-              <p className="text-[10px] font-bold tracking-[0.2em] text-mute">FREE SLOTS</p>
+              <p className="text-[11px] font-bold text-mute">使える空き時間</p>
               <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.freeSlots.length} /> : "—"}</p>
             </div>
             <div className="rounded-2xl bg-cloud p-3">
-              <p className="text-[10px] font-bold tracking-[0.2em] text-mute">MASKED</p>
+              <p className="text-[11px] font-bold text-mute">入っている予定</p>
               <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.busyCount} /> : "—"}</p>
             </div>
           </div>
@@ -220,7 +241,7 @@ function CalendarCard() {
               Google アカウントを連携する →
             </a>
           ) : (
-            <p className="text-[11px] leading-relaxed text-mute">{connected ? "権限は閲覧のみ・タイトルは受信しません" : "未連携のためデモカレンダーで体験できます"}</p>
+            <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、お試し用の予定で体験できます"}</p>
           )}
         </div>
         {event ? (
@@ -295,6 +316,7 @@ function Setlist() {
 }
 
 function Greeting() {
+  const { eventImage } = useStore();
   const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Tokyo" }));
   const hello = h < 11 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   return (
@@ -315,9 +337,14 @@ function Greeting() {
       </Reveal>
       <div className="hidden items-center gap-2 lg:flex">
         <PendingBell />
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-rose-100 to-lav-200 ring-2 ring-white" aria-hidden>
-          <Heart className="h-5 w-5 fill-rose-300 text-rose-400" />
-        </span>
+        {eventImage ? (
+          // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
+          <img src={eventImage} alt="" className="h-11 w-11 rounded-full object-cover ring-2 ring-rose-300" />
+        ) : (
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-rose-100 to-lav-200 ring-2 ring-white" aria-hidden>
+            <Heart className="h-5 w-5 fill-rose-300 text-rose-400" />
+          </span>
+        )}
       </div>
     </div>
   );

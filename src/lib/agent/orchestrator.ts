@@ -59,13 +59,13 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       await runGeminiLoop(input, ctx, trace, usage);
     } catch (e) {
       logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, model: config.gemini.model });
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "Gemini 呼び出しに失敗したためルールベースで作成" });
+      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "AI が混み合っていたため、かんたんモードで作成しました" });
       engine = "rule-based";
     }
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "上限ステップ内に確定しなかったためルールベースで補完" });
+      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "時間内にまとまらなかったため、かんたんモードで仕上げました" });
       engine = "rule-based";
     }
     await runRuleBasedPlanner(ctx, trace);
@@ -74,9 +74,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
 
   const items = [...ctx.submitted.items].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarSource === "demo") warnings.unshift("デモカレンダーで作成しています。Google カレンダー連携で実際の空き時間に基づくプランになります。");
-  if (engine === "rule-based" && !isGeminiConfigured()) warnings.push("Gemini 未設定のためルールベースで作成しました。");
-  if (items.some((i) => i.route?.source === "mock")) warnings.push("経路はモック（概算）です。実際の時刻・運賃は乗車前に必ず確認してください。");
+  if (input.calendarSource === "demo") warnings.unshift("お試し用の予定で作成しています。Google カレンダーを連携すると、あなたの予定に合わせたプランになります。");
+  if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");
 
   const plan: Plan = {
     id: input.previous?.id ?? randomId(8),
@@ -112,7 +111,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     name: "plan",
     ok: true,
     latencyMs: 0,
-    summary: `${config.gemini.model} に ${declarations.length} 個のツールを提供（駅すぱあと MCP: ${ekispert ? "接続" : "未接続→モック"}）`,
+    summary: `AI が調べものを開始しました（乗換案内: ${ekispert ? "連携中" : "目安で計算"}）`,
   });
 
   const contents: Content[] = [
@@ -169,7 +168,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
       const t0 = Date.now();
       const outcome = allowed.has(name)
         ? await executeTool(name, (call.args ?? {}) as Record<string, unknown>, ctx)
-        : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "許可リスト外のツール呼び出しを拒否" };
+        : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
       trace.push({ step: trace.length + 1, type: allowed.has(name) ? "tool" : "guardrail", name, ok: outcome.ok, latencyMs: Date.now() - t0, summary: outcome.summary });
       logger.info("agent.tool", { requestId: input.requestId, tool: name, toolOk: outcome.ok, latencyMs: Date.now() - t0 });
       responseParts.push({ functionResponse: { id: call.id, name, response: outcome.response } });

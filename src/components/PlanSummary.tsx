@@ -10,12 +10,12 @@ import { useStore } from "./store";
 export const STATUS_LABEL: Record<string, string> = {
   draft: "下書き",
   generating: "作成中",
-  pending_approval: "承認待ち",
-  revising: "修正中",
+  pending_approval: "あなたの確認待ち",
+  revising: "作り直し中",
   approved: "承認済み",
   rejected: "見送り",
-  booking: "予約処理中",
-  booked: "予約完了",
+  booking: "手続き準備中",
+  booked: "予約手続きへ",
 };
 
 /** ホームの「提案プラン（概要）」カード */
@@ -43,7 +43,7 @@ export function PlanSummaryCard() {
       ) : items.length === 0 ? (
         <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lav-200 px-4 py-10 text-center">
           <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
-          <p className="mt-2 text-xs text-mute">セットリストの M2 からプランを作成できます。</p>
+          <p className="mt-2 text-xs text-mute">「次にやること」の M2 からプランを作れます。</p>
         </div>
       ) : (
         <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-6 space-y-5">

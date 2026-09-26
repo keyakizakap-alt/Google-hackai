@@ -193,17 +193,17 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         dayStartHour: num(args.day_start_hour, 9),
         dayEndHour: num(args.day_end_hour, 21),
       }).slice(0, 40);
-      return { ok: true, response: { slots, note: "予定の内容は非公開。時間帯のみ" }, summary: `${fromKey}〜${toKey} の空き ${slots.length} 枠` };
+      return { ok: true, response: { slots, note: "予定の内容は非公開。時間帯のみ" }, summary: `${fromKey.slice(5).replace("-", "/")}〜${toKey.slice(5).replace("-", "/")} の空き時間を ${slots.length} 件見つけました` };
     }
     case "get_beauty_guideline": {
       const svc = str(args.service, 20) as keyof typeof BEAUTY_GUIDELINES;
       const g = BEAUTY_GUIDELINES[svc];
-      if (!g) return { ok: false, response: { error: "unknown service" }, summary: "不明なメニュー" };
-      return { ok: true, response: { service: svc, ...g }, summary: `${g.label}: ${g.idealDaysBefore[0]}〜${g.idealDaysBefore[1]}日前推奨` };
+      if (!g) return { ok: false, response: { error: "unknown service" }, summary: "対応していないメニューでした" };
+      return { ok: true, response: { service: svc, ...g }, summary: `${g.label}は${g.idealDaysBefore[0]}〜${g.idealDaysBefore[1]}日前がおすすめ` };
     }
     case "search_beauty_salons": {
       const svc = str(args.service, 20) as keyof typeof BEAUTY_GUIDELINES;
-      if (!BEAUTY_GUIDELINES[svc]) return { ok: false, response: { error: "unknown service" }, summary: "不明なメニュー" };
+      if (!BEAUTY_GUIDELINES[svc]) return { ok: false, response: { error: "unknown service" }, summary: "対応していないメニューでした" };
       const slots = searchSalonSlots({
         service: svc,
         station: str(args.station, 40) || ctx.event.homeStation,
@@ -214,16 +214,16 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       return {
         ok: true,
         response: { slots: slots.slice(0, 6), source: "mock", note: "予約はまだ行われていません" },
-        summary: `${BEAUTY_GUIDELINES[svc].label} の空き枠 ${Math.min(slots.length, 6)} 件`,
+        summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の空きを ${Math.min(slots.length, 6)} 件見つけました`,
       };
     }
     case "get_skin_analysis":
       return ctx.skin
-        ? { ok: true, response: { provided: true, ...ctx.skin }, summary: "肌解析結果を参照" }
-        : { ok: true, response: { provided: false }, summary: "肌解析なし" };
+        ? { ok: true, response: { provided: true, ...ctx.skin }, summary: "肌診断の結果を参考にしました" }
+        : { ok: true, response: { provided: false }, summary: "肌診断はなし" };
     case "estimate_crowd": {
       const r = estimateCrowd({ eventStart: ctx.event.startAt, at: str(args.at, 40) });
-      return { ok: true, response: r, summary: `混雑度: ${r.level}（開演${r.minutesBeforeStart}分前）` };
+      return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
     }
     case "search_transit_route_mock": {
       const r = mockRoute({
@@ -231,14 +231,14 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         to: str(args.to_station, 40) || ctx.event.venueStation,
         arriveBy: str(args.arrive_by, 40) || new Date(Date.parse(ctx.event.startAt) - 2 * 3600_000).toISOString(),
       });
-      return { ok: true, response: r as unknown as Record<string, unknown>, summary: `経路（モック）${r.durationMin}分・乗換${r.transfers}回` };
+      return { ok: true, response: r as unknown as Record<string, unknown>, summary: `移動ルート（目安）約${Math.floor(r.durationMin / 60)}時間${r.durationMin % 60}分・乗り換え${r.transfers}回` };
     }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
-        return { ok: false, response: { accepted: false, errors: issues }, summary: `形式エラー ${issues.length} 件で差し戻し` };
+        return { ok: false, response: { accepted: false, errors: issues }, summary: `内容に不備があったため作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
       if (errors.length > 0) {
@@ -246,18 +246,18 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return {
           ok: false,
           response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください" },
-          summary: `検証エラー ${errors.length} 件で差し戻し`,
+          summary: `予定の重なりなどが見つかったため作り直します（${errors.length}件）`,
         };
       }
       ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings] };
-      return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `タイムライン ${parsed.data.items.length} 件を受理` };
+      return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `スケジュール ${parsed.data.items.length} 件が完成しました` };
     }
     default:
       if (name.startsWith(EKISPERT_PREFIX)) {
         const r = (await callEkispertTool(name, args)) as Record<string, unknown>;
-        return { ok: !r.error && !r.isError, response: r, summary: r.error ? "駅すぱあと呼び出し失敗" : "駅すぱあと 経路探索" };
+        return { ok: !r.error && !r.isError, response: r, summary: r.error ? "乗換案内に接続できませんでした" : "乗換案内でルートを調べました" };
       }
-      return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "許可されていないツール" };
+      return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
   }
 }
 

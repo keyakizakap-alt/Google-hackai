@@ -343,3 +343,12 @@ body {
     transform: none;
   }
 }
+
+/* 推し画像: ゆっくりズームして“生きている”写真に */
+.kenburns {
+  animation: kenburns 18s ease-in-out infinite alternate;
+}
+@keyframes kenburns {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.12) translate(-1%, -1%); }
+}

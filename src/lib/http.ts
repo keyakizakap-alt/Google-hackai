@@ -20,10 +20,10 @@ export function assertSameOrigin(req: Request, requiredAction?: string): NextRes
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const allowed = new Set([new URL(config.appBaseUrl).host, host].filter(Boolean));
   if (!origin || !allowed.has(new URL(origin).host)) {
-    return NextResponse.json({ error: "forbidden origin" }, { status: 403 });
+    return NextResponse.json({ error: "この操作は OshiReady の画面からのみ行えます" }, { status: 403 });
   }
   if (requiredAction && req.headers.get("x-oshiready-action") !== requiredAction) {
-    return NextResponse.json({ error: "explicit user action required" }, { status: 403 });
+    return NextResponse.json({ error: "この操作にはあなたの確認が必要です" }, { status: 403 });
   }
   return null;
 }

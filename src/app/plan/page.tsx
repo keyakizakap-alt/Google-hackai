@@ -15,7 +15,17 @@ import type { TimelineItem } from "@/lib/agent/types";
 import { formatJst, relativeDayLabel } from "@/lib/time";
 
 const FLOW = ["generating", "pending_approval", "approved", "booked"] as const;
-const FLOW_LABEL = ["AIが作成", "あなたが確認", "承認", "予約"];
+const HISTORY_LABEL: Record<string, string> = {
+  draft: "作成開始",
+  generating: "AIが作成",
+  pending_approval: "確認待ち",
+  revising: "見直し",
+  approved: "承認",
+  rejected: "見送り",
+  booking: "手続き開始",
+  booked: "予約リストへ追加",
+};
+const FLOW_LABEL = ["AIが提案", "あなたが確認", "承認", "予約手続き"];
 
 function StatusStepper({ status }: { status: string }) {
   const idx = status === "revising" ? 0 : status === "rejected" ? 1 : status === "booking" ? 3 : FLOW.indexOf(status as (typeof FLOW)[number]);
@@ -68,7 +78,7 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
                   {item.route.from} → {item.route.to}
                   {item.route.fareJpy !== undefined && <span className="ml-2 font-normal">約 ¥{item.route.fareJpy.toLocaleString()}</span>}
                   <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${item.route.source === "ekispert" ? "bg-lav-200 text-lav-700" : "bg-white text-mute"}`}>
-                    {item.route.source === "ekispert" ? "駅すぱあと" : "概算"}
+                    {item.route.source === "ekispert" ? "乗換案内" : "目安"}
                   </span>
                 </p>
                 {item.route.legs.length > 0 ? (
@@ -122,7 +132,7 @@ function RevisePanel() {
     <section className="card flex flex-col p-5" aria-labelledby="revise">
       <h2 id="revise" className="flex items-center gap-2 text-[15px] font-bold text-ink">
         <Bot className="h-5 w-5 text-lav-600" />
-        修正指示
+        AIに相談して直す
       </h2>
       <p className="mt-1 text-xs text-mute">AI への要望はここから。修正後も必ずあなたの承認待ちに戻ります。</p>
       <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -139,7 +149,7 @@ function RevisePanel() {
         ))}
         {busy === "revising" && (
           <p className="flex items-center gap-2 text-xs text-mute">
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> エージェントが組み直しています…
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> AIが組み直しています…
           </p>
         )}
         <div ref={endRef} />
@@ -170,7 +180,7 @@ function RevisePanel() {
           placeholder={canRevise ? "例: 眉毛サロンは土曜の午前がいい" : "予約完了後は修正できません"}
           disabled={!canRevise || busy !== null}
           className="min-w-0 flex-1 rounded-xl border border-line bg-cloud px-3 py-2.5 text-sm outline-none focus:border-lav-400 focus:bg-white"
-          aria-label="修正指示"
+          aria-label="AIへの相談内容"
         />
         <button type="submit" disabled={!canRevise || busy !== null || !text.trim()} className="btn-primary grid w-11 place-items-center rounded-xl text-white" aria-label="送信">
           <Send className="h-4 w-4" />
@@ -181,19 +191,29 @@ function RevisePanel() {
 }
 
 function TracePanel() {
-  const { trace, usage, engine, envelope } = useStore();
+  const { trace, envelope } = useStore();
   if (!trace.length) return null;
   return (
     <section aria-labelledby="trace" className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Activity className="h-4 w-4 text-lav-600" />
-        <h2 id="trace" className="text-sm font-bold text-ink">エージェントの行動ログ</h2>
-        <span className="ml-auto text-[11px] text-mute">
-          {engine === "gemini" ? envelope?.plan.generatedBy.model : "ルールベース"}
-          {usage && usage.totalTokens > 0 && ` ・ ${usage.totalTokens.toLocaleString()} tokens`} ・ 予定の内容や画像は含みません
-        </span>
+        <h2 id="trace" className="text-sm font-bold text-ink">AIが調べたこと</h2>
+        <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
       <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} />
+      {envelope && (
+        <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1 text-[11px] text-mute" aria-label="これまでの流れ">
+          {envelope.history.map((h, i) => (
+            <li key={i} className="flex items-center gap-2">
+              {i > 0 && <span aria-hidden>→</span>}
+              <span>
+                {formatJst(h.at, { time: true })} {HISTORY_LABEL[h.status] ?? h.status}
+                <span className="text-lav-400">（{h.actor === "user" ? "あなた" : h.actor === "agent" ? "AI" : "アプリ"}）</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -217,7 +237,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
         <p className="flex items-center gap-1.5 font-semibold text-ink">
           <Lock className="h-3.5 w-3.5" /> あなたが承認するまで、予約・決済は一切行われません。
         </p>
-        <p className="mt-1">AI は提案のみを行い、予約系の操作権限を持っていません。</p>
+        <p className="mt-1">AI は提案するだけで、勝手に予約することはありません。</p>
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <dt className="text-ink-soft">予約対象</dt>
@@ -250,11 +270,11 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
               disabled={busy !== null || selectedItems.length === 0}
               className="btn-primary flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
-              承認済み：予約へ進む <ChevronRight className="h-4 w-4" />
+              予約サイトで手続きする <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-              <p className="text-xs text-ink">以下の {selectedItems.length} 件の予約手続きを実行します。よろしいですか？</p>
+              <p className="text-xs leading-relaxed text-ink">次の {selectedItems.length} 件を「予約の管理」に追加します。実際の予約・支払いは各予約サイトで行います（OshiReady が代わりに予約することはありません）。</p>
               <ul className="mt-2 list-inside list-disc text-xs text-ink-soft">
                 {selectedItems.map((i) => (
                   <li key={i.id}>{i.title}</li>
@@ -273,18 +293,18 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
                   className="btn-primary flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-bold text-white"
                 >
                   {busy === "booking" && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
-                  予約を確定する
+                  予約リストに追加する
                 </button>
               </div>
             </div>
           )}
-          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約対象が選択されていません。修正指示から再提案できます。</p>}
+          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約するものが選ばれていません。「AIに相談して直す」から作り直せます。</p>}
         </div>
       )}
-      {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。修正指示を送ると再提案します。</p>}
+      {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。「AIに相談して直す」から作り直せます。</p>}
       {status === "booked" && (
         <button onClick={() => router.push("/bookings")} className="btn-primary mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white">
-          予約内容を見る <ChevronRight className="h-4 w-4" />
+          予約の管理を開く <ChevronRight className="h-4 w-4" />
         </button>
       )}
     </section>
@@ -306,13 +326,13 @@ function EmptyPlan() {
           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
         </div>
         <div className="relative flex flex-col justify-center p-7 sm:p-10">
-          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">AI AGENT</p>
+          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">AI PLANNER</p>
           <p className="mt-2 text-2xl font-bold leading-snug">
             {event ? event.title : "イベントが未登録です"}
             <span className="block text-base font-medium text-white/70">{event ? "に向けたプランを逆算します" : "先にイベントを登録してください"}</span>
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/65">
-            空き時間・美容の最適タイミング・混雑を避けた経路をエージェントが自分で調べ、承認待ちのタイムラインとして提案します。
+            空き時間・美容のベストなタイミング・混雑を避けたルートを AI が調べて、スケジュールを提案します。予約はあなたが確認してからです。
             {!availability && "（空き時間はプラン作成時に自動で確認します）"}
           </p>
           {planning ? (
@@ -358,9 +378,9 @@ export default function PlanPage() {
     <div className="space-y-5 px-1">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="font-display text-lg italic text-mute">Countdown Plan · rev.{plan.revision}</p>
+          <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
-            改訂 {plan.revision} ・ {plan.generatedBy.engine === "gemini" ? `Gemini (${plan.generatedBy.model})` : "ルールベース"} ・ {STATUS_LABEL[status]}
+            {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
@@ -371,7 +391,7 @@ export default function PlanPage() {
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
           <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-rose-400" />
           <p>
-            <b>承認待ち（pending_approval）</b> — 内容を確認し、予約したい項目にチェックを入れて承認してください。気になる点は修正指示で AI に伝えられます。
+            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。
           </p>
         </div>
       )}

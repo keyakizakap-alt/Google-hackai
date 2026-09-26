@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "OshiReady — 推しに会う日を、いちばん気持ちよく迎える。",
-  description: "カレンダーの空き時間から、推し活の遠征・美容スケジュールを逆算して提案する AI エージェント。予約はあなたの承認後のみ。",
+  description: "カレンダーの空き時間から、推し活の遠征・美容スケジュールを逆算して提案する AI プランナー。予約はあなたが確認してから。",
 };
 
 export const viewport: Viewport = {

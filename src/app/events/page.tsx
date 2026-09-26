@@ -8,6 +8,7 @@ import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
 import { GoogleG } from "@/components/brand";
 import { formatJst } from "@/lib/time";
+import { matchVenue, VENUES } from "@/lib/eventDetection/venues";
 
 /** 顔画像はブラウザ内で縮小（長辺 1024px）してからメモリ上の data URL として保持する */
 async function downscale(file: File): Promise<string> {
@@ -59,8 +60,8 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
         </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mute">
-        {session?.calendarConnected ? "Google カレンダー" : "デモカレンダー"}の今後 6 か月の予定から、ライブ・公演らしい予定だけを抽出して登録します。
-        それ以外の予定のタイトルは読み取った直後に破棄し、どこにも保存しません。
+        {session?.calendarConnected ? "Google カレンダー" : "お試し用カレンダー"}の今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。
+        それ以外の予定の内容はすぐに捨て、どこにも保存しません。
       </p>
       {lastImport && (
         <p className="pop-in mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-ink">
@@ -181,7 +182,25 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
             </label>
             <label className="text-xs font-semibold text-ink-soft">
               会場
-              <input className={field} value={form.venue} onChange={(e) => set("venue", e.target.value)} maxLength={60} />
+              <input
+                className={field}
+                value={form.venue}
+                list="venue-list"
+                placeholder="会場名を入力 / 候補から選択"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const known = matchVenue(v);
+                  setForm((f) => ({ ...f, venue: v, venueStation: known && known.name === v ? known.station : f.venueStation }));
+                }}
+                maxLength={60}
+              />
+              <datalist id="venue-list">
+                {VENUES.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.area}・{v.station}駅
+                  </option>
+                ))}
+              </datalist>
             </label>
             <label className="text-xs font-semibold text-ink-soft">
               会場最寄り駅
@@ -267,20 +286,32 @@ export default function EventsPage() {
 
         <div className="space-y-5">
           <section className="card p-5">
-            <h2 className="text-[15px] font-bold text-ink">イベント画像</h2>
-            <p className="mt-1 text-xs text-mute">お気に入りの画像を設定できます（この端末のメモリ上でのみ表示・送信しません）。</p>
-            <div className="relative mt-3 h-36 overflow-hidden rounded-2xl">
+            <h2 className="text-[15px] font-bold text-ink">推し画像</h2>
+            <p className="mt-1 text-xs text-mute">
+              {event ? `「${event.title}」` : "選択中のイベント"}のチケットやホームに表示されます。画像はこの端末の中だけで使い、どこにも送信しません。
+            </p>
+            <div className="relative mt-3 h-44 overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              {eventImage ? <img src={eventImage} alt="" className="h-full w-full object-cover" /> : <StageScene className="relative h-full w-full" crowd={18} />}
+              {eventImage ? <img src={eventImage} alt="推し画像" className="kenburns h-full w-full object-cover" /> : <StageScene className="relative h-full w-full" crowd={18} />}
             </div>
             <div className="mt-3 flex gap-2">
-              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-xs text-ink-soft hover:bg-lav-50">
-                <ImagePlus className="h-4 w-4" /> 画像を選ぶ
-                <input type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files?.[0] && setEventImage(URL.createObjectURL(e.target.files[0]))} />
+              <label className={`flex min-h-[44px] items-center gap-1.5 rounded-xl border border-line px-4 text-xs font-bold text-ink-soft ${event ? "cursor-pointer hover:bg-lav-50" : "cursor-not-allowed opacity-50"}`}>
+                <ImagePlus className="h-4 w-4" /> {eventImage ? "画像を変更" : "推し画像を選ぶ"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={!event}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) setEventImage(URL.createObjectURL(f));
+                  }}
+                />
               </label>
               {eventImage && (
                 <button onClick={() => setEventImage(null)} className="flex items-center gap-1 rounded-xl px-3 py-2 text-xs text-mute hover:text-ink">
-                  <Trash2 className="h-4 w-4" /> 解除
+                  <Trash2 className="h-4 w-4" /> 外す
                 </button>
               )}
             </div>
@@ -289,7 +320,7 @@ export default function EventsPage() {
           <section className="card p-5">
             <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
               <Camera className="h-5 w-5 text-lav-600" /> AI 肌解析（任意）
-              <span className="ml-auto rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-semibold text-lav-600">YouCam {session?.youcam.mode === "api" ? "API" : "モック"}</span>
+              <span className="ml-auto rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-semibold text-lav-600">{session?.youcam.mode === "api" ? "YouCam" : "お試し版"}</span>
             </h2>
             <p className="mt-2 text-xs leading-relaxed text-ink-soft">
               素顔の写真から肌状態を解析し、前日のセルフケアをプランに組み込みます。
@@ -299,9 +330,9 @@ export default function EventsPage() {
                 <ShieldCheck className="h-3.5 w-3.5" /> 顔画像の取り扱い
               </p>
               <ul className="mt-1 list-inside list-disc space-y-0.5">
-                <li>解析のためにメモリ上でのみ処理し、保存・ログ出力はしません</li>
+                <li>診断のためだけに使い、保存も記録もしません</li>
                 <li>サーバーでは解析直後に画像データを消去します</li>
-                <li>AI（Gemini）には画像ではなく解析スコアのみを渡します</li>
+                <li>AI には画像ではなく、解析結果（点数）だけを渡します</li>
               </ul>
             </div>
             <label className="mt-3 flex items-start gap-2 text-xs text-ink-soft">
