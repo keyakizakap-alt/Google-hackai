@@ -121,27 +121,7 @@ npm run lint && npm run typecheck
 
 ## Cloud Run へのデプロイ
 
-```bash
-PROJECT_ID=your-project
-REGION=asia-northeast1
-gcloud config set project $PROJECT_ID
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com aiplatform.googleapis.com \
-  calendar-json.googleapis.com secretmanager.googleapis.com
-
-# シークレット（例）
-printf '%s' "$(openssl rand -base64 48)" | gcloud secrets create oshiready-session-secret --data-file=-
-printf '%s' "<client-secret>"            | gcloud secrets create oshiready-google-client-secret --data-file=-
-printf '%s' "<ekispert-key>"             | gcloud secrets create oshiready-ekispert-key --data-file=-
-
-gcloud run deploy oshiready --source . --region $REGION --allow-unauthenticated \
-  --set-env-vars "APP_BASE_URL=https://<your-run-url>,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-3.5-flash,GOOGLE_CLIENT_ID=<client-id>" \
-  --set-secrets "SESSION_SECRET=oshiready-session-secret:latest,GOOGLE_CLIENT_SECRET=oshiready-google-client-secret:latest,EKISPERT_API_KEY=oshiready-ekispert-key:latest" \
-  --timeout 180 --memory 1Gi
-```
-
-- Cloud Run のサービスアカウントに「Vertex AI ユーザー（`roles/aiplatform.user`）」と「Secret Manager のシークレット アクセサー」のロールを付与してください
-- OAuth クライアントの「承認済みのリダイレクト URI」に `https://<your-run-url>/api/auth/google/callback` を追加してください
-- 本番では Cloud Armor によるレート制限の併用を推奨します（アプリ内のレート制限はインスタンス単位のため）
+初回のプロジェクト作成、Billing、最小権限の実行アカウント、Secret Manager、Dockerfile を使う Cloud Run ソースデプロイは [初回公開手順](docs/cloud-run-launch.md) を参照。`scripts/cloud-run-bootstrap.sh` は Google Cloud Shell で実行する。スクリプトはまだ実プロジェクトで未検証。Google カレンダー OAuth はデプロイ後に設定する。
 
 ## 審査基準との対応
 
