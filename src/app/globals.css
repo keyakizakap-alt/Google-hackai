@@ -35,7 +35,7 @@
 
 html,
 body {
-  background: #fbf7fb;
+  background: #ffffff;
   color: var(--color-ink);
 }
 
@@ -44,15 +44,6 @@ body {
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "palt";
   letter-spacing: 0.02em;
-}
-
-/* 背景: 淡い桜色〜ラベンダーのグラデーション */
-.bg-dreamy {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #fde7ef 0%, transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, #ece6fb 0%, transparent 55%),
-    radial-gradient(900px 600px at 50% 110%, #f7e9f3 0%, transparent 60%),
-    #fbf7fb;
 }
 
 .btn-primary {
@@ -72,14 +63,6 @@ body {
   border: 1px solid var(--color-line);
   border-radius: 18px;
   box-shadow: var(--shadow-card);
-}
-
-.petal {
-  position: absolute;
-  border-radius: 150% 0 150% 0;
-  background: linear-gradient(135deg, #f8c9d6, #f3dbe6);
-  opacity: 0.7;
-  filter: blur(0.2px);
 }
 
 @keyframes shimmer {

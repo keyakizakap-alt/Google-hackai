@@ -34,13 +34,13 @@ function StatusStepper({ status }: { status: string }) {
 function ItemCard({ item, eventStart, selectable, checked, onToggle }: { item: TimelineItem; eventStart: string; selectable: boolean; checked: boolean; onToggle: () => void }) {
   const highlight = item.kind === "event";
   return (
-    <li className="relative grid grid-cols-[64px_1fr] gap-3 sm:grid-cols-[92px_1fr] sm:gap-5">
-      <div className="pt-4 text-right">
+    <li className="relative grid grid-cols-1 gap-1.5 sm:grid-cols-[92px_1fr] sm:gap-5">
+      <div className="flex items-baseline gap-2 px-1 sm:block sm:px-0 sm:pt-4 sm:text-right">
         <p className="text-sm font-bold text-ink">{relativeDayLabel(item.start, eventStart)}</p>
         <p className="text-[11px] text-mute">{formatJst(item.start, { date: true })}</p>
       </div>
-      <div className={`relative rounded-2xl border p-4 ${highlight ? "border-rose-100 bg-gradient-to-r from-rose-50 to-white" : "border-line bg-white"}`}>
-        <span className="absolute -left-[13px] top-6 h-3.5 w-3.5 rounded-full border-[3px] border-rose-300 bg-white sm:-left-[17px]" aria-hidden />
+      <div className={`relative rounded-2xl border p-3.5 sm:p-4 ${highlight ? "border-rose-100 bg-gradient-to-r from-rose-50 to-white" : "border-line bg-white"}`}>
+        <span className="absolute -left-[17px] top-6 hidden h-3.5 w-3.5 rounded-full border-[3px] border-rose-300 bg-white sm:block" aria-hidden />
         <div className="flex items-start gap-3">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${highlight ? "bg-rose-100 text-rose-500" : "bg-lav-50 text-lav-600"}`}>
             <ItemIcon item={item} />
@@ -381,7 +381,7 @@ export default function PlanPage() {
 
           <section className="card p-4 sm:p-6" aria-label="タイムライン">
             <ol className="relative space-y-4">
-              <span className="absolute bottom-4 left-[70px] top-4 w-px bg-rose-100 sm:left-[102px]" aria-hidden />
+              <span className="absolute bottom-4 left-[102px] top-4 hidden w-px bg-rose-100 sm:block" aria-hidden />
               {plan.items.map((it) => (
                 <ItemCard
                   key={it.id}
