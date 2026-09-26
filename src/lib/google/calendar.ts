@@ -4,7 +4,6 @@ import { logger } from "../logger";
 import { maskEvents, type BusyBlock, type RawCalendarEvent } from "../privacy/mask";
 import { readTokens, writeTokens } from "../session";
 import { MS_DAY } from "../time";
-import { demoBusyBlocks, demoCalendarItems } from "../demo/calendar";
 import type { CalendarItemForDetection } from "../eventDetection/detect";
 import { createOAuthClient } from "./oauth";
 
@@ -37,7 +36,7 @@ export async function getBusyBlocks(opts: { days?: number; until?: number; demoD
 
   const tokens = isGoogleOAuthConfigured() ? await readTokens() : null;
   if (!tokens?.access_token && !tokens?.refresh_token) {
-    return { source: "demo", busy: demoBusyBlocks(from, to, opts.demoDayOff), from, to };
+    return { source: "demo", busy: [], from, to };
   }
 
   const client = createOAuthClient();
@@ -78,6 +77,7 @@ export async function getBusyBlocks(opts: { days?: number; until?: number; demoD
     pageToken = body.nextPageToken;
     if (!pageToken) break;
   }
+  if (pageToken) throw new Error("Calendar results exceeded the supported page limit");
 
   const busy = maskEvents(raw);
   raw = []; // 参照を即座に破棄
@@ -96,7 +96,7 @@ export async function getItemsForDetection(days = 180): Promise<{ source: Calend
   const from = Date.now();
   const to = from + days * MS_DAY;
   const tokens = isGoogleOAuthConfigured() ? await readTokens() : null;
-  if (!tokens?.access_token && !tokens?.refresh_token) return { source: "demo", items: demoCalendarItems(from) };
+  if (!tokens?.access_token && !tokens?.refresh_token) return { source: "demo", items: [] };
 
   const client = createOAuthClient();
   client.setCredentials(tokens);
@@ -131,5 +131,6 @@ export async function getItemsForDetection(days = 180): Promise<{ source: Calend
     pageToken = body.nextPageToken;
     if (!pageToken) break;
   }
+  if (pageToken) throw new Error("Calendar event detection exceeded the supported page limit");
   return { source: "google", items };
 }

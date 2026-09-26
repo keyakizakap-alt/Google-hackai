@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   try {
     const parsed = Body.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください" }, { status: 400 });
+    if (parsed.data.selfie) return NextResponse.json({ error: "肌解析は現在利用できません。写真は送信されていません" }, { status: 400 });
     if (Date.parse(parsed.data.event.startAt) < Date.now()) {
       return NextResponse.json({ error: "イベント日時が過去です" }, { status: 400 });
     }

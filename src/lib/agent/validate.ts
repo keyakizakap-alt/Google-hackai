@@ -28,6 +28,9 @@ export function validateTimeline(items: readonly TimelineItem[], event: OshiEven
     if (s < now - 5 * MS_MIN) errors.push(`${it.id}: 過去の日時は指定できません`);
 
     if (it.kind === "beauty") {
+      if (it.provider && (it.provider.name !== "予約サイトで店舗と空きを確認" || it.provider.priceJpy !== undefined || it.provider.slotId)) {
+        errors.push(`${it.id}: 実際の店舗・空席・価格は取得していません。候補日時として案内してください`);
+      }
       if (e > eventStart) errors.push(`${it.id}: 美容予定はイベント開始前に終わる必要があります`);
       if (overlapsBusy(busy, s, e, 15)) errors.push(`${it.id}: カレンダーの既存予定（前後15分の移動バッファ含む）と重なっています`);
       if (isBeautyService(it.category)) {
@@ -61,7 +64,9 @@ export function validateTimeline(items: readonly TimelineItem[], event: OshiEven
       warnings.push(`希望メニュー「${BEAUTY_GUIDELINES[svc].label}」がプランに含まれていません`);
     }
   }
-  if (!sorted.some((it) => it.kind === "transit")) errors.push("会場までの移動（transit）が含まれていません");
+  if (!sorted.some((it) => it.kind === "transit" || (it.kind === "prep" && it.category === "transit-check"))) {
+    errors.push("移動経路、または経路を確認する手順が含まれていません");
+  }
 
   return { errors, warnings };
 }

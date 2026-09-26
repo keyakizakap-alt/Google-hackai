@@ -20,7 +20,8 @@ describe("planning tools + validation", () => {
     await runRuleBasedPlanner(ctx, trace);
     expect(ctx.submitted).toBeDefined();
     const kinds = ctx.submitted!.items.map((i) => i.kind);
-    expect(kinds).toContain("transit");
+    expect(ctx.submitted!.items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "prep", category: "transit-check" })]));
+    expect(ctx.submitted!.items.some((i) => i.route?.source === "mock")).toBe(false);
     expect(kinds).toContain("event");
     expect(ctx.submitted!.items.filter((i) => i.kind === "beauty")).toHaveLength(2);
     expect(validateTimeline(ctx.submitted!.items, event, ctx.busy, now).errors).toEqual([]);
@@ -50,5 +51,20 @@ describe("planning tools + validation", () => {
     const now = Date.now();
     const out = await executeTool("book_salon", {}, { event, busy: [], now, rejectedSubmissions: 0 });
     expect(out.ok).toBe(false);
+  });
+
+  it("does not invent a route or accept unverified salon prices", async () => {
+    const now = Date.now();
+    const ctx: AgentContext = { event, busy: [], now, rejectedSubmissions: 0 };
+    const route = await executeTool("search_transit_route_mock", { from_station: "福岡", to_station: "東京" }, ctx);
+    expect(route.ok).toBe(false);
+    expect(route.response).not.toHaveProperty("legs");
+
+    const day = event.startAt.slice(0, 10);
+    const result = validateTimeline([
+      { id: "beauty-1", kind: "beauty", category: "brow", title: "眉毛", start: `${day}T10:00:00+09:00`, end: `${day}T11:00:00+09:00`, provider: { name: "架空の店", priceJpy: 5000 }, rationale: "候補", requiresBooking: true },
+      { id: "check", kind: "prep", category: "transit-check", title: "経路を確認", start: `${day}T12:00:00+09:00`, end: `${day}T12:10:00+09:00`, rationale: "検索", requiresBooking: false },
+    ], event, [], now);
+    expect(result.errors.join(" ")).toMatch(/実際の店舗・空席・価格/);
   });
 });

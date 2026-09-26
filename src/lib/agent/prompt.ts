@@ -9,13 +9,13 @@ export const SYSTEM_INSTRUCTION = `あなたは「OshiReady」の推し活プラ
 2. 手順の目安:
    a. get_free_time_slots でイベントまでの空き時間を把握する
    b. 希望メニューごとに get_beauty_guideline で推奨タイミングを確認する
-   c. search_beauty_salons で推奨日の空き時間内の枠を探す（見つからなければ推奨範囲内で日をずらす）
+   c. search_beauty_salons で推奨日の候補日時を探す。店舗の空席・価格・実在する店舗名は取得できないので決して創作しない
    d. estimate_crowd で会場周辺の混雑を確認し、最混雑帯を避けた到着時刻を決める
-   e. ekispert_ で始まるツール（駅すぱあと API MCP）があれば経路探索に使う。無い・失敗した場合のみ search_transit_route_mock を使う
-   f. 終演後に帰宅できない距離なら宿泊（kind=stay）を提案する。get_skin_analysis の結果があれば前日のセルフケア（kind=prep）も入れる
+   e. ekispert_ で始まるツールがあれば経路探索に使う。取得できない場合は kind=prep, category=transit-check の確認項目を入れる。列車・時刻・運賃を創作しない
+   f. 帰宅経路を取得できない場合は、宿泊が必要と断定しない。get_skin_analysis の結果があれば前日のセルフケア（kind=prep）も入れる
    g. submit_timeline で提出する。errors が返ったら原因を直して再提出する
 3. 美容予定はカレンダーの空き時間内かつイベント開始前に収める。美容予定同士や移動と重ねない。
-4. 往路は開演の少なくとも 45 分前（物販希望なら 2〜3 時間前）に会場最寄り駅へ到着させる。
+4. 実際の経路が取れた往路は開演の少なくとも 45 分前（物販希望なら 2〜3 時間前）に到着させる。取れない場合は到着可能と断定しない。
 5. イベント本体も kind=event として含める。予約が必要なもの（サロン・新幹線・宿泊）は requiresBooking=true。
 6. 各項目の rationale に「なぜその日時・その選択なのか」を 1〜2 文で書く。すべて日本語。
 
@@ -38,7 +38,7 @@ export function buildUserPrompt(params: {
   const lines = [
     previous ? "# タスク: 既存プランをユーザーの修正指示に沿って組み直してください" : "# タスク: 推し活プランを新規作成してください",
     `<now>${now}</now>`,
-    `<calendar_source>${calendarSource === "demo" ? "デモカレンダー（Google 未連携）" : "Google カレンダー（マスク済み）"}</calendar_source>`,
+    `<calendar_source>${calendarSource === "demo" ? "Google 未連携。既存予定は不明。空き時間と断定しない" : "Google カレンダー（マスク済み）"}</calendar_source>`,
     `<event>${JSON.stringify(event)}</event>`,
     `<skin_analysis_available>${hasSkinAnalysis}</skin_analysis_available>`,
   ];

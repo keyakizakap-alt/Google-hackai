@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { config, isEkispertConfigured, isGeminiConfigured, isGoogleOAuthConfigured } from "@/lib/config";
+import { isEkispertConfigured, isGeminiConfigured, isGoogleOAuthConfigured } from "@/lib/config";
 import { readTokens } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,6 @@ export async function GET() {
     calendarConnected: Boolean(tokens?.access_token || tokens?.refresh_token),
     gemini: { configured: isGeminiConfigured() },
     ekispert: { mode: isEkispertConfigured() ? "mcp" : "mock" },
-    youcam: { mode: config.youcam.apiKey ? "api" : "mock" },
+    youcam: { mode: "mock" },
   });
 }

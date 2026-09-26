@@ -89,7 +89,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全が確認できないリンク ${replacedLinks} 件を公式の検索ページに差し替えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarSource === "demo") warnings.unshift("お試し用の予定で作成しています。Google カレンダーを連携すると、あなたの予定に合わせたプランになります。");
+  if (input.calendarSource === "demo") warnings.unshift("Google カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  if (!items.some((i) => i.kind === "transit")) warnings.push("実際の移動経路と所要時間は確認できていません。交通機関の検索サイトで確認してください。");
   if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");
 
   const plan: Plan = {

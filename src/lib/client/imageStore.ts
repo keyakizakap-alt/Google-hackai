@@ -11,8 +11,11 @@ export const artistKey = (artist: string) => artist.normalize("NFKC").trim().toL
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    const req = indexedDB.open(DB, 2);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+      if (!req.result.objectStoreNames.contains("workspace")) req.result.createObjectStore("workspace");
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
