@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* ---- OshiReady design tokens（モックのラベンダー × ピンクを踏襲） ---- */
+@theme {
+  --color-ink: #2a2950;
+  --color-ink-soft: #5b5a7e;
+  --color-mute: #8d8ba6;
+  --color-line: #ebe7f3;
+  --color-paper: #ffffff;
+  --color-cloud: #faf8fd;
+  --color-lav-50: #f6f3fc;
+  --color-lav-100: #eee9f8;
+  --color-lav-200: #ddd5f1;
+  --color-lav-400: #9d93cf;
+  --color-lav-500: #7a71b5;
+  --color-lav-600: #655da3;
+  --color-lav-700: #514a8a;
+  --color-rose-50: #fdf2f5;
+  --color-rose-100: #fbe4ea;
+  --color-rose-300: #f2a9ba;
+  --color-rose-400: #ec8aa2;
+  --color-rose-500: #e06a88;
+
+  --font-sans: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", "Playfair Display", "Times New Roman", serif;
+  --font-script: "Dancing Script", "Zen Kurenaido", "Brush Script MT", cursive;
+
+  --shadow-card: 0 1px 2px rgb(60 50 110 / 0.04), 0 8px 24px -12px rgb(60 50 110 / 0.14);
+  --shadow-float: 0 24px 60px -28px rgb(70 55 130 / 0.35);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #fbf7fb;
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "palt";
+  letter-spacing: 0.02em;
+}
+
+/* 背景: 淡い桜色〜ラベンダーのグラデーション */
+.bg-dreamy {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #fde7ef 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, #ece6fb 0%, transparent 55%),
+    radial-gradient(900px 600px at 50% 110%, #f7e9f3 0%, transparent 60%),
+    #fbf7fb;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #7c74b8 0%, #615a9f 100%);
+  box-shadow: 0 10px 22px -12px rgb(80 70 150 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+.btn-primary:disabled {
+  filter: grayscale(0.4);
+  opacity: 0.6;
+}
+
+.card {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+}
+
+.petal {
+  position: absolute;
+  border-radius: 150% 0 150% 0;
+  background: linear-gradient(135deg, #f8c9d6, #f3dbe6);
+  opacity: 0.7;
+  filter: blur(0.2px);
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f3f0f8 25%, #ebe6f4 37%, #f3f0f8 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
