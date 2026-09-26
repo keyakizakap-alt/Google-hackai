@@ -264,7 +264,7 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
 }
 
 export default function EventsPage() {
-  const { event, events, eventImage, setEventImage, selfie, setSelfie, session } = useStore();
+  const { event, events, eventImage, setEventImage, selfie, setSelfie, session, persistImages } = useStore();
   const [editingId, setEditingId] = useState<string | null | undefined>(undefined);
   const [consent, setConsent] = useState(false);
   // 未指定なら選択中のイベントを編集、null なら新規追加
@@ -288,7 +288,8 @@ export default function EventsPage() {
           <section className="card p-5">
             <h2 className="text-[15px] font-bold text-ink">推し画像</h2>
             <p className="mt-1 text-xs text-mute">
-              {event ? `「${event.title}」` : "選択中のイベント"}のチケットやホームに表示されます。画像はこの端末の中だけで使い、どこにも送信しません。
+              {event ? `${event.artist} ` : "選択中のアーティスト"}の推し画像として、同じアーティストのイベントすべてに表示されます。
+              画像はサーバーに送信しません。{persistImages ? "このブラウザに保存されるので、次に開いたときも表示されます。" : "設定で「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
             </p>
             <div className="relative mt-3 h-44 overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -305,7 +306,7 @@ export default function EventsPage() {
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     e.target.value = "";
-                    if (f) setEventImage(URL.createObjectURL(f));
+                    if (f) setEventImage(f);
                   }}
                 />
               </label>

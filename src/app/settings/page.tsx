@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Bot, CalendarCheck, Camera, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, Camera, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { useStore } from "@/components/store";
 
@@ -29,7 +29,8 @@ function OAuthNotice() {
 }
 
 export default function SettingsPage() {
-  const { session, disconnect } = useStore();
+  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, oshiImages } = useStore();
+  const saved = Object.keys(oshiImages).length;
   return (
     <div className="space-y-5 px-1">
       <div>
@@ -80,12 +81,50 @@ export default function SettingsPage() {
         </ul>
       </section>
 
+      <section className="card p-5" aria-labelledby="img-save">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <ImageIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="img-save" className="font-bold text-ink">推し画像をこの端末に保存する</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              オンにすると、推し画像をこのブラウザの中だけに保存し、次に開いたときも表示します。サーバーには送信しません。
+              共用のパソコンではオフにするか、使い終わったら削除してください。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={persistImages}
+            aria-labelledby="img-save"
+            onClick={() => setPersistImages(!persistImages)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${persistImages ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${persistImages ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
+          <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです（画面を閉じると消えます）"}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("この端末に保存した推し画像をすべて削除します。よろしいですか？")) void clearSavedImages();
+            }}
+            disabled={saved === 0}
+            className="min-h-[40px] rounded-lg border border-line bg-white px-3 font-bold text-rose-500 hover:bg-rose-50 disabled:opacity-40"
+          >
+            保存した画像をすべて削除
+          </button>
+        </div>
+      </section>
+
       <section className="card p-5">
         <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
           <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />カレンダーの予定や顔写真は、どこにも保存しません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />カレンダーの予定や顔写真は、どこにも保存しません（推し画像は、オンにしたときだけこの端末に保存します）。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約や支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>

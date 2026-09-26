@@ -45,7 +45,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
-                  if (f) setEventImage(URL.createObjectURL(f));
+                  if (f) setEventImage(f);
                 }}
               />
             </label>
@@ -124,7 +124,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
 
 /** 登録済みイベントの切り替え（カレンダー取り込み分にはバッジ） */
 function EventSwitcher() {
-  const { events, event, selectEvent, lastImport, busy, oshiImages } = useStore();
+  const { events, event, selectEvent, lastImport, busy, imageFor } = useStore();
   if (events.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -147,9 +147,9 @@ function EventSwitcher() {
               onClick={() => selectEvent(e.id)}
               className={`group flex min-h-[44px] shrink-0 items-center gap-2.5 rounded-full border px-4 py-2 text-left transition ${active ? "border-transparent bg-night text-white shadow-float" : "border-line bg-white text-ink hover:border-rose-300"}`}
             >
-              {oshiImages[e.id] ? (
-                // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
-                <img src={oshiImages[e.id]} alt="" className={`h-7 w-7 rounded-full object-cover ${active ? "ring-2 ring-rose-400" : ""}`} />
+              {imageFor(e) ? (
+                // eslint-disable-next-line @next/next/no-img-element -- blob URL（端末内のみ）
+                <img src={imageFor(e)!} alt="" className={`h-7 w-7 rounded-full object-cover ${active ? "ring-2 ring-rose-400" : ""}`} />
               ) : (
                 <span className={`h-2 w-2 rounded-full ${active ? "bg-rose-400 shadow-[0_0_10px_2px_rgb(var(--oshi-glow))]" : "bg-lav-200"}`} />
               )}

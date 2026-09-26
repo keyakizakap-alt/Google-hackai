@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
 
 /**
@@ -127,9 +128,15 @@ interface Store {
   lastImport: ImportResult | null;
   /** 選択中イベントの推し画像 */
   eventImage: string | null;
-  setEventImage: (url: string | null) => void;
-  /** イベントごとの推し画像（端末のメモリ上のみ） */
+  /** 選択中イベントのアーティストの推し画像を設定（null で外す） */
+  setEventImage: (file: Blob | null) => void;
+  /** アーティストごとの推し画像（blob URL）。imageFor(event) で取得 */
   oshiImages: Record<string, string>;
+  imageFor: (e: OshiEvent) => string | null;
+  /** 推し画像をこの端末のブラウザに保存するか */
+  persistImages: boolean;
+  setPersistImages: (on: boolean) => void;
+  clearSavedImages: () => Promise<void>;
   selfie: string | null;
   setSelfie: (dataUrl: string | null) => void;
   availability: Availability | null;
@@ -260,21 +267,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 起動時に 1 回だけ
   }, []);
 
-  const eventImage = event ? (oshiImages[event.id] ?? null) : null;
-  const eventId = event?.id;
-  const setEventImage = useCallback(
-    (url: string | null) => {
-      if (!eventId) return;
-      setOshiImages((prev) => {
-        const old = prev[eventId];
-        if (old?.startsWith("blob:") && old !== url) URL.revokeObjectURL(old);
-        const next = { ...prev };
-        if (url) next[eventId] = url;
-        else delete next[eventId];
-        return next;
+  const [persistImages, setPersistImagesState] = useState(false);
+  const imageFor = useCallback((e: OshiEvent) => oshiImages[artistKey(e.artist)] ?? null, [oshiImages]);
+  const eventImage = event ? imageFor(event) : null;
+  const eventArtist = event?.artist;
+
+  // 起動時: 保存設定を読み、保存済みの推し画像を復元（この端末のブラウザ内のみ）
+  useEffect(() => {
+    const on = readPersistPref();
+    let alive = true;
+    const t = setTimeout(() => {
+      setPersistImagesState(on);
+      if (!on) return;
+      void loadAllImages().then((all) => {
+        if (!alive) return;
+        const urls: Record<string, string> = {};
+        for (const [k, blob] of Object.entries(all)) urls[k] = URL.createObjectURL(blob);
+        setOshiImages((prev) => ({ ...urls, ...prev }));
       });
+    }, 0);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, []);
+
+  const setEventImage = useCallback(
+    (file: Blob | null) => {
+      if (!eventArtist) return;
+      const key = artistKey(eventArtist);
+      void (async () => {
+        const blob = file ? await downscale(file) : null;
+        const url = blob ? URL.createObjectURL(blob) : null;
+        setOshiImages((prev) => {
+          const old = prev[key];
+          if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
+          const next = { ...prev };
+          if (url) next[key] = url;
+          else delete next[key];
+          return next;
+        });
+        if (persistImages) {
+          if (blob) await saveImage(key, blob);
+          else await deleteImage(key);
+        }
+      })();
     },
-    [eventId],
+    [eventArtist, persistImages],
+  );
+
+  const setPersistImages = useCallback(
+    (on: boolean) => {
+      setPersistImagesState(on);
+      writePersistPref(on);
+      if (!on) {
+        void clearImages();
+        return;
+      }
+      // ON にしたら、いま表示中の画像を保存
+      void (async () => {
+        for (const [k, url] of Object.entries(oshiImages)) {
+          const blob = await fetch(url).then((r) => r.blob()).catch(() => null);
+          if (blob) await saveImage(k, blob);
+        }
+      })();
+    },
+    [oshiImages],
   );
 
   const applyPlan = useCallback((r: PlanResponse) => {
@@ -325,6 +383,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       eventImage,
       setEventImage,
       oshiImages,
+      imageFor,
+      persistImages,
+      setPersistImages,
+      clearSavedImages: async () => {
+        await clearImages();
+        setOshiImages((prev) => {
+          for (const u of Object.values(prev)) if (u.startsWith("blob:")) URL.revokeObjectURL(u);
+          return {};
+        });
+      },
       selfie,
       setSelfie,
       availability,
@@ -422,7 +490,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, oshiImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
