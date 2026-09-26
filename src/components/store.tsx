@@ -12,7 +12,7 @@ import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } 
 export interface SessionInfo {
   googleOAuthConfigured: boolean;
   calendarConnected: boolean;
-  gemini: { configured: boolean; model: string; platform: string };
+  gemini: { configured: boolean };
   ekispert: { mode: "mcp" | "mock" };
   youcam: { mode: "api" | "mock" };
 }

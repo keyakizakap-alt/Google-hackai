@@ -5,6 +5,7 @@ import { randomId } from "../crypto";
 import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { getEkispertDeclarations } from "../services/ekispert";
+import { hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
@@ -72,7 +73,21 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   }
   if (!ctx.submitted) throw new Error("planner produced no timeline");
 
-  const items = [...ctx.submitted.items].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  // AI が書いた外部リンクは許可リストで検査し、許可外は安全な検索ページに差し替える
+  let replacedLinks = 0;
+  const items = [...ctx.submitted.items]
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+    .map((it) => {
+      if (!it.provider?.bookingUrl) return it;
+      const safe = safeExternalUrl(it.provider.bookingUrl);
+      if (safe) return { ...it, provider: { ...it.provider, bookingUrl: safe } };
+      replacedLinks++;
+      const fallback = it.kind === "stay" ? jalanSearchUrl(it.location ?? it.title) : it.kind === "beauty" ? hotpepperSearchUrl(`${input.event.homeStation} ${it.title}`) : undefined;
+      return { ...it, provider: { ...it.provider, bookingUrl: fallback } };
+    });
+  if (replacedLinks > 0) {
+    trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全が確認できないリンク ${replacedLinks} 件を公式の検索ページに差し替えました` });
+  }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
   if (input.calendarSource === "demo") warnings.unshift("お試し用の予定で作成しています。Google カレンダーを連携すると、あなたの予定に合わせたプランになります。");
   if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");

@@ -36,6 +36,20 @@ async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * AI に渡してよい駅すぱあとのツールを絞り込む（MCP 側が想定外のツールを公開しても AI に渡さない）。
+ * - EKISPERT_ALLOWED_TOOLS（カンマ区切り）が設定されていれば、その名前だけを許可
+ * - 未設定なら、経路・駅・時刻表の「検索」系と判断できるものだけを許可
+ */
+export function isAllowedTool(name: string, description = ""): boolean {
+  const explicit = (process.env.EKISPERT_ALLOWED_TOOLS ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  if (explicit.length > 0) return explicit.includes(name);
+  const text = `${name} ${description}`.toLowerCase();
+  const searchLike = /(route|course|search|station|timetable|fare|探索|経路|駅|時刻|運賃)/.test(text);
+  const writeLike = /(create|update|delete|register|post|book|reserve|purchase|登録|削除|予約|購入)/.test(text);
+  return searchLike && !writeLike;
+}
+
 function sanitizeName(name: string): string {
   return (EKISPERT_PREFIX + name.replace(/[^a-zA-Z0-9_-]/g, "_")).slice(0, 64);
 }
@@ -61,7 +75,8 @@ export async function getEkispertDeclarations(): Promise<{ declarations: Functio
   try {
     const tools = await withClient((c) => c.listTools(undefined, { timeout: TIMEOUT_MS }));
     const nameMap = new Map<string, string>();
-    const declarations: FunctionDeclaration[] = tools.tools.map((t) => {
+    const exposed = tools.tools.filter((t) => isAllowedTool(t.name, t.description));
+    const declarations: FunctionDeclaration[] = exposed.map((t) => {
       const name = sanitizeName(t.name);
       nameMap.set(name, t.name);
       return {
@@ -71,7 +86,7 @@ export async function getEkispertDeclarations(): Promise<{ declarations: Functio
       };
     });
     cache = { at: Date.now(), declarations, nameMap };
-    logger.info("ekispert.listTools", { latencyMs: Date.now() - started, itemCount: declarations.length });
+    logger.info("ekispert.listTools", { latencyMs: Date.now() - started, itemCount: declarations.length, candidates: tools.tools.length });
     return cache;
   } catch (e) {
     logger.warn("ekispert.listTools.failed", { latencyMs: Date.now() - started, errorCode: (e as Error).name });

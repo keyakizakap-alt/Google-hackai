@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { config } from "@/lib/config";
+import { appBaseUrl, isGoogleOAuthConfigured } from "@/lib/config";
 import { createOAuthClient } from "@/lib/google/oauth";
 import { logger } from "@/lib/logger";
 import { consumeOAuthState, writeTokens } from "@/lib/session";
@@ -9,7 +9,8 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const saved = await consumeOAuthState();
-  const home = new URL("/", config.appBaseUrl);
+  if (!isGoogleOAuthConfigured()) return NextResponse.redirect(new URL("/settings?error=oauth_not_configured", req.url));
+  const home = new URL("/", appBaseUrl()!);
 
   if (!code || !state || !saved || saved.state !== state) {
     logger.warn("oauth.callback.rejected", { route: "oauth.callback" });

@@ -61,7 +61,8 @@ export const clearImages = () => tx("readwrite", (s) => s.clear());
 
 export function readPersistPref(): boolean {
   try {
-    return localStorage.getItem(PREF_KEY) !== "off";
+    // 共用端末への配慮で、既定はオフ（利用者がオンにしたときだけ保存）
+    return localStorage.getItem(PREF_KEY) === "on";
   } catch {
     return false;
   }

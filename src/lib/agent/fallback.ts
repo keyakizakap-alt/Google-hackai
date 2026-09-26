@@ -1,5 +1,6 @@
 import "server-only";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
+import { jalanSearchUrl } from "../safeUrl";
 import { MS_MIN, toJstIso } from "../time";
 import { daysBefore, executeTool, type AgentContext } from "./tools";
 import type { TimelineItem, TraceStep } from "./types";
@@ -104,7 +105,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     start: toJstIso(eventStart + 210 * MS_MIN),
     end: toJstIso(eventStart + 16 * 60 * MS_MIN),
     location: `${event.venueStation}周辺`,
-    provider: { name: "宿泊予約サイトで検索", bookingUrl: `https://www.jalan.net/uw/uwp1700/uww1701.do?keyword=${encodeURIComponent(event.venue)}` },
+    provider: { name: "宿泊予約サイトで検索", bookingUrl: jalanSearchUrl(event.venue) },
     rationale: "終演後は帰宅手段がないため、会場周辺での宿泊をおすすめします。",
     requiresBooking: true,
   });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generatePlan } from "@/lib/agent/workflow";
 import { OshiEventSchema } from "@/lib/agent/types";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta } from "@/lib/http";
 
 export const maxDuration = 120;
 
@@ -14,7 +14,7 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   const meta = { ...requestMeta(req), route: "agent.plan" };
-  const denied = assertSameOrigin(req) ?? rateLimit(req, "agent", 6);
+  const denied = assertSameOrigin(req) ?? rateLimit(req, "agent", 6) ?? dailyAgentCap();
   if (denied) return denied;
   try {
     const parsed = Body.safeParse(await req.json());

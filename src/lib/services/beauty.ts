@@ -1,4 +1,5 @@
 import type { BeautyService } from "../agent/types";
+import { hotpepperSearchUrl } from "../safeUrl";
 import { jstAt, jstDateKey, MS_MIN, toJstIso } from "../time";
 
 /**
@@ -90,7 +91,7 @@ export function searchSalonSlots(params: {
           end: toJstIso(t + duration),
           priceJpy: salon.price,
           nearestStation: `${station}駅 ${salon.walk}`,
-          bookingUrl: `https://beauty.hotpepper.jp/CSP/bt/salonSearch/search/?freeword=${encodeURIComponent(`${station} ${BEAUTY_GUIDELINES[service].label.split("（")[0]}`)}`,
+          bookingUrl: hotpepperSearchUrl(`${station} ${BEAUTY_GUIDELINES[service].label.split("（")[0]}`),
         });
         if (out.length >= limit) return out;
       }

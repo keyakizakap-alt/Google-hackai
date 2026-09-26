@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { AppShell } from "@/components/AppShell";
 import { StoreProvider } from "@/components/store";
 import "./globals.css";
@@ -14,7 +15,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // CSP の nonce をリクエストごとに付与するため、常にリクエスト時に描画する
+  await connection();
   return (
     <html lang="ja">
       <head>

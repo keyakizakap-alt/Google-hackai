@@ -4,11 +4,11 @@ import { signEnvelope, verifyEnvelope } from "@/lib/agent/envelope";
 import { advance, GuardrailError, hasUserApproval } from "@/lib/agent/stateMachine";
 import type { BookingResult, TimelineItem } from "@/lib/agent/types";
 import { assertSameOrigin, errorResponse, requestMeta } from "@/lib/http";
+import { EKISPERT_ROUTE_URL, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "@/lib/safeUrl";
 import { logger } from "@/lib/logger";
 
 const Body = z.object({ envelope: z.unknown(), confirm: z.literal(true) });
 
-const JALAN = (q: string) => `https://www.jalan.net/uw/uwp1700/uww1701.do?keyword=${encodeURIComponent(q)}`;
 
 /**
  * 承認済み項目を「予約サイトへの案内」に変換する。
@@ -22,7 +22,7 @@ function handoff(item: TimelineItem): BookingResult {
         itemId: item.id,
         title: item.provider?.name ? `${item.title}（${item.provider.name}）` : item.title,
         status: "handoff",
-        externalUrl: item.provider?.bookingUrl,
+        externalUrl: safeExternalUrl(item.provider?.bookingUrl) ?? hotpepperSearchUrl(`${item.location ?? ""} ${item.title}`),
         note: "予約サイトで空き状況を確認し、予約してください。",
       };
     case "transit":
@@ -30,7 +30,7 @@ function handoff(item: TimelineItem): BookingResult {
         itemId: item.id,
         title: item.title,
         status: "handoff",
-        externalUrl: "https://roote.ekispert.net/",
+        externalUrl: EKISPERT_ROUTE_URL,
         note: "乗車券・特急券は鉄道会社の予約サイトや駅で購入してください。",
       };
     case "stay":
@@ -38,11 +38,11 @@ function handoff(item: TimelineItem): BookingResult {
         itemId: item.id,
         title: item.title,
         status: "handoff",
-        externalUrl: item.provider?.bookingUrl ?? JALAN(item.location ?? item.title),
+        externalUrl: safeExternalUrl(item.provider?.bookingUrl) ?? jalanSearchUrl(item.location ?? item.title),
         note: "宿泊予約サイトで予約してください。",
       };
     default:
-      return { itemId: item.id, title: item.title, status: "handoff", externalUrl: item.provider?.bookingUrl, note: "予約サイトで手続きしてください。" };
+      return { itemId: item.id, title: item.title, status: "handoff", externalUrl: safeExternalUrl(item.provider?.bookingUrl), note: "予約サイトで手続きしてください。" };
   }
 }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { pickLiveCandidates } from "@/lib/eventDetection/detect";
 import { extractLiveEvents } from "@/lib/eventDetection/extract";
 import { getItemsForDetection } from "@/lib/google/calendar";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -14,7 +14,7 @@ export const maxDuration = 60;
  */
 export async function POST(req: Request) {
   const meta = { ...requestMeta(req), route: "calendar.detect" };
-  const denied = assertSameOrigin(req) ?? rateLimit(req, "detect", 10);
+  const denied = assertSameOrigin(req) ?? rateLimit(req, "detect", 10) ?? dailyAgentCap();
   if (denied) return denied;
   try {
     const { source, items } = await getItemsForDetection(180);

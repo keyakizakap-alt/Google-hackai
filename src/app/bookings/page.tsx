@@ -5,6 +5,7 @@ import { useState, type CSSProperties } from "react";
 import { CircleCheck, ExternalLink, Info, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { ItemIcon } from "@/components/icons";
 import { useStore, type Reservation, type ReservationStatus } from "@/components/store";
+import { safeExternalUrl } from "@/lib/safeUrl";
 import { formatJst } from "@/lib/time";
 
 const STATUS: Record<ReservationStatus, { label: string; tone: string }> = {
@@ -20,8 +21,10 @@ const FILTERS: { id: "all" | ReservationStatus; label: string }[] = [
   { id: "cancelled", label: "キャンセル済み" },
 ];
 
-function ReservationCard({ r, index }: { r: Reservation; index: number }) {
+function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
   const { updateReservation, removeReservation } = useStore();
+  // 念のため表示側でも許可リスト外のリンクは出さない
+  const r = { ...raw, url: safeExternalUrl(raw.url) };
   const [mode, setMode] = useState<"view" | "reserve" | "cancel">("view");
   const [no, setNo] = useState(r.confirmationNo ?? "");
   const [memo, setMemo] = useState(r.memo ?? "");

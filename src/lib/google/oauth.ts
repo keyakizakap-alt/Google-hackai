@@ -1,11 +1,11 @@
 import "server-only";
 import { CodeChallengeMethod, OAuth2Client } from "google-auth-library";
-import { config } from "../config";
+import { appBaseUrl, config } from "../config";
 
 /** 最小権限: 予定の読み取りのみ（書き込み・削除権限は要求しない） */
 export const CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events.readonly"];
 
-export const redirectUri = () => `${config.appBaseUrl}/api/auth/google/callback`;
+export const redirectUri = () => `${appBaseUrl()}/api/auth/google/callback`;
 
 export function createOAuthClient(): OAuth2Client {
   return new OAuth2Client({
