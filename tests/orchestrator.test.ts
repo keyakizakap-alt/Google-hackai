@@ -59,4 +59,9 @@ describe("runPlanningAgent (Gemini loop)", () => {
     expect(second.map((c) => c.role)).toEqual(["user", "model", "user"]);
     expect(second[2].parts.map((p) => p.functionResponse?.name)).toEqual(["get_free_time_slots", "book_salon_now"]);
   });
+
+  it("reports Gemini failure instead of quietly claiming AI success", async () => {
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "failure" })).rejects.toMatchObject({ name: "AgentUnavailableError" });
+  });
 });

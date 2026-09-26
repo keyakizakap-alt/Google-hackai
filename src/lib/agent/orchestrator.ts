@@ -32,6 +32,13 @@ export interface AgentRunOutput {
 
 const DEADLINE_MS = 110_000;
 
+export class AgentUnavailableError extends Error {
+  constructor() {
+    super("AI に接続できませんでした。時間をおいて再試行してください");
+    this.name = "AgentUnavailableError";
+  }
+}
+
 function genai() {
   return config.gemini.useVertex
     ? new GoogleGenAI({ vertexai: true, project: config.gemini.project, location: config.gemini.location, httpOptions: { timeout: 60_000 } })
@@ -60,14 +67,12 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       await runGeminiLoop(input, ctx, trace, usage);
     } catch (e) {
       logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, model: config.gemini.model });
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "AI が混み合っていたため、かんたんモードで作成しました" });
-      engine = "rule-based";
+      throw new AgentUnavailableError();
     }
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "時間内にまとまらなかったため、かんたんモードで仕上げました" });
-      engine = "rule-based";
+      throw new AgentUnavailableError();
     }
     await runRuleBasedPlanner(ctx, trace);
   }

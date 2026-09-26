@@ -18,6 +18,7 @@ export interface AgentContext {
   now: number;
   submitted?: { summary: string; items: TimelineItem[]; warnings: string[] };
   rejectedSubmissions: number;
+  ekispertSucceeded?: boolean;
 }
 
 const ISO = { type: "string", description: "ISO 8601 日時（例: 2026-10-27T11:00:00+09:00）" } as const;
@@ -236,6 +237,9 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return { ok: false, response: { accepted: false, errors: issues }, summary: `内容に不備があったため作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
+      if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
+        errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
+      }
       if (errors.length > 0) {
         ctx.rejectedSubmissions++;
         return {
@@ -250,6 +254,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
     default:
       if (name.startsWith(EKISPERT_PREFIX)) {
         const r = (await callEkispertTool(name, args)) as Record<string, unknown>;
+        if (!r.error && !r.isError) ctx.ekispertSucceeded = true;
         return { ok: !r.error && !r.isError, response: r, summary: r.error ? "乗換案内に接続できませんでした" : "乗換案内でルートを調べました" };
       }
       return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
