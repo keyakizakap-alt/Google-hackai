@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, LoaderCircle, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
-import { StageArt } from "@/components/brand";
+import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService } from "@/lib/agent/types";
 
@@ -160,7 +160,7 @@ export default function EventsPage() {
             <p className="mt-1 text-xs text-mute">お気に入りの画像を設定できます（この端末のメモリ上でのみ表示・送信しません）。</p>
             <div className="relative mt-3 h-36 overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              {eventImage ? <img src={eventImage} alt="" className="h-full w-full object-cover" /> : <StageArt className="h-full w-full" />}
+              {eventImage ? <img src={eventImage} alt="" className="h-full w-full object-cover" /> : <StageScene className="relative h-full w-full" crowd={18} />}
             </div>
             <div className="mt-3 flex gap-2">
               <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-xs text-ink-soft hover:bg-lav-50">

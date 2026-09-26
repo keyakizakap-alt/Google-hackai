@@ -30,6 +30,15 @@ export interface ChatMessage {
   text: string;
 }
 
+export const OSHI_COLORS = [
+  { id: "pink", label: "ピンク", hex: "#ec8aa2" },
+  { id: "lilac", label: "ライラック", hex: "#b789ea" },
+  { id: "sky", label: "スカイ", hex: "#6fb1e6" },
+  { id: "mint", label: "ミント", hex: "#5fc7a5" },
+  { id: "gold", label: "ゴールド", hex: "#e7b955" },
+] as const;
+export type OshiColor = (typeof OSHI_COLORS)[number]["id"];
+
 type Busy = "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
 
 function defaultEvent(): OshiEvent {
@@ -72,6 +81,8 @@ interface PlanResponse {
 
 interface Store {
   session: SessionInfo | null;
+  oshiColor: OshiColor;
+  setOshiColor: (c: OshiColor) => void;
   event: OshiEvent;
   setEvent: (e: OshiEvent) => void;
   eventImage: string | null;
@@ -102,6 +113,7 @@ const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [oshiColor, setOshiColor] = useState<OshiColor>("pink");
   const [event, setEvent] = useState<OshiEvent>(defaultEvent);
   const [eventImage, setEventImageState] = useState<string | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
@@ -164,6 +176,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store: Store = useMemo(
     () => ({
       session,
+      oshiColor,
+      setOshiColor,
       event,
       setEvent: (e) => {
         setEvent(e);
@@ -237,7 +251,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, event, eventImage, setEventImage, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, event, eventImage, setEventImage, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

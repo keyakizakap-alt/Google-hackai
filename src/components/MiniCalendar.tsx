@@ -1,40 +1,65 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { Availability } from "./store";
 
 const WEEK = ["月", "火", "水", "木", "金", "土", "日"];
 
-/** 週単位のミニカレンダー。予定の中身は持たず、日別の空き/埋まり量だけで色付けする */
-export function MiniCalendar({ availability, eventDate }: { availability: Availability | null; eventDate: string }) {
+/**
+ * 空き時間ヒートマップ。予定の中身は持たず、日別の空き時間量だけで濃淡を付ける。
+ * 抽出のたびにセルが順番に点灯する。
+ */
+export function MiniCalendar({ availability, eventDate, scanning }: { availability: Availability | null; eventDate: string; scanning?: boolean }) {
   const eventKey = eventDate.slice(0, 10);
-  const monthLabel = `${Number(eventKey.slice(5, 7))}月`;
-  // イベント日を含む週と、その前 1 週
   const ev = new Date(`${eventKey}T12:00:00+09:00`);
   const dow = (ev.getUTCDay() + 6) % 7; // 月曜始まり
   const monday = new Date(ev.getTime() - dow * 86_400_000);
-  const days = Array.from({ length: 14 }, (_, i) => new Date(monday.getTime() + (i - 7) * 86_400_000));
+  const days = Array.from({ length: 21 }, (_, i) => new Date(monday.getTime() + (i - 14) * 86_400_000));
   const byDate = new Map(availability?.days.map((d) => [d.date, d]) ?? []);
+  const month = Number(eventKey.slice(5, 7));
 
   return (
-    <div className="rounded-2xl border border-line bg-white p-3 text-[11px]">
-      <p className="mb-2 text-xs font-semibold text-ink">{monthLabel}</p>
-      <div className="grid grid-cols-7 gap-1 text-center text-mute">
+    <div className={`relative rounded-2xl bg-cloud p-3 ${scanning ? "scanning" : ""}`}>
+      <div className="mb-2 flex items-baseline justify-between px-0.5">
+        <p className="font-display text-2xl font-semibold leading-none text-ink">
+          {month}
+          <span className="ml-1 text-sm italic text-mute">月</span>
+        </p>
+        <p className="flex items-center gap-1.5 text-[10px] text-mute">
+          空き
+          <span className="flex gap-0.5">
+            {[0.15, 0.4, 0.7, 1].map((o) => (
+              <span key={o} className="h-2 w-2 rounded-sm" style={{ background: `rgb(var(--oshi-glow) / ${o})` }} />
+            ))}
+          </span>
+          多
+        </p>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-mute">
         {WEEK.map((w) => (
-          <span key={w}>{w}</span>
+          <span key={w} className="pb-0.5">
+            {w}
+          </span>
         ))}
-        {days.map((d) => {
+        {days.map((d, i) => {
           const key = new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
           const info = byDate.get(key);
           const isEvent = key === eventKey;
-          const ratio = info ? info.freeMinutes / 720 : 0;
-          const tone = !info ? "bg-lav-50" : ratio > 0.6 ? "bg-lav-200" : ratio > 0.2 ? "bg-lav-100" : "bg-rose-50";
+          const ratio = info ? Math.min(1, info.freeMinutes / 600) : 0;
+          const style: CSSProperties = isEvent
+            ? { background: "var(--color-night)", color: "#fff", boxShadow: "0 0 14px 2px rgb(var(--oshi-glow) / 0.7)" }
+            : info
+              ? { background: `rgb(var(--oshi-glow) / ${0.12 + ratio * 0.78})`, color: ratio > 0.6 ? "#fff" : undefined }
+              : {};
           return (
-            <div key={key} className="flex flex-col items-center gap-1">
-              <span className={`grid h-5 w-5 place-items-center rounded-full ${isEvent ? "bg-rose-300 font-bold text-white" : "text-ink-soft"}`}>
-                {Number(key.slice(8, 10))}
-              </span>
-              <span className={`h-3 w-full rounded ${isEvent ? "bg-rose-100" : tone}`} title={info ? `空き ${Math.round(info.freeMinutes / 60)}時間` : "未取得"} />
-            </div>
+            <span
+              key={`${key}-${availability ? "on" : "off"}`}
+              className={`pop-in grid aspect-square place-items-center rounded-lg text-[11px] font-semibold ${info || isEvent ? "" : "bg-white text-ink-soft"}`}
+              style={{ ...style, "--delay": availability ? `${i * 35}ms` : "0ms" } as CSSProperties}
+              title={isEvent ? "イベント当日" : info ? `空き ${Math.round(info.freeMinutes / 60)}時間` : "未取得"}
+            >
+              {isEvent ? "♡" : Number(key.slice(8, 10))}
+            </span>
           );
         })}
       </div>

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#faf6fb",
+  themeColor: "#1b1935",
   width: "device-width",
   initialScale: 1,
 };
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Dancing+Script:wght@500&family=Zen+Kurenaido&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
         />
       </head>
       <body>

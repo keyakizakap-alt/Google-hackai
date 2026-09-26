@@ -2,164 +2,276 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, CalendarPlus, ChevronRight, Heart, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
-import { GoogleG, SkylineArt, StageArt } from "@/components/brand";
+import { ArrowUpRight, CalendarPlus, Heart, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
+import { useState, type CSSProperties } from "react";
+import { PendingBell } from "@/components/AppShell";
+import { GoogleG } from "@/components/brand";
 import { MiniCalendar } from "@/components/MiniCalendar";
+import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
+import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import { formatJst } from "@/lib/time";
 
-function EventCard() {
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** チケット型ヒーロー: 左にステージ、右の半券に開演までのライブカウントダウン */
+function TicketHero() {
   const { event, eventImage } = useStore();
+  const cd = useCountdown(event.startAt);
+  const [liked, setLiked] = useState(true);
   return (
-    <section className="card p-5" aria-labelledby="next-event">
-      <div className="flex items-center justify-between">
-        <h2 id="next-event" className="text-[15px] font-bold text-ink">次の推し活イベント</h2>
-        <Link href="/events" className="flex items-center text-xs text-ink-soft hover:text-lav-600">
-          詳細を見る <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-      <div className="relative mt-3 h-36 overflow-hidden rounded-2xl sm:h-40">
+    <Reveal as="section" aria-labelledby="next-event" className="glow-border grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_300px]">
+      <div className="relative min-h-[300px] overflow-hidden md:min-h-[340px]">
         {eventImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
-          <img src={eventImage} alt="" className="h-full w-full object-cover" />
+          <img src={eventImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
-          <StageArt className="h-full w-full" />
+          <StageScene className="absolute inset-0" />
         )}
-        <span className="absolute bottom-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-white shadow-md">
-          <Heart className="h-5 w-5 fill-rose-400 text-rose-400" />
-        </span>
+        <div className="absolute inset-0 bg-gradient-to-t from-night via-night/55 to-transparent" />
+        <div className="relative flex h-full flex-col justify-between p-6 sm:p-8">
+          <div className="flex items-center justify-between">
+            <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.3em] backdrop-blur">NEXT LIVE</span>
+            <button
+              type="button"
+              onClick={() => setLiked((v) => !v)}
+              aria-pressed={liked}
+              aria-label="お気に入り"
+              className="grid h-11 w-11 place-items-center rounded-full bg-white/95 text-rose-400 shadow-lg transition hover:scale-110 active:scale-95"
+            >
+              <Heart className={`h-5 w-5 transition ${liked ? "fill-rose-400" : ""}`} />
+            </button>
+          </div>
+          <div>
+            <p className="font-display text-lg italic text-white/70">{event.artist}</p>
+            <h2 id="next-event" className="mt-1 text-[26px] font-bold leading-tight tracking-wide sm:text-4xl">
+              {event.title}
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
+              <span className="rounded-full bg-white/12 px-3 py-1.5 backdrop-blur">{formatJst(event.startAt)} 開演</span>
+              <span className="flex items-center gap-1 rounded-full bg-white/12 px-3 py-1.5 backdrop-blur">
+                <MapPin className="h-3.5 w-3.5" />
+                {event.venue}
+              </span>
+              <Link href="/events" className="flex items-center gap-1 rounded-full bg-white px-3 py-1.5 font-bold text-ink transition hover:bg-rose-50">
+                詳細を編集 <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
-      <h3 className="mt-4 text-xl font-bold tracking-wide text-ink">{event.title}</h3>
-      <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[15px] text-ink-soft">
-        <span className="flex items-center gap-1.5">
-          <CalendarDays className="h-4 w-4" strokeWidth={1.7} />
-          {formatJst(event.startAt)}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <MapPin className="h-4 w-4" strokeWidth={1.7} />
-          {event.venue}
-        </span>
+
+      {/* 半券 */}
+      <div className="relative flex flex-col justify-between bg-paper p-6 text-ink sm:p-7">
+        <span className="ticket-perf absolute inset-y-0 left-0 hidden w-3 -translate-x-1/2 md:block" aria-hidden />
+        <span className="ticket-perf absolute inset-x-0 top-0 h-3 -translate-y-1/2 rotate-0 md:hidden" style={{ backgroundSize: "16px 100%" }} aria-hidden />
+        <div>
+          <p className="text-[10px] font-bold tracking-[0.3em] text-mute">COUNTDOWN</p>
+          <p className="mt-2 flex items-baseline gap-2" aria-live="off" aria-label={`開演まであと${cd.days}日`}>
+            <span className="font-display text-[92px] font-semibold leading-[0.8] text-ink">
+              <TickDigits value={cd.ready ? String(cd.days) : "–"} />
+            </span>
+            <span className="font-display text-2xl italic text-rose-400">days</span>
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            {[
+              [cd.hours, "HRS"],
+              [cd.minutes, "MIN"],
+              [cd.seconds, "SEC"],
+            ].map(([v, l]) => (
+              <div key={l} className="rounded-xl bg-cloud py-2">
+                <p className="font-display text-2xl font-semibold text-ink">
+                  <TickDigits value={cd.ready ? pad(v as number) : "--"} />
+                </p>
+                <p className="text-[9px] font-bold tracking-[0.25em] text-mute">{l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-5 flex items-end justify-between border-t border-dashed border-line pt-4">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.25em] text-mute">ADMIT ONE</p>
+            <p className="font-display text-lg italic text-ink">OshiReady</p>
+          </div>
+          <div className="flex gap-[2px]" aria-hidden>
+            {Array.from({ length: 18 }).map((_, i) => (
+              <span key={i} className="bg-ink" style={{ width: i % 3 === 0 ? 3 : 1, height: 28 }} />
+            ))}
+          </div>
+        </div>
       </div>
-    </section>
+    </Reveal>
   );
 }
 
 function CalendarCard() {
   const { session, availability, busy, extractAvailability, event } = useStore();
   const connected = session?.calendarConnected;
+  const scanning = busy === "availability";
   return (
-    <section className="card flex flex-col p-5" aria-labelledby="gcal">
-      <div className="grid flex-1 gap-4 sm:grid-cols-[1fr_minmax(0,230px)]">
+    <Reveal delay={120} as="section" aria-labelledby="gcal" className="card card-lift flex flex-col p-6">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="gcal" className="flex items-center gap-2 text-[15px] font-bold text-ink">
-            <GoogleG className="h-6 w-6" />
+          <p className="font-display text-sm italic text-mute">Free / Busy</p>
+          <h2 id="gcal" className="flex items-center gap-2 text-[17px] font-bold text-ink">
+            <GoogleG className="h-5 w-5" />
             Googleカレンダーと連携
           </h2>
-          <p className="mt-3 text-[13px] leading-relaxed text-ink-soft">
-            カレンダーから予定を読み取り、推し活のための空き時間を抽出します。
-          </p>
-          <p className="mt-2 text-[11px] text-mute">
-            {connected ? "● 連携済み（予定の中身は取得しません）" : session?.googleOAuthConfigured ? (
-              <a href="/api/auth/google" className="font-semibold text-lav-600 underline-offset-2 hover:underline">
-                Google アカウントを連携する →
-              </a>
-            ) : (
-              "未連携：デモカレンダーで体験できます"
-            )}
-          </p>
-          {availability && (
-            <p className="mt-3 rounded-xl bg-lav-50 px-3 py-2 text-xs text-ink-soft">
-              {availability.source === "demo" ? "デモ" : "Google"}カレンダーから
-              <b className="mx-1 text-lav-700">{availability.freeSlots.length}</b>件の空き時間を抽出（予定 {availability.busyCount} 件はマスク済み）
-            </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "デモ"}</span>
+      </div>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">予定の中身は読まず、時間帯だけから推し活に使える空き時間を抽出します。</p>
+
+      <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[1fr_1.15fr]">
+        <div className="flex flex-col justify-between gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-cloud p-3">
+              <p className="text-[10px] font-bold tracking-[0.2em] text-mute">FREE SLOTS</p>
+              <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.freeSlots.length} /> : "—"}</p>
+            </div>
+            <div className="rounded-2xl bg-cloud p-3">
+              <p className="text-[10px] font-bold tracking-[0.2em] text-mute">MASKED</p>
+              <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.busyCount} /> : "—"}</p>
+            </div>
+          </div>
+          {!connected && session?.googleOAuthConfigured ? (
+            <a href="/api/auth/google" className="text-xs font-bold text-lav-600 underline-offset-4 hover:underline">
+              Google アカウントを連携する →
+            </a>
+          ) : (
+            <p className="text-[11px] leading-relaxed text-mute">{connected ? "権限は閲覧のみ・タイトルは受信しません" : "未連携のためデモカレンダーで体験できます"}</p>
           )}
         </div>
-        <MiniCalendar availability={availability} eventDate={event.startAt} />
+        <MiniCalendar availability={availability} eventDate={event.startAt} scanning={scanning} />
       </div>
-      <button
-        onClick={() => void extractAvailability()}
-        disabled={busy !== null}
-        className="btn-primary mt-5 flex w-full items-center justify-center gap-3 rounded-xl py-3.5 text-[15px] font-bold text-white"
-      >
-        {busy === "availability" ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <CalendarPlus className="h-5 w-5" strokeWidth={1.7} />}
-        空き時間を抽出
-        <ChevronRight className="ml-auto mr-2 h-4 w-4" />
+
+      <button onClick={() => void extractAvailability()} disabled={busy !== null} className="btn-primary mt-5 flex w-full items-center justify-center gap-3 rounded-xl py-3.5 text-[15px] font-bold">
+        {scanning ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <CalendarPlus className="h-5 w-5" strokeWidth={1.7} />}
+        {scanning ? "スキャン中…" : "空き時間を抽出"}
       </button>
-    </section>
+    </Reveal>
   );
 }
 
-function NextSteps() {
+/** 「次にやること」をライブのセットリストとして表現 */
+function Setlist() {
   const { availability, envelope, busy, generatePlan } = useStore();
   const router = useRouter();
   const steps = [
-    { n: "01", icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーから\n空き時間を抽出", done: Boolean(availability), tone: "from-lav-50 to-white" },
-    { n: "02", icon: Sparkles, t: "美容プランを作成", d: "美容・施術の候補を\n提案します", done: Boolean(envelope), tone: "from-rose-50 to-white" },
-    { n: "03", icon: TrainFront, t: "移動プランを作成", d: "出発時間・ルートを\n最適化します", done: Boolean(envelope), tone: "from-rose-50 to-white" },
+    { icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーから空き時間を抽出", done: Boolean(availability) },
+    { icon: Sparkles, t: "美容プランを作成", d: "美容・施術の候補を逆算して提案", done: Boolean(envelope) },
+    { icon: TrainFront, t: "移動プランを作成", d: "混雑を避けた出発時間・ルート", done: Boolean(envelope) },
   ];
+  const doneCount = steps.filter((s) => s.done).length;
   const onStep = async (i: number) => {
-    if (i === 0) return document.getElementById("gcal")?.scrollIntoView({ behavior: "smooth" });
+    if (i === 0) return document.getElementById("gcal")?.scrollIntoView({ behavior: "smooth", block: "center" });
     if (envelope) return router.push("/plan");
     if (await generatePlan()) router.push("/plan");
   };
   return (
-    <section className="card p-5" aria-labelledby="next-steps">
-      <h2 id="next-steps" className="text-[15px] font-bold text-ink">次にやること</h2>
-      <p className="mt-1 text-xs text-mute">3ステップで、推しに会う準備をはじめましょう。</p>
-      <div className="mt-4 grid grid-cols-3 gap-2.5 sm:gap-3">
-        {steps.map((s, i) => (
-          <button
-            key={s.n}
-            onClick={() => void onStep(i)}
-            disabled={busy !== null}
-            className={`group relative flex flex-col items-center rounded-2xl border border-line bg-gradient-to-b ${s.tone} px-2 pb-4 pt-3 text-center transition hover:-translate-y-0.5 hover:shadow-md sm:items-start sm:px-4 sm:text-left`}
-          >
-            <span className="hidden rounded-md bg-white px-1.5 text-[11px] font-bold text-rose-500 shadow-sm sm:block">{s.n}</span>
-            <span className="mt-1 grid h-12 w-12 place-items-center self-center rounded-full bg-white text-lav-600 shadow-sm sm:mt-2 sm:h-14 sm:w-14">
-              {busy === "planning" && i > 0 ? <LoaderCircle className="h-6 w-6 animate-spin" /> : <s.icon className="h-6 w-6" strokeWidth={1.6} />}
-            </span>
-            <span className="mt-3 text-[12px] font-bold leading-snug text-ink sm:text-[15px]">{s.t}</span>
-            <span className="mt-1 hidden whitespace-pre-line text-xs leading-relaxed text-mute sm:block">{s.d}</span>
-            {s.done && <span className="absolute right-2 top-2 rounded-full bg-lav-100 px-1.5 text-[10px] font-bold text-lav-600">済</span>}
-            <ChevronRight className="absolute bottom-3 right-3 hidden h-4 w-4 text-mute sm:block" />
-          </button>
-        ))}
+    <Reveal delay={80} as="section" aria-labelledby="setlist" className="card p-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="font-display text-sm italic text-mute">Tonight&apos;s Setlist</p>
+          <h2 id="setlist" className="text-[17px] font-bold text-ink">次にやること</h2>
+        </div>
+        <p className="font-display text-3xl font-semibold text-ink">
+          {doneCount}
+          <span className="text-base italic text-mute"> / 3</span>
+        </p>
       </div>
-    </section>
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-lav-50">
+        <div className="h-full rounded-full bg-gradient-to-r from-lav-400 to-rose-400 transition-all duration-1000" style={{ width: `${(doneCount / 3) * 100}%` }} />
+      </div>
+      <ol className="mt-4 divide-y divide-line">
+        {steps.map((s, i) => (
+          <li key={s.t}>
+            <button
+              onClick={() => void onStep(i)}
+              disabled={busy !== null}
+              className="group flex w-full items-center gap-4 py-4 text-left transition disabled:opacity-60"
+            >
+              <span className={`font-display w-10 shrink-0 text-2xl italic transition ${s.done ? "text-rose-400" : "text-lav-200 group-hover:text-lav-500"}`}>M{i + 1}</span>
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition duration-300 group-hover:scale-110 ${s.done ? "bg-rose-400 text-white" : "bg-lav-50 text-lav-600 group-hover:bg-night group-hover:text-white"}`}>
+                {busy === "planning" && i > 0 ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <s.icon className="h-5 w-5" strokeWidth={1.7} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold text-ink transition group-hover:translate-x-1">{s.t}</span>
+                <span className="block text-xs text-mute">{s.d}</span>
+              </span>
+              <span className="text-[10px] font-bold tracking-[0.2em] text-mute">{s.done ? "DONE" : i === doneCount ? "NEXT" : ""}</span>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-mute transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink" />
+            </button>
+          </li>
+        ))}
+      </ol>
+    </Reveal>
+  );
+}
+
+function Greeting() {
+  const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Tokyo" }));
+  const hello = h < 11 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <Reveal>
+        <p className="font-display text-xl italic text-mute" suppressHydrationWarning>
+          {hello},
+        </p>
+        <h1 className="mt-1 text-2xl font-bold leading-snug tracking-wide text-ink sm:text-[32px]">
+          推しに会う日を、
+          <br className="sm:hidden" />
+          <span className="relative isolate whitespace-nowrap">
+            いちばん気持ちよく
+            <span className="absolute inset-x-0 bottom-1 -z-10 h-3 rounded bg-rose-100" aria-hidden />
+          </span>
+          迎えよう。
+        </h1>
+      </Reveal>
+      <div className="hidden items-center gap-2 lg:flex">
+        <PendingBell />
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-rose-100 to-lav-200 ring-2 ring-white" aria-hidden>
+          <Heart className="h-5 w-5 fill-rose-300 text-rose-400" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function OutroMarquee() {
+  const words = ["Good Travel", "Good Live", "推しに会うすべての準備を", "OshiReady と、いっしょに"];
+  const row = (
+    <div className="flex shrink-0 items-center">
+      {words.map((w, i) => (
+        <span key={i} className="flex items-center whitespace-nowrap px-6">
+          <span className={i % 2 === 0 ? "font-display text-5xl italic text-ink sm:text-6xl" : "text-2xl font-bold tracking-widest text-ink/80 sm:text-3xl"}>{w}</span>
+          <Heart className="ml-12 h-6 w-6 fill-rose-300 text-rose-300" />
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <Reveal as="section" aria-label="推しに会うすべての準備を、OshiReady といっしょに。" className="relative -mx-4 overflow-hidden py-6 sm:-mx-6 lg:mx-0 lg:rounded-[22px] lg:bg-white">
+      <div className="marquee" style={{ "--marquee-duration": "48s" } as CSSProperties} aria-hidden>
+        {row}
+        {row}
+      </div>
+    </Reveal>
   );
 }
 
 export default function Home() {
   return (
-    <div className="space-y-5">
-      <div className="px-1">
-        <p className="text-sm text-ink-soft">おかえりなさい、</p>
-        <h1 className="mt-1 text-lg font-bold tracking-wide text-ink sm:text-xl">推しに会う日を、いちばん気持ちよく迎える準備をしましょう。</h1>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.02fr_1fr]">
-        <EventCard />
+    <div className="space-y-6">
+      <Greeting />
+      <TicketHero />
+      <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
         <CalendarCard />
-      </div>
-      <div className="grid gap-5 xl:grid-cols-[1.45fr_1fr]">
-        <NextSteps />
         <PlanSummaryCard />
       </div>
-
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-50 via-lav-50 to-lav-100">
-        <SkylineArt className="absolute inset-y-0 right-0 h-full w-full opacity-80" />
-        <div className="relative flex items-center gap-4 px-6 py-6 sm:px-10">
-          <p className="text-[15px] font-medium leading-relaxed tracking-[0.08em] text-ink sm:text-xl sm:tracking-[0.12em]">
-            推しに会うすべての準備を、
-            <br />
-            <span className="whitespace-nowrap">
-              <span className="font-display text-xl italic sm:text-2xl">OshiReady</span> といっしょに。
-            </span>
-          </p>
-          <Heart className="h-8 w-8 shrink-0 text-lav-400" strokeWidth={1.2} />
-        </div>
-      </section>
+      <Setlist />
+      <OutroMarquee />
     </div>
   );
 }

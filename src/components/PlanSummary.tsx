@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { relativeDayLabel, formatJst } from "@/lib/time";
+import { AgentConsole } from "./AgentConsole";
 import { ItemIcon } from "./icons";
 import { useStore } from "./store";
 
@@ -24,48 +25,49 @@ export function PlanSummaryCard() {
   const items = plan?.items.filter((i) => i.kind === "beauty" || i.kind === "transit").slice(0, 4) ?? [];
 
   return (
-    <section className="card flex flex-col p-5" aria-labelledby="plan-summary">
+    <section className="card card-lift flex flex-col p-6" aria-labelledby="plan-summary">
       <div className="flex items-center justify-between">
-        <h2 id="plan-summary" className="text-[15px] font-bold text-ink">提案プラン（概要）</h2>
-        <span className="rounded-full bg-lav-50 px-2.5 py-1 text-[11px] font-semibold text-lav-600">
-          {envelope ? `AIが作成・${STATUS_LABEL[envelope.status]}` : "AIが作成"}
+        <div>
+          <p className="font-display text-sm italic text-mute">Countdown Plan</p>
+          <h2 id="plan-summary" className="text-[17px] font-bold text-ink">提案プラン</h2>
+        </div>
+        <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-500">
+          {envelope ? `AI作成・${STATUS_LABEL[envelope.status]}` : "AIが作成"}
         </span>
       </div>
 
       {busy === "planning" ? (
-        <div className="mt-5 space-y-4" aria-busy>
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="skeleton h-11 rounded-xl" />
-          ))}
-          <p className="text-center text-xs text-mute">エージェントがカレンダー・サロン・経路を確認しています…</p>
+        <div className="mt-5">
+          <AgentConsole running compact />
         </div>
       ) : items.length === 0 ? (
-        <div className="mt-6 flex flex-1 flex-col items-center justify-center rounded-2xl bg-lav-50/60 px-4 py-8 text-center">
-          <p className="text-sm text-ink-soft">まだプランはありません。</p>
-          <p className="mt-1 text-xs text-mute">「空き時間を抽出」してからプランを作成しましょう。</p>
+        <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lav-200 px-4 py-10 text-center">
+          <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
+          <p className="mt-2 text-xs text-mute">セットリストの M2 からプランを作成できます。</p>
         </div>
       ) : (
-        <ol className="relative mt-5 space-y-4 pl-1">
-          <span className="absolute bottom-3 left-[98px] top-3 w-px bg-rose-100" aria-hidden />
-          {items.map((it) => {
-            return (
-              <li key={it.id} className="relative flex items-center gap-3">
-                <div className="w-[76px] shrink-0">
-                  <p className="text-sm font-bold text-ink">{relativeDayLabel(it.start, plan!.event.startAt)}</p>
-                  <p className="text-[11px] text-mute">{formatJst(it.start, { date: true })}</p>
-                </div>
-                <span className="relative z-10 h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-rose-300 bg-white" />
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
-                  <ItemIcon item={it} />
-                </span>
+        <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-6 space-y-5">
+          <span className="draw-line absolute bottom-2 left-[83px] top-2 w-[2px] rounded bg-gradient-to-b from-rose-300 to-lav-200" aria-hidden />
+          {items.map((it, idx) => (
+            <li key={it.id} className="pop-in relative flex items-center gap-3" style={{ "--delay": `${300 + idx * 140}ms` } as React.CSSProperties}>
+              <div className="w-[68px] shrink-0 text-right">
+                <p className="font-display text-xl font-semibold leading-none text-ink">{relativeDayLabel(it.start, plan!.event.startAt)}</p>
+                <p className="mt-1 text-[11px] text-mute">{formatJst(it.start, { date: true })}</p>
+              </div>
+              <span className="relative z-10 h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-rose-400 bg-white shadow-[0_0_0_4px_var(--oshi-50)]" />
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+                <ItemIcon item={it} />
+              </span>
+              <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-ink">{it.title}</p>
-              </li>
-            );
-          })}
+                <p className="truncate text-[11px] text-mute">{formatJst(it.start, { time: true })}〜 {it.provider?.name ?? it.route?.to ?? ""}</p>
+              </div>
+            </li>
+          ))}
         </ol>
       )}
 
-      <Link href="/plan" className="btn-primary mt-auto flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white max-lg:mt-6 lg:mt-6">
+      <Link href="/plan" className="btn-primary mt-6 flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold">
         プランを見る
         <ChevronRight className="h-4 w-4" />
       </Link>

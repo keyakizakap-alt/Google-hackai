@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Activity, Bot, Check, ChevronRight, CircleCheck, CircleX, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
+  Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
 } from "lucide-react";
+import { AgentConsole } from "@/components/AgentConsole";
 import { ItemIcon } from "@/components/icons";
+import { StageScene } from "@/components/StageScene";
 import { STATUS_LABEL } from "@/components/PlanSummary";
 import { useStore } from "@/components/store";
 import type { TimelineItem } from "@/lib/agent/types";
@@ -31,15 +33,15 @@ function StatusStepper({ status }: { status: string }) {
   );
 }
 
-function ItemCard({ item, eventStart, selectable, checked, onToggle }: { item: TimelineItem; eventStart: string; selectable: boolean; checked: boolean; onToggle: () => void }) {
+function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }: { item: TimelineItem; eventStart: string; selectable: boolean; checked: boolean; onToggle: () => void; index?: number }) {
   const highlight = item.kind === "event";
   return (
-    <li className="relative grid grid-cols-1 gap-1.5 sm:grid-cols-[92px_1fr] sm:gap-5">
+    <li className="pop-in relative grid grid-cols-1 gap-1.5 sm:grid-cols-[92px_1fr] sm:gap-5" style={{ "--delay": `${200 + index * 120}ms` } as CSSProperties}>
       <div className="flex items-baseline gap-2 px-1 sm:block sm:px-0 sm:pt-4 sm:text-right">
-        <p className="text-sm font-bold text-ink">{relativeDayLabel(item.start, eventStart)}</p>
+        <p className="font-display text-xl font-semibold leading-none text-ink">{relativeDayLabel(item.start, eventStart)}</p>
         <p className="text-[11px] text-mute">{formatJst(item.start, { date: true })}</p>
       </div>
-      <div className={`relative rounded-2xl border p-3.5 sm:p-4 ${highlight ? "border-rose-100 bg-gradient-to-r from-rose-50 to-white" : "border-line bg-white"}`}>
+      <div className={`card-lift relative rounded-2xl border p-3.5 transition sm:p-4 ${highlight ? "border-rose-100 bg-gradient-to-r from-rose-50 to-white" : "border-line bg-white"}`}>
         <span className="absolute -left-[17px] top-6 hidden h-3.5 w-3.5 rounded-full border-[3px] border-rose-300 bg-white sm:block" aria-hidden />
         <div className="flex items-start gap-3">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${highlight ? "bg-rose-100 text-rose-500" : "bg-lav-50 text-lav-600"}`}>
@@ -181,28 +183,17 @@ function TracePanel() {
   const { trace, usage, engine, envelope } = useStore();
   if (!trace.length) return null;
   return (
-    <details className="card p-5">
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-[15px] font-bold text-ink">
-        <Activity className="h-5 w-5 text-lav-600" />
-        エージェントの行動ログ
-        <span className="ml-auto text-[11px] font-normal text-mute">
-          {engine === "gemini" ? envelope?.plan.generatedBy.model : "ルールベース"} ・ {trace.length} ステップ
-          {usage && usage.totalTokens > 0 && ` ・ ${usage.totalTokens.toLocaleString()} tokens`}
+    <section aria-labelledby="trace" className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 px-1">
+        <Activity className="h-4 w-4 text-lav-600" />
+        <h2 id="trace" className="text-sm font-bold text-ink">エージェントの行動ログ</h2>
+        <span className="ml-auto text-[11px] text-mute">
+          {engine === "gemini" ? envelope?.plan.generatedBy.model : "ルールベース"}
+          {usage && usage.totalTokens > 0 && ` ・ ${usage.totalTokens.toLocaleString()} tokens`} ・ 予定の内容や画像は含みません
         </span>
-      </summary>
-      <p className="mt-2 text-[11px] text-mute">可観測性のため、ツール呼び出しの種類・結果・所要時間を表示します（予定の内容や画像は含みません）。</p>
-      <ol className="mt-3 space-y-1.5">
-        {trace.map((t) => (
-          <li key={t.step} className="flex items-start gap-2 text-xs">
-            <span className="w-5 shrink-0 text-right tabular-nums text-mute">{t.step}</span>
-            {t.ok ? <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-lav-500" /> : <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />}
-            <code className={`shrink-0 rounded px-1.5 ${t.type === "guardrail" ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-700"}`}>{t.name}</code>
-            <span className="min-w-0 text-ink-soft">{t.summary}</span>
-            <span className="ml-auto shrink-0 tabular-nums text-mute">{t.latencyMs}ms</span>
-          </li>
-        ))}
-      </ol>
-    </details>
+      </div>
+      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} />
+    </section>
   );
 }
 
@@ -301,23 +292,39 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
 
 function EmptyPlan() {
   const { busy, generatePlan, event, availability } = useStore();
+  const planning = busy === "planning";
   return (
-    <div className="px-1">
-      <h1 className="text-xl font-bold text-ink">推し活プラン</h1>
-      <div className="card mt-5 flex flex-col items-center px-6 py-14 text-center">
-        <span className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-b from-rose-100 to-lav-100 text-lav-600">
-          <Sparkles className="h-7 w-7" strokeWidth={1.6} />
-        </span>
-        <p className="mt-4 text-lg font-bold text-ink">{event.title} に向けたプランを作成します</p>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-ink-soft">
-          エージェントがカレンダーの空き時間・美容の最適タイミング・混雑を避けた経路を調べて、タイムラインを提案します。
-          {!availability && "（空き時間はプラン作成時に自動で確認します）"}
-        </p>
-        <button onClick={() => void generatePlan()} disabled={busy !== null} className="btn-primary mt-6 flex items-center gap-2 rounded-xl px-8 py-3.5 text-[15px] font-bold text-white">
-          {busy === "planning" ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
-          {busy === "planning" ? "エージェントが計画中…" : "AI にプランを作ってもらう"}
-        </button>
-        {busy === "planning" && <p className="mt-3 text-xs text-mute">空き時間 → 美容の推奨日 → サロン空き枠 → 混雑 → 経路 の順に確認しています</p>}
+    <div className="space-y-6">
+      <div>
+        <p className="font-display text-xl italic text-mute">Countdown Plan</p>
+        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[32px]">推し活プラン</h1>
+      </div>
+      <div className="grid overflow-hidden rounded-[22px] bg-night text-white shadow-float lg:grid-cols-[1.1fr_1fr]">
+        <div className="relative min-h-[260px]">
+          <StageScene className="absolute inset-0" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
+        </div>
+        <div className="relative flex flex-col justify-center p-7 sm:p-10">
+          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">AI AGENT</p>
+          <p className="mt-2 text-2xl font-bold leading-snug">
+            {event.title}
+            <span className="block text-base font-medium text-white/70">に向けたプランを逆算します</span>
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-white/65">
+            空き時間・美容の最適タイミング・混雑を避けた経路をエージェントが自分で調べ、承認待ちのタイムラインとして提案します。
+            {!availability && "（空き時間はプラン作成時に自動で確認します）"}
+          </p>
+          {planning ? (
+            <div className="mt-6">
+              <AgentConsole running />
+            </div>
+          ) : (
+            <button onClick={() => void generatePlan()} disabled={busy !== null} className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
+              <Sparkles className="h-5 w-5" />
+              AI にプランを作ってもらう
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -346,10 +353,11 @@ export default function PlanPage() {
     <div className="space-y-5 px-1">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          <p className="font-display text-lg italic text-mute">Countdown Plan · rev.{plan.revision}</p>
           <p className="text-xs text-mute">
             改訂 {plan.revision} ・ {plan.generatedBy.engine === "gemini" ? `Gemini (${plan.generatedBy.model})` : "ルールベース"} ・ {STATUS_LABEL[status]}
           </p>
-          <h1 className="mt-1 text-xl font-bold text-ink">{plan.event.title} への準備プラン</h1>
+          <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
         <StatusStepper status={status} />
       </div>
@@ -381,10 +389,11 @@ export default function PlanPage() {
 
           <section className="card p-4 sm:p-6" aria-label="タイムライン">
             <ol className="relative space-y-4">
-              <span className="absolute bottom-4 left-[102px] top-4 hidden w-px bg-rose-100 sm:block" aria-hidden />
-              {plan.items.map((it) => (
+              <span key={bookableKey} className="draw-line absolute bottom-4 left-[102px] top-4 hidden w-[2px] rounded bg-gradient-to-b from-rose-300 via-lav-200 to-rose-300 sm:block" aria-hidden />
+              {plan.items.map((it, idx) => (
                 <ItemCard
-                  key={it.id}
+                  key={`${bookableKey}-${it.id}`}
+                  index={idx}
                   item={it}
                   eventStart={plan.event.startAt}
                   selectable={isPending && busy === null}
