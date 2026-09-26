@@ -32,7 +32,8 @@ gcloud config set project "$OSHIREADY_PROJECT_ID"
 gcloud services enable \
   serviceusage.googleapis.com run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com aiplatform.googleapis.com \
-  secretmanager.googleapis.com compute.googleapis.com calendar-json.googleapis.com
+  secretmanager.googleapis.com compute.googleapis.com iam.googleapis.com \
+  calendar-json.googleapis.com
 
 OSHIREADY_PROJECT_NUMBER="$(gcloud projects describe "$OSHIREADY_PROJECT_ID" --format='value(projectNumber)')"
 OSHIREADY_RUNTIME_EMAIL="${OSHIREADY_RUNTIME}@${OSHIREADY_PROJECT_ID}.iam.gserviceaccount.com"
