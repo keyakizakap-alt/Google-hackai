@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, CalendarPlus, Heart, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { PendingBell } from "@/components/AppShell";
 import { GoogleG } from "@/components/brand";
 import { MiniCalendar } from "@/components/MiniCalendar";
@@ -239,28 +239,6 @@ function Greeting() {
   );
 }
 
-function OutroMarquee() {
-  const words = ["Good Travel", "Good Live", "推しに会うすべての準備を", "OshiReady と、いっしょに"];
-  const row = (
-    <div className="flex shrink-0 items-center">
-      {words.map((w, i) => (
-        <span key={i} className="flex items-center whitespace-nowrap px-6">
-          <span className={i % 2 === 0 ? "font-display text-5xl italic text-ink sm:text-6xl" : "text-2xl font-bold tracking-widest text-ink/80 sm:text-3xl"}>{w}</span>
-          <Heart className="ml-12 h-6 w-6 fill-rose-300 text-rose-300" />
-        </span>
-      ))}
-    </div>
-  );
-  return (
-    <Reveal as="section" aria-label="推しに会うすべての準備を、OshiReady といっしょに。" className="relative -mx-4 overflow-hidden py-6 sm:-mx-6 lg:mx-0 lg:rounded-[22px] lg:bg-white">
-      <div className="marquee" style={{ "--marquee-duration": "48s" } as CSSProperties} aria-hidden>
-        {row}
-        {row}
-      </div>
-    </Reveal>
-  );
-}
-
 export default function Home() {
   return (
     <div className="space-y-6">
@@ -271,7 +249,6 @@ export default function Home() {
         <PlanSummaryCard />
       </div>
       <Setlist />
-      <OutroMarquee />
     </div>
   );
 }
