@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { appBaseUrl } from "./config";
 import { randomId } from "./crypto";
 import { GuardrailError } from "./agent/stateMachine";
+import { AgentUnavailableError } from "./agent/orchestrator";
 import { CalendarAuthError } from "./google/calendar";
 import { logger, traceFromRequest } from "./logger";
 
@@ -61,6 +62,10 @@ export function rateLimit(req: Request, key: string, limit: number, windowMs = 6
 }
 
 export function errorResponse(e: unknown, meta: { requestId: string; trace?: string; route: string }) {
+  if (e instanceof AgentUnavailableError) {
+    logger.warn("agent.unavailable", meta);
+    return NextResponse.json({ error: e.message, code: "AGENT_UNAVAILABLE" }, { status: 503 });
+  }
   if (e instanceof GuardrailError) {
     logger.warn("guardrail.blocked", { ...meta, errorCode: e.code });
     return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });

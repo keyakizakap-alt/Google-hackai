@@ -160,7 +160,7 @@ export default function BookingsPage() {
       <div className="flex items-start gap-3 rounded-2xl bg-lav-50 px-4 py-3 text-xs leading-relaxed text-ink-soft">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-lav-600" />
         <p>
-          OshiReady が代わりに予約・支払いをすることはありません。「予約サイトを開く」から各サイトで予約し、終わったら「予約できた」を押して記録してください。
+          OshiReady が代わりに予約・支払いをすることはありません。「予約サイトを開く」から各サイトで予約し、終わったら「予約できた」を押して記録してください。公演と予約メモはこの端末のブラウザに保存されます。
           キャンセルも予約したサイトで行い、ここで状況を管理できます。
         </p>
       </div>

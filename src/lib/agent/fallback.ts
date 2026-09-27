@@ -1,6 +1,6 @@
 import "server-only";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
-import { jalanSearchUrl } from "../safeUrl";
+import { EKISPERT_ROUTE_URL } from "../safeUrl";
 import { MS_MIN, toJstIso } from "../time";
 import { daysBefore, executeTool, type AgentContext } from "./tools";
 import type { TimelineItem, TraceStep } from "./types";
@@ -33,7 +33,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
         window_start: toJstIso(daysBefore(event.startAt, d, 9)),
         window_end: toJstIso(daysBefore(event.startAt, d, 21)),
       });
-      const slots = (out.response.slots ?? []) as { slotId: string; salonName: string; start: string; end: string; priceJpy: number; nearestStation: string; bookingUrl: string }[];
+      const slots = (out.response.slots ?? []) as { slotId: string; salonName: string; start: string; end: string; nearestStation: string; bookingUrl: string }[];
       const taken = slots.find((s) => !items.some((it) => Date.parse(s.start) < Date.parse(it.end) && Date.parse(s.end) > Date.parse(it.start)));
       if (taken) {
         items.push({
@@ -44,10 +44,10 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
           start: taken.start,
           end: taken.end,
           location: taken.nearestStation,
-          provider: { name: taken.salonName, priceJpy: taken.priceJpy, bookingUrl: taken.bookingUrl, slotId: taken.slotId },
+          provider: { name: taken.salonName, bookingUrl: taken.bookingUrl },
           rationale: ideal.includes(d)
-            ? `${g.note}。空き時間と推奨タイミング（${d}日前）が一致する枠を選択しました。`
-            : `推奨（${minD}〜${maxD}日前）の空き枠がなかったため、最も近い${d}日前を提案します。${g.note}。`,
+            ? `${g.note}。予定上の候補日時です。店舗の空席と価格は予約サイトで確認してください。`
+            : `推奨（${minD}〜${maxD}日前）から外れた候補日時です。店舗の空席と価格は予約サイトで確認してください。`,
           requiresBooking: true,
         });
         break;
@@ -58,17 +58,16 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
   const eventStart = Date.parse(event.startAt);
   const arriveBy = eventStart - (event.arriveEarlyForGoods ? 180 : 90) * MS_MIN;
   await call("estimate_crowd", { at: toJstIso(arriveBy) });
-  const routeOut = await call("search_transit_route_mock", { from_station: event.homeStation, to_station: event.venueStation, arrive_by: toJstIso(arriveBy) });
-  const r = routeOut.response as { departure: string; arrival: string; summary: string; fareJpy: number; legs: { line: string; from: string; to: string; departure: string; arrival: string }[] };
+  const checkAt = Math.max(ctx.now + MS_MIN, Math.min(eventStart - 15 * MS_MIN, eventStart - 24 * 60 * MS_MIN));
   items.push({
-    id: "transit-out",
-    kind: "transit",
-    category: "train",
-    title: `${event.homeStation}駅 出発`,
-    start: r.departure,
-    end: r.arrival,
-    route: { from: event.homeStation, to: event.venueStation, summary: r.summary, legs: r.legs, fareJpy: r.fareJpy, source: "mock" },
-    rationale: "開演直前のいちばん混む時間を避けて、グッズ販売にも間に合う時間から逆算しました。",
+    id: "transit-check",
+    kind: "prep",
+    category: "transit-check",
+    title: `${event.homeStation}から${event.venueStation}への移動を確認`,
+    start: toJstIso(checkAt),
+    end: toJstIso(checkAt + MS_MIN),
+    provider: { name: "駅すぱあとで経路を検索", bookingUrl: EKISPERT_ROUTE_URL },
+    rationale: `経路データを取得できていません。${toJstIso(arriveBy)} 頃の現地到着を目安に、実際の列車・所要時間・運賃を確認してください。`,
     requiresBooking: true,
   });
 
@@ -97,22 +96,9 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     rationale: "推しに会う日！",
     requiresBooking: false,
   });
-  items.push({
-    id: "stay-1",
-    kind: "stay",
-    category: "hotel",
-    title: "会場周辺に後泊",
-    start: toJstIso(eventStart + 210 * MS_MIN),
-    end: toJstIso(eventStart + 16 * 60 * MS_MIN),
-    location: `${event.venueStation}周辺`,
-    provider: { name: "宿泊予約サイトで検索", bookingUrl: jalanSearchUrl(event.venue) },
-    rationale: "終演後は帰宅手段がないため、会場周辺での宿泊をおすすめします。",
-    requiresBooking: true,
-  });
-
   await call("submit_timeline", {
-    summary: `${event.title} に向けて、美容 ${items.filter((i) => i.kind === "beauty").length} 件と移動・宿泊を逆算しました。`,
+    summary: `${event.title} に向けて、美容 ${items.filter((i) => i.kind === "beauty").length} 件の候補日時を選びました。移動と宿泊の要否は経路検索で確認してください。`,
     items,
-    warnings: [],
+    warnings: ["実際のサロン空席・料金と移動経路は未取得です。予約前に確認してください。"],
   });
 }

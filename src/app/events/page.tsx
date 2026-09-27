@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, ImagePlus, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ImagePlus, LoaderCircle, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
@@ -10,18 +10,6 @@ import { GoogleG } from "@/components/brand";
 import { ScanImportButton } from "@/components/ScanImport";
 import { formatJst } from "@/lib/time";
 import { matchVenue, VENUES } from "@/lib/eventDetection/venues";
-
-/** 顔画像はブラウザ内で縮小（長辺 1024px）してからメモリ上の data URL として保持する */
-async function downscale(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
 
 const field = "mt-1.5 w-full rounded-xl border border-line bg-cloud px-3 py-2.5 text-sm outline-none focus:border-lav-400 focus:bg-white";
 
@@ -55,14 +43,14 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
             </a>
           )}
           <ScanImportButton className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" />
-          <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold">
+          <button onClick={() => void importFromCalendar()} disabled={busy !== null || !session?.calendarConnected} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-40">
             {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             カレンダーから取り込む
           </button>
         </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mute">
-        {session?.calendarConnected ? "Google カレンダー" : "お試し用カレンダー"}の今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。
+        {session?.calendarConnected ? "Google カレンダーの今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。" : "連携前は、スクショ・文章からの追加か手動で公演を登録できます。カレンダーの空き時間は連携後に確認します。"}
         それ以外の予定の内容はすぐに捨て、どこにも保存しません。
       </p>
       {lastImport && (
@@ -267,9 +255,8 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
 }
 
 export default function EventsPage() {
-  const { event, events, eventImage, setEventImage, selfie, setSelfie, session, persistImages } = useStore();
+  const { event, events, eventImage, setEventImage, persistImages } = useStore();
   const [editingId, setEditingId] = useState<string | null | undefined>(undefined);
-  const [consent, setConsent] = useState(false);
   // 未指定なら選択中のイベントを編集、null なら新規追加
   const targetId = editingId === undefined ? (event?.id ?? null) : editingId;
   const editing = events.find((e) => e.id === targetId) ?? null;
@@ -321,54 +308,7 @@ export default function EventsPage() {
             </div>
           </section>
 
-          <section className="card p-5">
-            <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
-              <Camera className="h-5 w-5 text-lav-600" /> AI 肌解析（任意）
-              <span className="ml-auto rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-semibold text-lav-600">{session?.youcam.mode === "api" ? "YouCam" : "お試し版"}</span>
-            </h2>
-            <p className="mt-2 text-xs leading-relaxed text-ink-soft">
-              素顔の写真から肌状態を解析し、前日のセルフケアをプランに組み込みます。
-            </p>
-            <div className="mt-3 rounded-xl bg-lav-50/70 p-3 text-[11px] leading-relaxed text-ink-soft">
-              <p className="flex items-center gap-1.5 font-semibold text-ink">
-                <ShieldCheck className="h-3.5 w-3.5" /> 顔画像の取り扱い
-              </p>
-              <ul className="mt-1 list-inside list-disc space-y-0.5">
-                <li>診断のためだけに使い、保存も記録もしません</li>
-                <li>サーバーでは解析直後に画像データを消去します</li>
-                <li>AI には画像ではなく、解析結果（点数）だけを渡します</li>
-              </ul>
-            </div>
-            <label className="mt-3 flex items-start gap-2 text-xs text-ink-soft">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#655da3]" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              上記に同意して写真を解析に使用します
-            </label>
-            <div className="mt-3 flex items-center gap-2">
-              <label className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs ${consent ? "cursor-pointer border-lav-400 text-lav-700 hover:bg-lav-50" : "cursor-not-allowed border-line text-mute"}`}>
-                <Camera className="h-4 w-4" /> 写真を選ぶ
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  className="sr-only"
-                  disabled={!consent}
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) setSelfie(await downscale(f));
-                  }}
-                />
-              </label>
-              {selfie && (
-                <>
-                  <span className="text-xs font-semibold text-lav-700">✓ 次回のプラン作成で解析します</span>
-                  <button onClick={() => setSelfie(null)} className="ml-auto text-xs text-mute hover:text-ink">
-                    取り消す
-                  </button>
-                </>
-              )}
-            </div>
-          </section>
+
         </div>
       </div>
     </div>

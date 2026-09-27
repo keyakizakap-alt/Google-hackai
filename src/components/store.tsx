@@ -2,12 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
+import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
 
-/**
- * クライアント状態はすべて React のメモリ上のみ（localStorage 等に保存しない）。
- * リロードで消えるのは「個人情報を保存しない」という設計方針の意図的な帰結。
- */
+/** 公演と予約メモはこのブラウザの IndexedDB に保存する。顔画像と OAuth トークンは保存しない。 */
 
 export interface SessionInfo {
   googleOAuthConfigured: boolean;
@@ -155,6 +153,7 @@ interface Store {
   reservations: Reservation[];
   updateReservation: (id: string, patch: Partial<Pick<Reservation, "status" | "confirmationNo" | "memo">>) => void;
   removeReservation: (id: string) => void;
+  clearLocalData: () => Promise<void>;
   busy: Busy;
   error: string | null;
   clearError: () => void;
@@ -164,7 +163,7 @@ interface Store {
   revisePlan: (instruction: string) => Promise<void>;
   approve: (itemIds: string[]) => Promise<void>;
   reject: () => Promise<void>;
-  book: () => Promise<void>;
+  book: () => Promise<boolean>;
   disconnect: () => Promise<void>;
 }
 
@@ -199,6 +198,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void loadWorkspace().then((saved) => {
+      if (!alive) return;
+      if (saved) {
+        setEvents(saved.events ?? []);
+        setActiveId(saved.activeId ?? null);
+        setProfile(saved.profile ?? DEFAULT_PROFILE);
+        setReservations(saved.reservations ?? []);
+        if (saved.envelope && Date.parse(saved.envelope.expiresAt) > Date.now()) setEnvelope(saved.envelope);
+      }
+      setRestored(true);
+    }).catch(() => { if (alive) setRestored(true); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;
+    const timer = setTimeout(() => {
+      void saveWorkspace({ events, activeId, profile, reservations, envelope }).catch(() => setError("この端末への保存に失敗しました。空き容量とブラウザ設定を確認してください"));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [restored, events, activeId, profile, reservations, envelope]);
 
   const run = useCallback(async <T,>(kind: Exclude<Busy, null>, fn: () => Promise<T>): Promise<T | undefined> => {
     setBusy(kind);
@@ -261,21 +285,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [profile]);
 
-  // 起動時（＝Google 連携直後のリダイレクト含む）にカレンダーからライブを自動で取り込む
+  // 起動時にセッションを確認する。端末内データの復元後にだけカレンダーを取り込む。
   useEffect(() => {
     let alive = true;
     api<SessionInfo>("/api/session")
       .then((s) => alive && setSession(s))
       .catch(() => undefined);
-    const t = setTimeout(() => {
-      if (alive) void importFromCalendar();
-    }, 0);
     return () => {
       alive = false;
-      clearTimeout(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 起動時に 1 回だけ
   }, []);
+
+  useEffect(() => {
+    if (!restored || !session?.calendarConnected) return;
+    const timer = setTimeout(() => { void importFromCalendar(); }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 復元・連携完了時に一度だけ
+  }, [restored, session?.calendarConnected]);
 
   const [persistImages, setPersistImagesState] = useState(false);
   const imageFor = useCallback((e: OshiEvent) => oshiImages[artistKey(e.artist)] ?? null, [oshiImages]);
@@ -499,6 +525,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateReservation: (id, patch) =>
         setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r))),
       removeReservation: (id) => setReservations((prev) => prev.filter((r) => r.id !== id)),
+      clearLocalData: async () => {
+        await clearWorkspace();
+        setEvents([]);
+        setActiveId(null);
+        setReservations([]);
+        setEnvelope(null);
+        setProfile(DEFAULT_PROFILE);
+      },
       busy,
       error,
       clearError: () => setError(null),
@@ -530,7 +564,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (r) setEnvelope(r.envelope);
       },
       book: async () => {
-        if (!envelope) return;
+        if (!envelope) return false;
         const r = await run("booking", () =>
           api<{ envelope: PlanEnvelope; results: BookingResult[] }>("/api/booking", { envelope, confirm: true }, "book"),
         );
@@ -561,6 +595,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           });
           setReservations((prev) => [...prev.filter((x) => !added.some((a) => a.id === x.id)), ...added].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)));
         }
+        return Boolean(r);
       },
       disconnect: async () => {
         await run("availability", () => api("/api/auth/logout", {}));

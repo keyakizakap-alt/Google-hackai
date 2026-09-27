@@ -286,8 +286,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
                 </button>
                 <button
                   onClick={async () => {
-                    await book();
-                    router.push("/bookings");
+                    if (await book()) router.push("/bookings");
                   }}
                   disabled={busy !== null}
                   className="btn-primary flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-bold text-white"

@@ -32,6 +32,13 @@ export interface AgentRunOutput {
 
 const DEADLINE_MS = 110_000;
 
+export class AgentUnavailableError extends Error {
+  constructor() {
+    super("AI に接続できませんでした。時間をおいて再試行してください");
+    this.name = "AgentUnavailableError";
+  }
+}
+
 function genai() {
   return config.gemini.useVertex
     ? new GoogleGenAI({ vertexai: true, project: config.gemini.project, location: config.gemini.location, httpOptions: { timeout: 60_000 } })
@@ -60,14 +67,12 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       await runGeminiLoop(input, ctx, trace, usage);
     } catch (e) {
       logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, model: config.gemini.model });
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "AI が混み合っていたため、かんたんモードで作成しました" });
-      engine = "rule-based";
+      throw new AgentUnavailableError();
     }
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
-      trace.push({ step: trace.length + 1, type: "guardrail", name: "fallback", ok: false, latencyMs: 0, summary: "時間内にまとまらなかったため、かんたんモードで仕上げました" });
-      engine = "rule-based";
+      throw new AgentUnavailableError();
     }
     await runRuleBasedPlanner(ctx, trace);
   }
@@ -89,7 +94,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全が確認できないリンク ${replacedLinks} 件を公式の検索ページに差し替えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarSource === "demo") warnings.unshift("お試し用の予定で作成しています。Google カレンダーを連携すると、あなたの予定に合わせたプランになります。");
+  if (input.calendarSource === "demo") warnings.unshift("Google カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  if (!items.some((i) => i.kind === "transit")) warnings.push("実際の移動経路と所要時間は確認できていません。交通機関の検索サイトで確認してください。");
   if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");
 
   const plan: Plan = {

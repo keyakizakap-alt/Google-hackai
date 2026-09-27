@@ -133,7 +133,7 @@ function EventSwitcher() {
         <p className="text-[10px] font-bold tracking-[0.25em] text-mute">MY LIVES · {events.length}</p>
         {lastImport && lastImport.added > 0 && busy !== "importing" && (
           <p className="pop-in text-[11px] text-ink-soft">
-            {lastImport.source === "google" ? "Google カレンダー" : "お試し用カレンダー"}から <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
+            Google カレンダーから <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
           </p>
         )}
       </div>
@@ -220,7 +220,7 @@ function CalendarCard() {
             Googleカレンダーと連携
           </h2>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "お試し中"}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "未連携"}</span>
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間」だけから計算します。予定の中身はライブを探すときだけ確認し、保存はしません。</p>
 
@@ -241,7 +241,7 @@ function CalendarCard() {
               Google アカウントを連携する →
             </a>
           ) : (
-            <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、お試し用の予定で体験できます"}</p>
+            <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、既存予定との重なりは確認できません"}</p>
           )}
         </div>
         {event ? (

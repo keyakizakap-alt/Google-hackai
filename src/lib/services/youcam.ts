@@ -1,6 +1,4 @@
 import "server-only";
-import type { SkinAnalysis } from "../agent/types";
-import { config } from "../config";
 import { logger } from "../logger";
 
 /**
@@ -10,26 +8,11 @@ import { logger } from "../logger";
  * 顔画像は引数の Buffer としてメモリ上にのみ存在し、処理後に zero-fill して破棄する。
  * 画像・解析対象の生データはログにも永続化層にも出力しない。
  */
-export async function analyzeSkin(image: Buffer): Promise<SkinAnalysis> {
+export async function analyzeSkin(image: Buffer): Promise<never> {
   const started = Date.now();
   try {
-    if (image.length === 0) throw new Error("empty image");
-    // NOTE: 実 API 連携時はここで config.youcam.apiKey を用いてアップロード → 解析 → 結果取得を行う
-    const result: SkinAnalysis = {
-      source: "mock",
-      scores: [
-        { key: "moisture", label: "うるおい", score: 62 },
-        { key: "texture", label: "キメ", score: 74 },
-        { key: "redness", label: "赤み", score: 81 },
-        { key: "dark_circle", label: "クマ", score: 58 },
-      ],
-      advice: [
-        "うるおいスコアがやや低め。前日夜に保湿パックを入れると当日のメイクのりが安定します",
-        "クマ対策として前日は 0 時までの就寝を推奨",
-      ],
-    };
-    logger.info("youcam.analyze", { latencyMs: Date.now() - started, mode: config.youcam.apiKey ? "youcam-pending" : "mock" });
-    return result;
+    logger.info("youcam.unavailable", { latencyMs: Date.now() - started });
+    throw new Error("肌解析は未接続です");
   } finally {
     image.fill(0); // 顔画像バッファをメモリ上でも即座に消去
   }

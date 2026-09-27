@@ -5,7 +5,7 @@ import { extractFreeSlots, overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
 import { BEAUTY_GUIDELINES, searchSalonSlots } from "../services/beauty";
 import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
-import { estimateCrowd, mockRoute } from "../services/transit";
+import { estimateCrowd } from "../services/transit";
 import { jstAt, MS_DAY } from "../time";
 import { validateTimeline } from "./validate";
 import { BEAUTY_SERVICES, TimelineItemSchema, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
@@ -18,6 +18,7 @@ export interface AgentContext {
   now: number;
   submitted?: { summary: string; items: TimelineItem[]; warnings: string[] };
   rejectedSubmissions: number;
+  ekispertSucceeded?: boolean;
 }
 
 const ISO = { type: "string", description: "ISO 8601 日時（例: 2026-10-27T11:00:00+09:00）" } as const;
@@ -56,7 +57,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "search_beauty_salons",
     description:
-      "指定駅周辺の美容サロンの空き枠を検索する。カレンダーの既存予定と重なる枠は除外済み。予約はしない（検索のみ）。",
+      "美容施術を入れられる候補日時を計算する。店舗の実際の空席や価格は取得できない。予約サイトで確認が必要。",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -81,7 +82,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "search_transit_route_mock",
     description:
-      "経路の概算（モック）。駅すぱあと API（ekispert_ で始まるツール）が利用できない、または失敗した場合のみ使う。",
+      "経路データが取得できないことを返す。具体的な列車・所要時間・運賃は生成しない。",
     parametersJsonSchema: {
       type: "object",
       properties: { from_station: { type: "string" }, to_station: { type: "string" }, arrive_by: ISO },
@@ -209,12 +210,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         station: str(args.station, 40) || ctx.event.homeStation,
         windowStart: str(args.window_start, 40),
         windowEnd: str(args.window_end, 40),
-        limit: 12,
+        limit: 100,
       }).filter((s) => !overlapsBusy(ctx.busy, Date.parse(s.start), Date.parse(s.end), 15) && Date.parse(s.start) > ctx.now);
       return {
         ok: true,
-        response: { slots: slots.slice(0, 6), source: "mock", note: "予約はまだ行われていません" },
-        summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の空きを ${Math.min(slots.length, 6)} 件見つけました`,
+        response: { slots: slots.slice(0, 6), source: "calendar-candidates", note: "店舗の空席や価格は未確認。予約サイトで確認してください" },
+        summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の候補日時を ${Math.min(slots.length, 6)} 件見つけました（店舗の空席は未確認）`,
       };
     }
     case "get_skin_analysis":
@@ -226,12 +227,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
     }
     case "search_transit_route_mock": {
-      const r = mockRoute({
-        from: str(args.from_station, 40) || ctx.event.homeStation,
-        to: str(args.to_station, 40) || ctx.event.venueStation,
-        arriveBy: str(args.arrive_by, 40) || new Date(Date.parse(ctx.event.startAt) - 2 * 3600_000).toISOString(),
-      });
-      return { ok: true, response: r as unknown as Record<string, unknown>, summary: `移動ルート（目安）約${Math.floor(r.durationMin / 60)}時間${r.durationMin % 60}分・乗り換え${r.transfers}回` };
+      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "経路データを取得できませんでした。時刻は作らず検索をご案内します" };
     }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
@@ -241,6 +237,9 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return { ok: false, response: { accepted: false, errors: issues }, summary: `内容に不備があったため作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
+      if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
+        errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
+      }
       if (errors.length > 0) {
         ctx.rejectedSubmissions++;
         return {
@@ -255,6 +254,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
     default:
       if (name.startsWith(EKISPERT_PREFIX)) {
         const r = (await callEkispertTool(name, args)) as Record<string, unknown>;
+        if (!r.error && !r.isError) ctx.ekispertSucceeded = true;
         return { ok: !r.error && !r.isError, response: r, summary: r.error ? "乗換案内に接続できませんでした" : "乗換案内でルートを調べました" };
       }
       return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };

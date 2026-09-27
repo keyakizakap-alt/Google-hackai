@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Bot, CalendarCheck, Camera, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { useStore } from "@/components/store";
 
@@ -25,11 +25,11 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 function OAuthNotice() {
   const q = useSearchParams();
   if (q.get("error") !== "oauth_not_configured") return null;
-  return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-500">いまは Google カレンダーと連携できない状態です。お試し用の予定で体験できます。</p>;
+  return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-500">いまは Google カレンダーと連携できません。公演を手動で登録できますが、既存予定との重なりは確認できません。</p>;
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, oshiImages, autoPlan, setAutoPlan } = useStore();
+  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
   const saved = Object.keys(oshiImages).length;
   return (
     <div className="space-y-5 px-1">
@@ -46,7 +46,7 @@ export default function SettingsPage() {
           <Row
             icon={<GoogleG className="h-5 w-5" />}
             title="Google カレンダー"
-            status={session?.calendarConnected ? "連携中" : "お試し中"}
+            status={session?.calendarConnected ? "連携中" : "未連携"}
             desc="予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。"
             action={
               session?.calendarConnected ? (
@@ -64,19 +64,13 @@ export default function SettingsPage() {
             icon={<Bot className="h-5 w-5" />}
             title="AI プランナー"
             status={session?.gemini.configured ? "利用中" : "かんたんモード"}
-            desc="Google の AI が、空き時間・サロンの空き・会場の混雑・移動ルートを自分で調べてプランを作ります。かんたんモードでは決まったルールで作ります。"
+            desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えない場合はルールによる提案に切り替わります。"
           />
           <Row
             icon={<TrainFront className="h-5 w-5" />}
             title="乗換案内（駅すぱあと）"
-            status={session?.ekispert.mode === "mcp" ? "連携中" : "目安表示"}
-            desc="電車の時刻・乗り換え・運賃を調べます。連携していないときは所要時間と運賃の目安を表示します。"
-          />
-          <Row
-            icon={<Camera className="h-5 w-5" />}
-            title="AI 肌診断（YouCam）"
-            status={session?.youcam.mode === "api" ? "利用中" : "お試し版"}
-            desc="顔写真は診断のあとすぐに消去し、保存しません。"
+            status={session?.ekispert.mode === "mcp" ? "接続設定済み" : "未連携"}
+            desc="経路データを取得できたときだけ時刻・乗り換え・運賃を表示します。取得できないときは検索サイトをご案内します。"
           />
         </ul>
       </section>
@@ -148,11 +142,16 @@ export default function SettingsPage() {
           <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />カレンダーの予定や顔写真は、どこにも保存しません（推し画像は、オンにしたときだけこの端末に保存します）。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末のブラウザに保存します。Google カレンダーの予定や顔写真は保存しません。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約や支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>
         </ul>
+        <button type="button" onClick={() => {
+          if (window.confirm("この端末に保存した公演・プラン・予約メモを削除しますか？")) void clearLocalData();
+        }} className="my-4 min-h-[44px] rounded-xl border border-rose-200 px-4 text-sm text-rose-600">
+          公演・プラン・予約メモを削除
+        </button>
       </section>
     </div>
   );
