@@ -6,7 +6,7 @@ import { ArrowUpRight, CalendarPlus, Heart, ImagePlus, LoaderCircle, MapPin, Spa
 import { useState } from "react";
 import { PendingBell } from "@/components/AppShell";
 import { GoogleG } from "@/components/brand";
-import { GoogleConnectButton } from "@/components/CalendarConnect";
+import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
@@ -169,6 +169,7 @@ function EventSwitcher() {
 
 function EmptyHero() {
   const { session, busy, importFromCalendar } = useStore();
+  const { demoAvailable } = useCalendarLinks();
   const importing = busy === "importing";
   return (
     <Reveal as="section" className="relative grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_1fr]">
@@ -183,7 +184,10 @@ function EmptyHero() {
         </p>
         <div className="flex flex-wrap gap-2">
           {!session?.calendarConnected ? (
-            <GoogleConnectButton className="btn-primary rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20" label="Google カレンダーと連携" />
+            <>
+              <GoogleConnectButton className="btn-primary rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20" label="Google カレンダーと連携" />
+              {demoAvailable && <DemoCalendarButton className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-night hover:bg-white/90" />}
+            </>
           ) : (
             <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
               {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
@@ -208,6 +212,7 @@ function Hero() {
 function CalendarCard() {
   const { session, availability, busy, extractAvailability, event } = useStore();
   const connected = session?.calendarConnected;
+  const { demoAvailable, demoConnected } = useCalendarLinks();
   const scanning = busy === "availability";
   return (
     <Reveal delay={120} as="section" aria-labelledby="gcal" className="card card-lift flex flex-col p-6">
@@ -236,7 +241,12 @@ function CalendarCard() {
             </div>
           </div>
           {session && !connected ? (
-            <GoogleConnectButton className="btn-primary min-h-[44px] rounded-xl px-4 text-xs font-bold" />
+            <div className="flex flex-wrap gap-2">
+              <GoogleConnectButton className="btn-primary min-h-[44px] rounded-xl px-4 text-xs font-bold" />
+              {demoAvailable && <DemoCalendarButton className="min-h-[44px] rounded-xl border border-line px-4 text-xs font-bold text-ink hover:bg-lav-50" />}
+            </div>
+          ) : demoConnected ? (
+            <p className="text-[11px] leading-relaxed text-mute">デモのカレンダー（架空の予定）を表示しています</p>
           ) : (
             <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、既存予定との重なりは確認できません"}</p>
           )}

@@ -105,6 +105,8 @@ draft → generating → pending_approval ─┬→ approved ─→ booking → 
 ## 変更に強い作り
 
 - **カレンダー連携は部品化**しています。連携先の追加・提供終了には、部品を足す／外す・環境変数を変えるだけで対応できます。どの連携先の予定も、共通の安全チェック（`src/lib/sources/gate.ts`）を必ず通ります → [docs/calendar-sources.md](docs/calendar-sources.md)
+- **デモのカレンダー**：ログインなしで連携の流れを体験できる「デモのカレンダーで試す」ボタンを用意できます（デモ専用カレンダーをアプリのサービスアカウントに共有）→ [docs/demo-calendar.md](docs/demo-calendar.md)
+- **本人のカレンダーとの連携**：「Google で連携する」ボタン → Google の確認画面で許可 → [docs/google-calendar-setup.md](docs/google-calendar-setup.md)
 - **秘密の値は新旧を併用して入れ替え**られます（`SESSION_SECRET` / `SESSION_SECRET_PREVIOUS`）。変更しやすい設定の一覧もあります → [docs/operations.md](docs/operations.md)
 
 ## ローカルでの実行

@@ -39,7 +39,7 @@ export const OSHI_COLORS = [
 ] as const;
 export type OshiColor = (typeof OSHI_COLORS)[number]["id"];
 
-type Busy = "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
+type Busy = "connecting" | "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
 
 export interface Profile {
   homeStation: string;
@@ -166,6 +166,9 @@ interface Store {
   reject: () => Promise<void>;
   book: () => Promise<boolean>;
   disconnect: () => Promise<void>;
+  /** デモのカレンダーで試す（ログイン不要）。成功すると自動でライブを取り込む */
+  connectDemoCalendar: () => Promise<boolean>;
+  stopDemoCalendar: () => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -600,6 +603,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       disconnect: async () => {
         await run("availability", () => api("/api/auth/logout", {}));
+        setAvailability(null);
+        setEvents((prev) => prev.filter((e) => e.source !== "calendar"));
+        await refreshSession();
+      },
+      connectDemoCalendar: async () => {
+        const r = await run("connecting", () => api<{ ok: boolean }>("/api/calendar/demo", {}));
+        if (r?.ok) await refreshSession();
+        return Boolean(r?.ok);
+      },
+      stopDemoCalendar: async () => {
+        await run("availability", async () => {
+          const res = await fetch("/api/calendar/demo", { method: "DELETE", cache: "no-store" });
+          if (!res.ok) throw new Error("デモのカレンダーをやめられませんでした");
+        });
         setAvailability(null);
         setEvents((prev) => prev.filter((e) => e.source !== "calendar"));
         await refreshSession();

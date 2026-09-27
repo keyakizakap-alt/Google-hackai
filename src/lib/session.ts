@@ -9,6 +9,8 @@ import { seal, unseal } from "./crypto";
  */
 export const SESSION_COOKIE = "or_sess";
 export const OAUTH_STATE_COOKIE = "or_oauth";
+/** 「デモのカレンダーで試す」を選んだかどうかの目印（秘密の値は含まない） */
+export const DEMO_CALENDAR_COOKIE = "or_demo_cal";
 
 export interface GoogleTokens {
   access_token?: string | null;
@@ -53,6 +55,17 @@ export async function writeTokens(tokens: GoogleTokens) {
 export async function clearTokens() {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
+}
+
+export async function readDemoCalendarChoice(): Promise<boolean> {
+  const jar = await cookies();
+  return jar.get(DEMO_CALENDAR_COOKIE)?.value === "1";
+}
+
+export async function writeDemoCalendarChoice(on: boolean) {
+  const jar = await cookies();
+  if (on) jar.set(DEMO_CALENDAR_COOKIE, "1", { ...cookieBase(), maxAge: 60 * 60 * 24 });
+  else jar.delete(DEMO_CALENDAR_COOKIE);
 }
 
 export async function writeOAuthState(state: { state: string; verifier: string }) {

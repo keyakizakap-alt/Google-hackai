@@ -53,3 +53,39 @@ describe("秘密の値の入れ替え（SESSION_SECRET / SESSION_SECRET_PREVIOUS
     delete process.env.SESSION_SECRET;
   });
 });
+
+describe("デモのカレンダー（sample）", () => {
+  it("DEMO_CALENDAR_ID を設定したときだけ連携先に現れる", async () => {
+    vi.resetModules();
+    delete process.env.DEMO_CALENDAR_ID;
+    delete process.env.CALENDAR_SOURCES;
+    expect((await import("@/lib/sources")).enabledSources().map((s) => s.id)).not.toContain("sample");
+
+    vi.resetModules();
+    process.env.DEMO_CALENDAR_ID = "oshiready.demo@example.com";
+    expect((await import("@/lib/sources")).enabledSources().map((s) => s.id)).toContain("sample");
+
+    vi.resetModules();
+    process.env.CALENDAR_SOURCES = "google";
+    expect((await import("@/lib/sources")).enabledSources().map((s) => s.id)).not.toContain("sample");
+    delete process.env.DEMO_CALENDAR_ID;
+    delete process.env.CALENDAR_SOURCES;
+  });
+
+  it("指定したカレンダー ID を URL エンコードして読み、失敗は認証エラーとして扱う", async () => {
+    vi.resetModules();
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string) => {
+      calls.push(url);
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listEventPages, CalendarAuthError } = await import("@/lib/google/calendar");
+    await expect(
+      listEventPages({ accessToken: "t", calendarId: "demo@example.com", from: 0, to: 1, fields: "items(start)", maxPages: 1, logEvent: "test" }),
+    ).rejects.toBeInstanceOf(CalendarAuthError);
+    expect(calls[0]).toContain("/calendars/demo%40example.com/events?");
+    expect(calls[0]).toContain("fields=items%28start%29");
+    vi.unstubAllGlobals();
+  });
+});

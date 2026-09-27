@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { CalendarHeart, CheckCircle2, LoaderCircle, X } from "lucide-react";
 import { GoogleG } from "./brand";
 import { useStore } from "./store";
 
@@ -18,6 +18,34 @@ export function GoogleConnectButton({ className = "", label = "Google で連携�
       </span>
       {label}
     </a>
+  );
+}
+
+/** 連携先ごとの状態（デモのカレンダーは準備されているときだけ出す） */
+export function useCalendarLinks() {
+  const { session } = useStore();
+  const find = (id: string) => session?.sources?.find((s) => s.id === id);
+  return {
+    ready: Boolean(session),
+    connected: Boolean(session?.calendarConnected),
+    googleConnected: Boolean(find("google")?.connected),
+    demoAvailable: Boolean(find("sample")),
+    demoConnected: Boolean(find("sample")?.connected),
+  };
+}
+
+/**
+ * 「デモのカレンダーで試す」ボタン。ログインも Google の確認画面もなく、押すだけで
+ * デモ専用カレンダーとの連携（ライブの自動取り込み・空き時間）を体験できる。
+ */
+export function DemoCalendarButton({ className = "", label = "デモのカレンダーで試す" }: { className?: string; label?: string }) {
+  const { connectDemoCalendar, busy } = useStore();
+  const connecting = busy === "connecting";
+  return (
+    <button type="button" onClick={() => void connectDemoCalendar()} disabled={busy !== null} className={`inline-flex items-center justify-center gap-2 disabled:opacity-60 ${className}`}>
+      {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarHeart className="h-4 w-4" />}
+      {connecting ? "デモのカレンダーを確認中…" : label}
+    </button>
   );
 }
 

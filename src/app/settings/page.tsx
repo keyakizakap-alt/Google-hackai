@@ -1,8 +1,8 @@
 "use client";
 
-import { Bot, CalendarCheck, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
-import { GoogleConnectButton } from "@/components/CalendarConnect";
+import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { useStore } from "@/components/store";
 
 function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; title: string; status: string; desc: string; action?: React.ReactNode }) {
@@ -22,8 +22,9 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
+  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
   const saved = Object.keys(oshiImages).length;
+  const { googleConnected, demoAvailable, demoConnected } = useCalendarLinks();
   return (
     <div className="space-y-5 px-1">
       <div>
@@ -36,10 +37,10 @@ export default function SettingsPage() {
           <Row
             icon={<GoogleG className="h-5 w-5" />}
             title="Google カレンダー"
-            status={session?.calendarConnected ? "連携中" : "未連携"}
+            status={googleConnected ? "連携中" : "未連携"}
             desc="予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。"
             action={
-              session?.calendarConnected ? (
+              googleConnected ? (
                 <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
                   連携を解除
                 </button>
@@ -48,6 +49,23 @@ export default function SettingsPage() {
               ) : null
             }
           />
+          {demoAvailable && (
+            <Row
+              icon={<CalendarHeart className="h-5 w-5" />}
+              title="デモのカレンダー"
+              status={demoConnected ? "表示中" : "未使用"}
+              desc="ログインなしで、架空の予定が入ったデモ用カレンダーとの連携を体験できます。ライブの自動取り込みや空き時間の表示を、実際の連携と同じ流れで試せます。"
+              action={
+                demoConnected ? (
+                  <button onClick={() => void stopDemoCalendar()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
+                    デモをやめる
+                  </button>
+                ) : (
+                  <DemoCalendarButton className="min-h-[44px] shrink-0 rounded-xl border border-line px-4 text-xs font-bold text-ink hover:bg-lav-50" label="試す" />
+                )
+              }
+            />
+          )}
           <Row
             icon={<Bot className="h-5 w-5" />}
             title="AI プランナー"

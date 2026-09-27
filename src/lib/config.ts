@@ -49,6 +49,14 @@ export const config = {
     maxSteps: Number(env("AGENT_MAX_STEPS") ?? 10),
   },
 
+  /**
+   * デモ用カレンダーの ID（例: デモ用アカウントのメールアドレス）。
+   * このカレンダーを実行サービスアカウントに「予定の詳細を表示」で共有すると、
+   * 利用者はログインなしで「デモのカレンダーで試す」を押すだけで連携の流れを体験できる。
+   * 架空の予定だけを入れたデモ専用カレンダーにすること（押した人は全員同じ内容を見る）。
+   */
+  demoCalendarId: env("DEMO_CALENDAR_ID"),
+
   ekispert: {
     mcpUrl: env("EKISPERT_MCP_URL") ?? "https://api-mcp.ekispert.jp/mcp",
     accessKey: env("EKISPERT_API_KEY"),

@@ -41,9 +41,9 @@ hd "4. 設定（秘密の値は表示しない）"
 gcloud run services describe "$SERVICE" --region "$REGION" "${P[@]}" --format=json | python3 -c '
 import json, sys
 env = {e["name"]: e for e in json.load(sys.stdin)["spec"]["template"]["spec"]["containers"][0].get("env", [])}
-show = {"APP_BASE_URL", "GEMINI_MODEL", "GOOGLE_CLOUD_LOCATION", "GOOGLE_GENAI_USE_VERTEXAI"}
+show = {"APP_BASE_URL", "GEMINI_MODEL", "GOOGLE_CLOUD_LOCATION", "GOOGLE_GENAI_USE_VERTEXAI", "DEMO_CALENDAR_ID"}
 for n in ["SESSION_SECRET", "GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION",
-          "GEMINI_MODEL", "APP_BASE_URL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]:
+          "GEMINI_MODEL", "APP_BASE_URL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "DEMO_CALENDAR_ID"]:
     e = env.get(n)
     if not e:
         print(f"  \033[31mNG\033[0m  {n} が未設定"); continue
