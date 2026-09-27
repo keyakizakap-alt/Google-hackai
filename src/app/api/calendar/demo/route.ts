@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { CalendarAuthError } from "@/lib/google/calendar";
 import { assertSameOrigin, rateLimit, requestMeta } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { writeDemoCalendarChoice } from "@/lib/session";
@@ -18,15 +19,31 @@ export async function POST(req: Request) {
   try {
     await probeSampleCalendar();
   } catch (e) {
-    logger.warn("sample.probe.failed", { ...meta, errorCode: (e as Error).name });
-    return NextResponse.json(
-      { error: "デモのカレンダーを読み込めませんでした。カレンダーの共有設定を確認してください。" },
-      { status: 503 },
-    );
+    const auth = e instanceof CalendarAuthError;
+    const httpStatus = auth ? e.httpStatus : undefined;
+    logger.warn("sample.probe.failed", { ...meta, errorCode: (e as Error).name, httpStatus });
+    const reason = auth ? (httpStatus ?? "token") : "other";
+    return NextResponse.json({ error: probeMessage(reason), code: `DEMO_CALENDAR_${String(reason).toUpperCase()}` }, { status: 503 });
   }
   await writeDemoCalendarChoice(true);
   logger.info("sample.connected", meta);
   return NextResponse.json({ ok: true });
+}
+
+/** 読めなかった理由を、設定する人が次に何を確かめればよいか分かる言葉にする */
+function probeMessage(reason: number | "token" | "other"): string {
+  switch (reason) {
+    case 404:
+      return "デモのカレンダーが見つかりません（404）。カレンダー ID（デモ用アカウントのメールアドレス）と、共有先にアプリのアドレス（oshiready-runtime@…）を追加したかを確認してください。";
+    case 403:
+      return "デモのカレンダーを読む権限がありません（403）。共有の権限が「予定の表示（すべての予定の詳細）」になっているか、Calendar API が有効かを確認してください。";
+    case 401:
+      return "アプリの認証に失敗しました（401）。少し待ってからもう一度お試しください。";
+    case "token":
+      return "アプリの権限を取得できませんでした。Cloud Run の実行サービスアカウントの設定を確認してください。";
+    default:
+      return "デモのカレンダーを読み込めませんでした。少し待ってからもう一度お試しください。";
+  }
 }
 
 /** デモのカレンダーをやめる */
