@@ -69,5 +69,17 @@ hd "7. 直近 1 時間の警告・エラー（イベント名とエラー種別�
 gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$SERVICE\" AND severity>=WARNING" \
   "${P[@]}" --freshness=1h --limit=30 \
   --format='table(timestamp.date("%H:%M:%S"),severity,jsonPayload.message,jsonPayload.errorCode,jsonPayload.httpStatus,textPayload.slice(0:120))'
+
+hd "8. デモのカレンダー"
+if curl -fsS "$URL/api/session" | grep -q '"id":"sample"'; then
+  ok "「デモのカレンダーで試す」ボタンが有効（DEMO_CALENDAR_ID 設定済み）"
+else
+  ng "ボタンが無効 → DEMO_CALENDAR_ID が未設定か、古い版のまま（最新を再デプロイ → scripts/cloud-run-enable-demo-calendar.sh）"
+fi
+echo "  共有先に追加するアドレス: $sa"
+echo "  直近 1 時間の読み込み結果（httpStatus: 200=成功 / 404=ID違い・未共有 / 403=権限不足・API無効）:"
+gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$SERVICE\" AND jsonPayload.message:\"sample.\"" \
+  "${P[@]}" --freshness=1h --limit=10 \
+  --format='table(timestamp.date("%H:%M:%S"),jsonPayload.message,jsonPayload.httpStatus,jsonPayload.errorCode)'
 echo
 echo "表示された NG と 7 のイベント名（例: agent.gemini.failed / oauth.token.failed）を伝えてください。"

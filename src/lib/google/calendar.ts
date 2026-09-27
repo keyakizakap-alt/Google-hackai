@@ -25,7 +25,12 @@ export interface BusyResult {
   to: number;
 }
 
-export class CalendarAuthError extends Error {}
+export class CalendarAuthError extends Error {
+  /** Calendar API が返した HTTP ステータス（原因の切り分け用。取得前の失敗なら undefined） */
+  constructor(message: string, readonly httpStatus?: number) {
+    super(message);
+  }
+}
 
 /**
  * 予定一覧（events.list）をページ送りしながら取得する共通処理。
@@ -59,7 +64,7 @@ export async function listEventPages<T>(opts: {
     });
     logger.info(opts.logEvent, { httpStatus: res.status, latencyMs: Date.now() - started });
     if (res.status === 401 || res.status === 403 || res.status === 404) {
-      throw new CalendarAuthError("カレンダーへのアクセスが拒否されました。");
+      throw new CalendarAuthError("カレンダーへのアクセスが拒否されました。", res.status);
     }
     if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
     const body = (await res.json()) as { items?: T[]; nextPageToken?: string };
