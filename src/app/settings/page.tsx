@@ -1,0 +1,158 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { Bot, CalendarCheck, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
+import { GoogleG } from "@/components/brand";
+import { useStore } from "@/components/store";
+
+function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; title: string; status: string; desc: string; action?: React.ReactNode }) {
+  return (
+    <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-2 font-bold text-ink">
+          {title}
+          <span className="rounded-full bg-lav-100 px-2 py-0.5 text-[10px] font-semibold text-lav-700">{status}</span>
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{desc}</p>
+      </div>
+      {action}
+    </li>
+  );
+}
+
+function OAuthNotice() {
+  const q = useSearchParams();
+  if (q.get("error") !== "oauth_not_configured") return null;
+  return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-500">いまは Google カレンダーと連携できません。公演を手動で登録できますが、既存予定との重なりは確認できません。</p>;
+}
+
+export default function SettingsPage() {
+  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
+  const saved = Object.keys(oshiImages).length;
+  return (
+    <div className="space-y-5 px-1">
+      <div>
+        <h1 className="text-xl font-bold text-ink">設定</h1>
+        <p className="mt-1 text-sm text-ink-soft">連携サービスの状態とプライバシー設定です。</p>
+      </div>
+      <Suspense>
+        <OAuthNotice />
+      </Suspense>
+
+      <section className="card px-5">
+        <ul className="divide-y divide-line">
+          <Row
+            icon={<GoogleG className="h-5 w-5" />}
+            title="Google カレンダー"
+            status={session?.calendarConnected ? "連携中" : "未連携"}
+            desc="予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。"
+            action={
+              session?.calendarConnected ? (
+                <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
+                  連携を解除
+                </button>
+              ) : session?.googleOAuthConfigured ? (
+                <a href="/api/auth/google" className="btn-primary rounded-xl px-4 py-2 text-xs font-bold text-white">
+                  連携する
+                </a>
+              ) : null
+            }
+          />
+          <Row
+            icon={<Bot className="h-5 w-5" />}
+            title="AI プランナー"
+            status={session?.gemini.configured ? "利用中" : "かんたんモード"}
+            desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えない場合はルールによる提案に切り替わります。"
+          />
+          <Row
+            icon={<TrainFront className="h-5 w-5" />}
+            title="乗換案内（駅すぱあと）"
+            status={session?.ekispert.mode === "mcp" ? "接続設定済み" : "未連携"}
+            desc="経路データを取得できたときだけ時刻・乗り換え・運賃を表示します。取得できないときは検索サイトをご案内します。"
+          />
+        </ul>
+      </section>
+
+      <section className="card p-5" aria-labelledby="auto-plan">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <Bot className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              イベントが登録されると、AI が美容・移動のプランを自動で作ります。予約はあなたが確認して承認するまで進みません。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoPlan}
+            aria-labelledby="auto-plan"
+            onClick={() => setAutoPlan(!autoPlan)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoPlan ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoPlan ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
+      </section>
+
+      <section className="card p-5" aria-labelledby="img-save">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <ImageIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="img-save" className="font-bold text-ink">推し画像をこの端末に保存する</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              オンにすると、推し画像をこのブラウザの中だけに保存し、次に開いたときも表示します。サーバーには送信しません。
+              共用のパソコンではオフにするか、使い終わったら削除してください。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={persistImages}
+            aria-labelledby="img-save"
+            onClick={() => setPersistImages(!persistImages)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${persistImages ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${persistImages ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
+          <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです（画面を閉じると消えます）"}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("この端末に保存した推し画像をすべて削除します。よろしいですか？")) void clearSavedImages();
+            }}
+            disabled={saved === 0}
+            className="min-h-[40px] rounded-lg border border-line bg-white px-3 font-bold text-rose-500 hover:bg-rose-50 disabled:opacity-40"
+          >
+            保存した画像をすべて削除
+          </button>
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink">
+          <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
+        </h2>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末のブラウザに保存します。Google カレンダーの予定や顔写真は保存しません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約や支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>
+        </ul>
+        <button type="button" onClick={() => {
+          if (window.confirm("この端末に保存した公演・プラン・予約メモを削除しますか？")) void clearLocalData();
+        }} className="my-4 min-h-[44px] rounded-xl border border-rose-200 px-4 text-sm text-rose-600">
+          公演・プラン・予約メモを削除
+        </button>
+      </section>
+    </div>
+  );
+}
