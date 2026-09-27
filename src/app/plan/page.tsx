@@ -7,6 +7,8 @@ import {
   Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
+import { AddToCalendarButton } from "@/components/Reminders";
+import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
 import { STATUS_LABEL } from "@/components/PlanSummary";
@@ -22,10 +24,10 @@ const HISTORY_LABEL: Record<string, string> = {
   revising: "見直し",
   approved: "承認",
   rejected: "見送り",
-  booking: "手続き開始",
-  booked: "予約リストへ追加",
+  booking: "予約を実行",
+  booked: "予約完了",
 };
-const FLOW_LABEL = ["AIが提案", "あなたが確認", "承認", "予約手続き"];
+const FLOW_LABEL = ["AIが提案", "あなたが確認", "承認", "予約"];
 
 function StatusStepper({ status }: { status: string }) {
   const idx = status === "revising" ? 0 : status === "rejected" ? 1 : status === "booking" ? 3 : FLOW.indexOf(status as (typeof FLOW)[number]);
@@ -219,14 +221,18 @@ function TracePanel() {
 }
 
 function ApprovalPanel({ selected }: { selected: Set<string> }) {
-  const { envelope, busy, approve, reject, book } = useStore();
+  const { envelope, busy, approve, reject, book, session } = useStore();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const inApp = session?.booking?.inApp ?? false;
+  const demo = session?.booking?.demo ?? false;
   if (!envelope) return null;
   const { plan, status } = envelope;
   const selectedItems = plan.items.filter((i) => (status === "pending_approval" ? selected.has(i.id) : envelope.approvedItemIds.includes(i.id)));
   const priced = selectedItems.filter((i) => (i.provider?.priceJpy ?? i.route?.fareJpy) !== undefined);
   const total = priced.reduce((a, i) => a + (i.provider?.priceJpy ?? i.route?.fareJpy ?? 0), 0);
+  const inAppCount = inApp ? selectedItems.filter(isInAppBookable).length : 0;
+  const guideCount = selectedItems.length - inAppCount;
 
   return (
     <section className="card p-5" aria-labelledby="approval">
@@ -236,9 +242,10 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
       </h2>
       <div className="mt-3 rounded-xl bg-lav-50/70 p-3 text-xs leading-relaxed text-ink-soft">
         <p className="flex items-center gap-1.5 font-semibold text-ink">
-          <Lock className="h-3.5 w-3.5" /> あなたが承認するまで、予約・決済は一切行われません。
+          <Lock className="h-3.5 w-3.5" /> あなたが承認して「予約する」を押すまで、予約は一切行われません。
         </p>
-        <p className="mt-1">AI は提案するだけで、勝手に予約することはありません。</p>
+        <p className="mt-1">AI エージェントは提案するだけで、勝手に予約・キャンセル・決済をすることはありません。</p>
+        {inApp && demo && <p className="mt-1 font-semibold text-rose-500">いまはデモ予約です。予約番号は発行されますが、実在の店舗・交通機関・宿には届きません。</p>}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <dt className="text-ink-soft">予約対象</dt>
@@ -273,14 +280,22 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
               disabled={busy !== null || selectedItems.length === 0}
               className="btn-primary flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
-              予約の手続きへ進む <ChevronRight className="h-4 w-4" />
+              {inApp ? "予約へ進む" : "予約の手続きへ進む"} <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-              <p className="text-xs leading-relaxed text-ink">次の {selectedItems.length} 件を「予約の管理」に追加します。実際の予約・支払いは各予約サイトで行います（OshiReady が代わりに予約することはありません）。</p>
+              <p className="text-xs leading-relaxed text-ink">
+                {inAppCount > 0
+                  ? `${inAppCount} 件をアプリ内で予約します${demo ? "（デモ予約：実在の店舗には届きません）" : ""}。予約後は「予約の管理」からキャンセルでき、前日と 2 時間前にリマインドします。支払いは発生しません。`
+                  : ""}
+                {guideCount > 0 ? `${inAppCount > 0 ? "残りの " : ""}${guideCount} 件は予約ではなく確認が必要なもので、「予約の管理」に案内サイトと一緒に追加します。` : ""}
+              </p>
               <ul className="mt-2 list-inside list-disc text-xs text-ink-soft">
                 {selectedItems.map((i) => (
-                  <li key={i.id}>{i.title}</li>
+                  <li key={i.id}>
+                    {i.title}
+                    <span className="ml-1 text-[10px] text-mute">{inApp && isInAppBookable(i) ? "（アプリ内で予約）" : "（案内のみ）"}</span>
+                  </li>
                 ))}
               </ul>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -295,7 +310,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
                   className="btn-primary flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-bold text-white"
                 >
                   {busy === "booking" && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
-                  予約リストに追加する
+                  {inAppCount > 0 ? `${inAppCount} 件を予約する` : "予約リストに追加する"}
                 </button>
               </div>
             </div>
@@ -305,10 +320,14 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
       )}
       {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。「AIに相談して直す」から作り直せます。</p>}
       {status === "booked" && (
-        <button onClick={() => router.push("/bookings")} className="btn-primary mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white">
-          予約の管理を開く <ChevronRight className="h-4 w-4" />
-        </button>
+        <div className="mt-4 grid gap-2">
+          <button onClick={() => router.push("/bookings")} className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white">
+            予約の管理を開く <ChevronRight className="h-4 w-4" />
+          </button>
+          <AddToCalendarButton className="min-h-[44px] w-full rounded-xl border border-line text-xs font-bold text-ink hover:bg-lav-50" />
+        </div>
       )}
+      {status === "approved" && <AddToCalendarButton className="mt-2 min-h-[40px] w-full rounded-xl text-xs font-bold text-ink-soft hover:bg-lav-50" />}
     </section>
   );
 }

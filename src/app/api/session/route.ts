@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isEkispertConfigured, isGeminiConfigured, isGoogleOAuthConfigured } from "@/lib/config";
+import { enabledProviders } from "@/lib/booking";
 import { describeSources } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
@@ -15,5 +16,6 @@ export async function GET() {
     gemini: { configured: isGeminiConfigured() },
     ekispert: { mode: isEkispertConfigured() ? "mcp" : "mock" },
     youcam: { mode: "mock" },
+    booking: { inApp: enabledProviders().length > 0, demo: enabledProviders().some((p) => p.demo) },
   });
 }

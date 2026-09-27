@@ -74,6 +74,16 @@ export default function SettingsPage() {
             desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えない場合はルールによる提案に切り替わります。"
           />
           <Row
+            icon={<ShieldCheck className="h-5 w-5" />}
+            title="アプリ内の予約・キャンセル"
+            status={session?.booking?.inApp ? (session.booking.demo ? "デモ予約" : "利用中") : "予約サイトへ案内"}
+            desc={
+              session?.booking?.inApp
+                ? `プランを承認して「予約する」を押したものだけ、アプリ内で予約し、予約の管理からキャンセルできます。AI エージェントが勝手に予約・キャンセルすることはありません。${session.booking.demo ? "いまはデモ予約のため、予約番号は発行されますが実在の店舗・交通機関・宿には届きません。" : ""}`
+                : "予約は各予約サイトで行い、アプリでは手続きの状況を管理します。"
+            }
+          />
+          <Row
             icon={<TrainFront className="h-5 w-5" />}
             title="乗換案内（駅すぱあと）"
             status={session?.ekispert.mode === "mcp" ? "接続設定済み" : "未連携"}
@@ -155,7 +165,8 @@ export default function SettingsPage() {
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末のブラウザに保存します。Google カレンダーの予定や顔写真は保存しません。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約や支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI エージェントが勝手に予約・キャンセル・支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中だけで作ります。予定をサーバーに保存したり送ったりしません。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>
         </ul>
