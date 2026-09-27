@@ -22,6 +22,14 @@ export function appBaseUrl(): string | null {
   return process.env.NODE_ENV === "production" ? null : "http://localhost:3000";
 }
 
+/** サーバーの設定不足（管理者が環境変数を設定すれば直るもの）。値そのものはメッセージに含めない */
+export class ConfigError extends Error {
+  constructor(readonly setting: string) {
+    super(`${setting} is not configured`);
+    this.name = "ConfigError";
+  }
+}
+
 export const config = {
   isProd: process.env.NODE_ENV === "production",
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { appBaseUrl } from "./config";
+import { appBaseUrl, ConfigError } from "./config";
 import { randomId } from "./crypto";
 import { GuardrailError } from "./agent/stateMachine";
 import { AgentUnavailableError } from "./agent/orchestrator";
@@ -83,6 +83,14 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
   if (e instanceof GuardrailError) {
     logger.warn("guardrail.blocked", { ...meta, errorCode: e.code });
     return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+  }
+  if (e instanceof ConfigError) {
+    // 秘密の値そのものは出さず、どの設定が足りないかだけを伝える
+    logger.error("config.missing", { ...meta, errorCode: e.setting });
+    return NextResponse.json(
+      { error: `アプリのサーバー設定が不足しています（${e.setting}）。管理者の方は Cloud Run の設定を確認してください。`, code: "CONFIG_MISSING", requestId: meta.requestId },
+      { status: 503 },
+    );
   }
   if (e instanceof CalendarAuthError) {
     logger.warn("calendar.auth", meta);

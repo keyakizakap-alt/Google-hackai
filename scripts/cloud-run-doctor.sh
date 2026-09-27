@@ -62,7 +62,10 @@ roles="$(gcloud projects get-iam-policy "$OSHIREADY_PROJECT_ID" --flatten='bindi
 grep -qx 'roles/aiplatform.user' <<<"$roles" && ok "roles/aiplatform.user（Gemini 呼び出し）" || ng "roles/aiplatform.user が無い → Gemini が 403 になる"
 
 hd "6. 動作確認"
-curl -fsS "$URL/api/health" >/dev/null && ok "/api/health" || ng "/api/health に応答しない"
+health="$(curl -fsS "$URL/api/health" || true)"
+if [[ -z "$health" ]]; then ng "/api/health に応答しない"
+elif grep -q '"sessionSecret":false' <<<"$health"; then ng "SESSION_SECRET が読めていない → プラン作成が「処理中にエラーが発生しました」になる（docs/cloud-run-launch.md の「うまく動かないとき」）"
+else ok "/api/health（SESSION_SECRET 読み込み済み）"; fi
 curl -fsS "$URL/api/session" | sed 's/^/  /'; echo
 
 hd "7. 直近 1 時間の警告・エラー（イベント名とエラー種別のみ）"
