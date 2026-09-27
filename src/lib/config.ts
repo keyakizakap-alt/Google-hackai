@@ -46,7 +46,11 @@ export const config = {
     project: env("GOOGLE_CLOUD_PROJECT"),
     location: env("GOOGLE_CLOUD_LOCATION") ?? "global",
     model: env("GEMINI_MODEL") ?? "gemini-3.5-flash",
-    maxSteps: Number(env("AGENT_MAX_STEPS") ?? 10),
+    /**
+     * 1 回のプラン作成で AI が道具（ツール）を使える回数。手順が 7 段階あるため最低 8 回は確保する。
+     * 残り 2 回になると提出（submit_timeline）だけを許可する。
+     */
+    maxSteps: Math.max(8, Number(env("AGENT_MAX_STEPS") ?? 12) || 12),
   },
 
   /**

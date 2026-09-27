@@ -6,14 +6,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const scripted: unknown[] = [];
 const seenContents: unknown[][] = [];
+type Req = { contents: unknown[]; config?: { toolConfig?: { functionCallingConfig?: { allowedFunctionNames?: string[] } } } };
+/** 指定すると scripted の代わりにリクエスト内容に応じて応答する */
+let responder: ((req: Req) => { calls: { name: string; args: Record<string, unknown> }[] }) | null = null;
+const seenAllowed: (string[] | undefined)[] = [];
 
 vi.mock("@google/genai", () => ({
   FunctionCallingConfigMode: { ANY: "ANY" },
   GoogleGenAI: class {
     models = {
-      generateContent: vi.fn(async (req: { contents: unknown[] }) => {
+      generateContent: vi.fn(async (req: Req) => {
         seenContents.push(structuredClone(req.contents));
-        const next = scripted.shift() as { calls: { name: string; args: Record<string, unknown> }[] };
+        seenAllowed.push(req.config?.toolConfig?.functionCallingConfig?.allowedFunctionNames);
+        const next = responder ? responder(req) : (scripted.shift() as { calls: { name: string; args: Record<string, unknown> }[] });
         return {
           functionCalls: next.calls.map((c, i) => ({ id: `c${i}`, ...c })),
           candidates: [{ content: { role: "model", parts: next.calls.map((c) => ({ functionCall: c, thoughtSignature: "sig" })) } }],
@@ -37,6 +42,22 @@ describe("runPlanningAgent (Gemini loop)", () => {
   beforeEach(() => {
     scripted.length = 0;
     seenContents.length = 0;
+    seenAllowed.length = 0;
+    responder = null;
+  });
+
+  it("forces submit_timeline on the final turns so long research still ends in a plan", async () => {
+    // 提出を許されるまで調べものを続ける AI を模擬する
+    responder = (req) =>
+      req.config?.toolConfig?.functionCallingConfig?.allowedFunctionNames?.includes("submit_timeline")
+        ? { calls: [{ name: "submit_timeline", args: { summary: "forced", items: [transit("15:00")] } }] }
+        : { calls: [{ name: "get_free_time_slots", args: { from_date: day, to_date: day } }] };
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "forced" });
+    expect(out.plan.summary).toBe("forced");
+    const firstForced = seenAllowed.findIndex((a) => a?.includes("submit_timeline"));
+    expect(firstForced).toBeGreaterThanOrEqual(6); // 最低 8 回のうち、最後の 2 回だけ提出に限定
+    expect(seenAllowed.slice(0, firstForced).every((a) => a === undefined)).toBe(true);
   });
 
   it("executes tools, self-corrects after a rejected submission, and returns a plan", async () => {
