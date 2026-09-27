@@ -1,6 +1,6 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { config } from "./config";
+import { config, ConfigError } from "./config";
 
 /**
  * SESSION_SECRET から用途別の鍵を導出する。
@@ -13,7 +13,7 @@ const devFallback = randomBytes(32).toString("hex");
 function secret(): string {
   if (config.sessionSecret) return config.sessionSecret;
   if (config.isProd && process.env.NEXT_PHASE !== "phase-production-build") {
-    throw new Error("SESSION_SECRET must be set in production");
+    throw new ConfigError("SESSION_SECRET");
   }
   return devFallback;
 }

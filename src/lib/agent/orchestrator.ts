@@ -33,8 +33,8 @@ export interface AgentRunOutput {
 const DEADLINE_MS = 110_000;
 
 export class AgentUnavailableError extends Error {
-  constructor() {
-    super("AI に接続できませんでした。時間をおいて再試行してください");
+  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください") {
+    super(message);
     this.name = "AgentUnavailableError";
   }
 }
@@ -72,7 +72,9 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
-      throw new AgentUnavailableError();
+      // 通信はできたが、決められた回数内にタイムラインを提出できなかった
+      logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model: config.gemini.model });
+      throw new AgentUnavailableError("AI がプランを仕上げられませんでした。もう一度お試しください");
     }
     await runRuleBasedPlanner(ctx, trace);
   }
@@ -157,6 +159,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   for (let step = 0; step < config.gemini.maxSteps; step++) {
     if (Date.now() > deadline) throw new Error("agent deadline exceeded");
     const started = Date.now();
+    // 残り 2 回になったら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
+    const mustSubmit = step >= config.gemini.maxSteps - 2;
     const res = await ai.models.generateContent({
       model: config.gemini.model,
       contents,
@@ -164,7 +168,12 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ functionDeclarations: declarations }],
         // ANY: 必ず何らかのツールを呼ぶ＝最終出力は submit_timeline 経由の構造化データに限定
-        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } },
+        toolConfig: {
+          functionCallingConfig: {
+            mode: FunctionCallingConfigMode.ANY,
+            ...(mustSubmit ? { allowedFunctionNames: ["submit_timeline"] } : {}),
+          },
+        },
         abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
       },
     });

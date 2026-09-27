@@ -23,7 +23,7 @@ async function toDataUrl(file: File): Promise<string> {
  * 読み取り結果は必ずユーザーが確認してから登録する。
  */
 function ScanDialog({ onClose }: { onClose: () => void }) {
-  const { addScannedEvents, selectEvent, session } = useStore();
+  const { addScannedEvents, selectEvent, session, autoPlan, notify } = useStore();
   const [image, setImage] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [state, setState] = useState<"input" | "reading" | "result">("input");
@@ -31,6 +31,8 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  // 画像の読み取りには AI が必要。使えないときは文章の貼り付けだけを受け付ける
+  const imageOnlyUnavailable = Boolean(session && !session.gemini.configured && image && !text.trim());
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -64,7 +66,8 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
 
   const register = () => {
     const chosen = found.filter((e) => checked.has(e.key));
-    addScannedEvents(chosen);
+    const added = addScannedEvents(chosen);
+    notify(added > 0 ? `${added} 件のライブを登録しました` : "選んだライブはすでに登録されています");
     if (chosen[0]) setTimeout(() => selectEvent(`scan-${chosen[0].key}`), 0);
     onClose();
   };
@@ -139,14 +142,14 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
 
-            {!session?.gemini.configured && image && !text && (
-              <p className="mt-2 text-[11px] text-rose-500">いまは画像の読み取りが準備中のため、文章の貼り付けをお使いください。</p>
+            {imageOnlyUnavailable && (
+              <p className="mt-2 text-[11px] text-rose-500">いまは画像の読み取りを使えません。当選メールなどの文章を貼り付けてください。</p>
             )}
             {err && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-500" role="alert">{err}</p>}
 
             <button
               onClick={() => void read()}
-              disabled={state === "reading" || (!image && !text.trim())}
+              disabled={state === "reading" || (!image && !text.trim()) || imageOnlyUnavailable}
               className="btn-primary mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl text-sm font-bold"
             >
               {state === "reading" ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ScanLine className="h-5 w-5" />}
@@ -211,7 +214,7 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
                     <CheckCircle2 className="h-4 w-4" /> {checked.size} 件を登録
                   </button>
                 </div>
-                <p className="mt-3 text-center text-[11px] text-mute">登録すると、AI が準備プランを自動で作ります。</p>
+                <p className="mt-3 text-center text-[11px] text-mute">{autoPlan ? "登録すると、準備プランを自動で作ります。" : "登録後、プラン画面から準備プランを作れます。"}</p>
               </>
             )}
           </>

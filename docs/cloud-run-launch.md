@@ -43,6 +43,22 @@ bash scripts/cloud-run-doctor.sh
 ```
 
 API の有効化・直近のビルド・リビジョンの起動状況・設定（値は表示しない）・実行サービスアカウントの権限・直近のエラーログ（イベント名とエラー種別のみ）をまとめて表示する。読み取りのみで何も変更しない。
+### プラン作成で「処理中にエラーが発生しました」「サーバー設定が不足しています（SESSION_SECRET）」と出る
+
+プランの署名に使う `SESSION_SECRET` が Cloud Run に渡っていない（コンソールから作成した、`--set-secrets` なしでデプロイした等）。`/api/health` が `"sessionSecret":false` を返す。
+
+```bash
+export OSHIREADY_PROJECT_ID='your-project-id'
+SA="$(gcloud run services describe oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')"
+# まだ無ければ作る（値は画面にもシェル履歴にも出さない）
+gcloud secrets describe oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" >/dev/null 2>&1 || \
+  openssl rand -base64 48 | gcloud secrets create oshiready-session-secret --data-file=- --replication-policy=automatic --project "$OSHIREADY_PROJECT_ID"
+gcloud secrets add-iam-policy-binding oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" \
+  --member="serviceAccount:${SA}" --role='roles/secretmanager.secretAccessor'
+gcloud run services update oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
+  --update-secrets=SESSION_SECRET=oshiready-session-secret:latest
+```
+
 Gemini のモデルは `OSHIREADY_GEMINI_MODEL` で変えられる（既定 `gemini-3.5-flash`。`gemini-2.5` 系は 2026年10月に提供終了予定）。
 
 ## 4. 提出前のゲート
