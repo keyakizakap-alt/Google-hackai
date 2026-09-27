@@ -112,12 +112,18 @@ function LiveTicker() {
 
 /** いま何をしているかを画面上部に出す（処理中にボタンが押せない理由が分かるように） */
 function BusyIndicator() {
-  const { busy } = useStore();
+  const { busy, aiReady } = useStore();
   if (!busy) return null;
+  const text =
+    aiReady && busy === "planning"
+      ? "AI エージェントが調べながらプランを作っています…"
+      : aiReady && busy === "revising"
+        ? "AI エージェントがプランを見直しています…"
+        : BUSY_LABEL[busy];
   return (
     <div role="status" aria-live="polite" className="pop-in pointer-events-none fixed left-1/2 top-[4.5rem] z-50 lg:top-12 flex -translate-x-1/2 items-center gap-2 rounded-full bg-night/95 px-4 py-2 text-xs font-bold text-white shadow-float backdrop-blur">
       <LoaderCircle className="h-3.5 w-3.5 animate-spin text-rose-300" />
-      {BUSY_LABEL[busy]}
+      {text}
     </div>
   );
 }

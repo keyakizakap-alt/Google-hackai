@@ -197,10 +197,10 @@ function TracePanel() {
     <section aria-labelledby="trace" className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Activity className="h-4 w-4 text-lav-600" />
-        <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AIが調べたこと" : "確認したこと"}</h2>
+        <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI エージェントが調べたこと" : "確認したこと"}</h2>
         <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
-      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} />
+      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
       {envelope && (
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1 text-[11px] text-mute" aria-label="これまでの流れ">
           {envelope.history.map((h, i) => (
@@ -389,7 +389,7 @@ export default function PlanPage() {
           <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
-            {plan.generatedBy.engine === "gemini" ? "AI（Gemini）が作成" : "かんたんモード（ルール）で作成"}
+            {plan.generatedBy.engine === "gemini" ? "AI エージェント（Gemini）が作成" : "かんたんモード（ルール）で作成"}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>

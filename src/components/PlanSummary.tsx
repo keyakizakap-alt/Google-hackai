@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { relativeDayLabel, formatJst } from "@/lib/time";
 import { AgentConsole } from "./AgentConsole";
+import { useNow } from "./motion";
 import { ItemIcon } from "./icons";
 import { useStore } from "./store";
 
@@ -20,7 +21,9 @@ export const STATUS_LABEL: Record<string, string> = {
 
 /** ホームの「提案プラン（概要）」カード */
 export function PlanSummaryCard() {
-  const { envelope, busy, event, planError, generatePlan, aiReady } = useStore();
+  const { envelope, busy, event, planError, generatePlan, aiReady, autoPlan } = useStore();
+  const now = useNow();
+  const upcoming = event && now !== null ? Date.parse(event.startAt) > now : false;
   const plan = envelope?.plan;
   const byAi = plan ? plan.generatedBy.engine === "gemini" : aiReady;
   const items = plan?.items.filter((i) => i.kind === "beauty" || i.kind === "transit").slice(0, 4) ?? [];
@@ -55,7 +58,11 @@ export function PlanSummaryCard() {
             <p className="mt-2 text-xs text-mute">このプランには美容・移動の予定がありません。詳しくはプラン画面で確認できます。</p>
           ) : (
             <p className="mt-2 text-xs text-mute">
-              {!event ? "イベントを登録すると、ここにプランが表示されます。" : "まだプランがありません。下の「プランを作る」から作成できます。"}
+              {!event
+                ? "イベントを登録すると、AI エージェントが準備プランを作ってここに表示します。"
+                : autoPlan && upcoming
+                  ? "AI エージェントがまもなく準備プランを作ります。"
+                  : "まだプランがありません。下の「プランを作る」から作成できます。"}
             </p>
           )}
         </div>

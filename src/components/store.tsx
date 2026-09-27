@@ -132,8 +132,8 @@ interface Store {
   /** 現在プランを作る対象のイベント */
   event: OshiEvent | null;
   selectEvent: (id: string) => void;
-  /** 保存する。autoPlan: false なら自動のプラン作成を行わない（「保存だけする」用） */
-  saveEvent: (e: OshiEvent, opts?: { autoPlan?: boolean }) => void;
+  /** 保存する。自動作成がオンなら、保存後に AI エージェントが準備プランを作り始める */
+  saveEvent: (e: OshiEvent) => void;
   removeEvent: (id: string) => void;
   profile: Profile;
   /** 次回以降の既定値を更新。出発駅だけは全イベント共通なので、変わったら各イベントにも反映する */
@@ -522,7 +522,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         restorePlan(id);
         setAvailability(null);
       },
-      saveEvent: (e, opts) => {
+      saveEvent: (e) => {
         const before = eventsRef.current.find((x) => x.id === e.id);
         const unchanged = before && planSignature(before) === planSignature(e) && before.title === e.title && before.artist === e.artist && before.venue === e.venue;
         setEvents((prev) => [...prev.filter((x) => x.id !== e.id), e].sort(byDate));
@@ -540,8 +540,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         restorePlan(null);
         setPlanError(null);
         setAvailability(null);
-        // 「保存だけする」ときは自動でプランを作らない
-        if (opts?.autoPlan === false) autoTried.current.add(planSignature(e));
       },
       removeEvent: (id) => {
         const removed = eventsRef.current.find((x) => x.id === id);

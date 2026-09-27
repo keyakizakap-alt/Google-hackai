@@ -95,7 +95,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              カレンダーやスクショから取り込んだイベントを選ぶと、準備プランがまだなければ自動で作ります。手動で追加したイベントは「保存してプランを作る」でも作れます。予約はあなたが確認して承認するまで進みません。
+              イベントが登録されると、AI エージェントが空き時間・美容のタイミング・混雑と移動を自分で調べて、準備プランを自動で作ります。予約はあなたが確認して承認するまで進みません。
             </p>
           </div>
           <button

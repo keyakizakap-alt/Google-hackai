@@ -111,7 +111,7 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
 }
 
 function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (id: string) => void }) {
-  const { saveEvent, generatePlan, busy, profile, setProfile, aiReady, notify } = useStore();
+  const { saveEvent, generatePlan, busy, profile, setProfile, aiReady, notify, autoPlan } = useStore();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     artist: editing?.artist ?? "",
@@ -127,7 +127,7 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
   const [err, setErr] = useState<string | null>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const save = (opts?: { autoPlan?: boolean }) => {
+  const save = () => {
     const parsed = OshiEventSchema.safeParse({
       id: editing?.id ?? `manual-${Math.random().toString(36).slice(2, 10)}`,
       artist: form.artist,
@@ -150,7 +150,7 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
       return null;
     }
     setErr(null);
-    saveEvent(parsed.data, opts);
+    saveEvent(parsed.data);
     // 出発駅（全イベント共通）と、美容メニュー・物販の希望を次に取り込むイベントの既定値として記憶
     setProfile({ homeStation: parsed.data.homeStation, beautyServices: parsed.data.beautyServices, arriveEarlyForGoods: parsed.data.arriveEarlyForGoods });
     onSaved(parsed.data.id);
@@ -240,11 +240,11 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => {
-                if (save({ autoPlan: false })) notify("保存しました。プランはあとから作れます");
+                if (save()) notify(autoPlan ? "保存しました。AI エージェントが準備プランを作り始めます" : "保存しました");
               }}
               className="rounded-xl border border-line px-6 py-3 text-sm font-semibold text-ink-soft hover:bg-lav-50"
             >
-              保存だけする
+              保存
             </button>
             <button
               onClick={() => {
@@ -258,9 +258,14 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
               className="btn-primary flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
               {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {aiReady ? "保存して AI にプランを作ってもらう" : "保存してプランを作る"}
+              {aiReady ? "保存して AI エージェントに任せる" : "保存してプランを作る"}
             </button>
           </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-mute">
+            {autoPlan
+              ? "どちらのボタンでも、保存すると AI エージェントが空き時間・美容・移動を自分で調べて準備プランを作ります。予約はあなたが承認するまで進みません。"
+              : "自動作成はオフです。「保存して AI エージェントに任せる」を押すとプランを作ります（設定で自動作成をオンにできます）。"}
+          </p>
 
       </section>
   );
