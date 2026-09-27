@@ -9,6 +9,7 @@ import { GoogleG } from "@/components/brand";
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
+import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import type { OshiEvent } from "@/lib/agent/types";
@@ -159,9 +160,7 @@ function EventSwitcher() {
             </button>
           );
         })}
-        <Link href="/events" className="flex min-h-[44px] shrink-0 items-center rounded-full border border-dashed border-lav-200 px-4 text-[13px] text-ink-soft hover:border-rose-300">
-          ＋ 追加
-        </Link>
+        <ScanImportButton label="スクショで追加" className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-dashed border-lav-200 px-4 text-[13px] text-ink-soft hover:border-rose-300" />
       </div>
     </div>
   );
@@ -179,7 +178,7 @@ function EmptyHero() {
           {importing ? "カレンダーからライブを探しています…" : "まだイベントが登録されていません"}
         </h2>
         <p className="text-sm leading-relaxed text-white/65">
-          Google カレンダーを連携すると、予定からアーティスト名・公演名・会場を読み取って自動で登録します。
+          Google カレンダーを連携するか、カレンダーやチケット画面のスクショを選ぶだけで、ライブを自動で登録します。
         </p>
         <div className="flex flex-wrap gap-2">
           {session?.googleOAuthConfigured && !session.calendarConnected ? (
@@ -192,8 +191,9 @@ function EmptyHero() {
               カレンダーから取り込む
             </button>
           )}
-          <Link href="/events" className="rounded-xl border border-white/20 px-5 py-3 text-sm font-bold text-white/85 hover:bg-white/10">
-            手動で登録
+          <ScanImportButton className="flex items-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-sm font-bold text-white hover:bg-white/10" />
+          <Link href="/events" className="rounded-xl px-4 py-3 text-sm text-white/70 underline-offset-4 hover:underline">
+            手で入力する
           </Link>
         </div>
       </div>

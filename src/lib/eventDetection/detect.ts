@@ -72,7 +72,7 @@ export function pickLiveCandidates(items: readonly CalendarItemForDetection[], n
 }
 
 const ARTIST_STOP =
-  /\s*(?:the\s+\d+(?:st|nd|rd|th)\s+|world\s+tour|tour|live|ライブ|コンサート|concert|公演|ファンミ|fan\s?meeting|fan\s?con|showcase|ショーケース|in\s|@|＠|「|『|【|\[|’|'|"|“|京セラ|東京ドーム|ドーム|アリーナ|武道館|\d{4})/i;
+  /\s*(?:the\s+\d+(?:st|nd|rd|th)\s+|world\s+tour|tour|live|ライブ|コンサート|concert|公演|ファンミ|fan\s?meeting|fan\s?con|showcase|ショーケース|in\s|@|＠|「|『|【|\[|’|'|"|“|京セラ|東京ドーム|ドーム|アリーナ|武道館|dome|arena|stadium|hall|\d{4})/i;
 
 /** ルールベースの抽出（Gemini 未設定・障害時のフォールバック） */
 export function extractByRules(c: LiveCandidate): DetectedLiveEvent {

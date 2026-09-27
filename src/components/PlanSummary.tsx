@@ -43,7 +43,7 @@ export function PlanSummaryCard() {
       ) : items.length === 0 ? (
         <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lav-200 px-4 py-10 text-center">
           <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
-          <p className="mt-2 text-xs text-mute">「次にやること」の M2 からプランを作れます。</p>
+          <p className="mt-2 text-xs text-mute">イベントを登録すると、AI が自動でプランを作ります。</p>
         </div>
       ) : (
         <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-6 space-y-5">

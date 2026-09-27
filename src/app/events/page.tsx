@@ -7,6 +7,7 @@ import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
 import { GoogleG } from "@/components/brand";
+import { ScanImportButton } from "@/components/ScanImport";
 import { formatJst } from "@/lib/time";
 import { matchVenue, VENUES } from "@/lib/eventDetection/venues";
 
@@ -53,6 +54,7 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
               <GoogleG className="h-4 w-4" /> Google カレンダーを連携
             </a>
           )}
+          <ScanImportButton className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" />
           <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold">
             {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             カレンダーから取り込む
@@ -87,6 +89,7 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
                         <GoogleG className="h-3 w-3" /> 自動取り込み
                       </span>
                     )}
+                    {e.source === "scan" && <span className="shrink-0 rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">スクショ・文章から</span>}
                     {active && <span className="shrink-0 rounded-full bg-rose-400 px-2 py-0.5 text-[10px] font-bold text-white">選択中</span>}
                   </span>
                   <span className="block truncate text-xs text-mute">
@@ -162,7 +165,7 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
     <section className="card p-5 sm:p-6" aria-labelledby="event-form">
       <p className="font-display text-sm italic text-mute">{editing ? "Edit" : "New"}</p>
       <h2 id="event-form" className="text-[17px] font-bold text-ink">{editing ? `「${editing.title}」を編集` : "イベントを手動で追加"}</h2>
-      {editing?.source === "calendar" && <p className="mt-1 text-xs text-mute">カレンダーから自動で読み取った内容です。違っていれば修正してください。</p>}
+      {(editing?.source === "calendar" || editing?.source === "scan") && <p className="mt-1 text-xs text-mute">自動で読み取った内容です。違っていれば修正してください。</p>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink-soft">
               アーティスト

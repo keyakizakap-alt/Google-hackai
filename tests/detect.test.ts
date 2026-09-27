@@ -57,3 +57,49 @@ describe("venue dictionary", () => {
     expect(matchVenue("LE SSERAFIM FAN MEETING")).toBeNull();
   });
 });
+
+describe("parseEventsFromText (貼り付けた文章から読み取り)", () => {
+  it("reads a ticket email", async () => {
+    const { parseEventsFromText } = await import("@/lib/eventDetection/parseText");
+    const now = Date.parse("2026-09-27T12:00:00+09:00");
+    const text = `【当選のお知らせ】
+公演名：IVE THE 2ND WORLD TOUR in JAPAN
+日時：2026年10月30日（金） 開場16:30 / 開演18:00
+会場：京セラドーム大阪
+お問い合わせ support@example.com`;
+    const [e] = parseEventsFromText(text, now);
+    expect(e).toMatchObject({ artist: "IVE", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎", startAt: "2026-10-30T18:00:00+09:00", timeUnknown: false });
+    expect(JSON.stringify(e)).not.toContain("support@example.com");
+  });
+
+  it("handles multiple blocks and infers the year", async () => {
+    const { parseEventsFromText } = await import("@/lib/eventDetection/parseText");
+    const now = Date.parse("2026-11-20T12:00:00+09:00");
+    const text = `SEVENTEEN TOUR 東京ドーム 12/15 18:30
+
+LE SSERAFIM FAN MEETING
+1/10 横浜アリーナ`;
+    const r = parseEventsFromText(text, now);
+    expect(r.map((e) => [e.artist, e.startAt.slice(0, 16), e.venueStation])).toEqual([
+      ["SEVENTEEN", "2026-12-15T18:30", "水道橋"],
+      ["LE SSERAFIM", "2027-01-10T18:00", "新横浜"],
+    ]);
+    expect(r[1].timeUnknown).toBe(true);
+  });
+
+  it("ignores text without dates or past dates", async () => {
+    const { parseEventsFromText } = await import("@/lib/eventDetection/parseText");
+    const now = Date.parse("2026-09-27T12:00:00+09:00");
+    expect(parseEventsFromText("IVE 京セラドーム公演 楽しみ！", now)).toEqual([]);
+    expect(parseEventsFromText("IVE LIVE 2025年1月1日 18:00", now)).toEqual([]);
+  });
+});
+
+describe("artist extraction with English venue words", () => {
+  it("stops at DOME / ARENA", async () => {
+    const { parseEventsFromText } = await import("@/lib/eventDetection/parseText");
+    const now = Date.parse("2026-09-27T12:00:00+09:00");
+    const [e] = parseEventsFromText("公演名：TWICE DOME TOUR\n日時：2026年12月20日 開演17:00\n会場：バンテリンドーム ナゴヤ", now);
+    expect(e).toMatchObject({ artist: "TWICE", venueStation: "ナゴヤドーム前矢田", startAt: "2026-12-20T17:00:00+09:00" });
+  });
+});

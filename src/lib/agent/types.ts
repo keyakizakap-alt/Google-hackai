@@ -30,8 +30,8 @@ export const OshiEventSchema = z.object({
   /** 物販などのため早めに現地入りしたいか */
   arriveEarlyForGoods: z.boolean().default(true),
   budgetJpy: z.number().int().min(0).max(1_000_000).optional(),
-  /** カレンダーから自動取り込みしたか、手入力か */
-  source: z.enum(["calendar", "manual"]).optional(),
+  /** カレンダーから自動取り込み／手入力／スクショ・文章から読み取り */
+  source: z.enum(["calendar", "manual", "scan"]).optional(),
   /** 終日予定などで開演時刻が不明（18:00 と仮置き） */
   timeUnknown: z.boolean().optional(),
 });

@@ -29,7 +29,7 @@ function OAuthNotice() {
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, oshiImages } = useStore();
+  const { session, disconnect, persistImages, setPersistImages, clearSavedImages, oshiImages, autoPlan, setAutoPlan } = useStore();
   const saved = Object.keys(oshiImages).length;
   return (
     <div className="space-y-5 px-1">
@@ -79,6 +79,30 @@ export default function SettingsPage() {
             desc="顔写真は診断のあとすぐに消去し、保存しません。"
           />
         </ul>
+      </section>
+
+      <section className="card p-5" aria-labelledby="auto-plan">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <Bot className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              イベントが登録されると、AI が美容・移動のプランを自動で作ります。予約はあなたが確認して承認するまで進みません。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoPlan}
+            aria-labelledby="auto-plan"
+            onClick={() => setAutoPlan(!autoPlan)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoPlan ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoPlan ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
       </section>
 
       <section className="card p-5" aria-labelledby="img-save">

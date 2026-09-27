@@ -125,6 +125,11 @@ interface Store {
   profile: Profile;
   setProfile: (p: Profile) => void;
   importFromCalendar: () => Promise<ImportResult | null>;
+  /** スクショ・文章から読み取ったイベントを登録（ユーザー確認後に呼ぶ） */
+  addScannedEvents: (list: DetectedLiveEvent[]) => number;
+  /** 登録済みイベントのプランを自動で作るか */
+  autoPlan: boolean;
+  setAutoPlan: (on: boolean) => void;
   lastImport: ImportResult | null;
   /** 選択中イベントの推し画像 */
   eventImage: string | null;
@@ -172,6 +177,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [lastImport, setLastImport] = useState<ImportResult | null>(null);
+  const [autoPlan, setAutoPlanState] = useState(true);
+  /** イベントごとの最新プラン（切り替えても消えないように、この画面の中だけで保持） */
+  const planCache = useRef<Record<string, { envelope: PlanEnvelope; trace: TraceStep[]; usage: PlanResponse["usage"] | null; engine: PlanResponse["engine"] | null; chat: ChatMessage[] }>>({});
+  /** 自動作成を試みたイベント（同じ内容で何度も AI を呼ばない） */
+  const autoTried = useRef<Set<string>>(new Set());
   const event = events.find((e) => e.id === activeId) ?? events[0] ?? null;
   const eventsRef = useRef(events);
   useEffect(() => {
@@ -278,6 +288,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const t = setTimeout(() => {
       setPersistImagesState(on);
+      try {
+        setAutoPlanState(localStorage.getItem("oshiready.autoPlan") !== "off");
+      } catch {
+        /* 既定（オン）のまま */
+      }
       if (!on) return;
       void loadAllImages().then((all) => {
         if (!alive) return;
@@ -343,6 +358,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBookings([]);
   }, []);
 
+  // プランの状態をイベントごとに保持（別のイベントに切り替えて戻っても消えない）
+  useEffect(() => {
+    if (envelope) planCache.current[envelope.plan.event.id] = { envelope, trace, usage, engine, chat };
+  }, [envelope, trace, usage, engine, chat]);
+
+  const restorePlan = useCallback((eventId: string | null) => {
+    const c = eventId ? planCache.current[eventId] : undefined;
+    setEnvelope(c?.envelope ?? null);
+    setTrace(c?.trace ?? []);
+    setUsage(c?.usage ?? null);
+    setEngine(c?.engine ?? null);
+    setChat(c?.chat ?? []);
+  }, []);
+
+  const planSignature = (e: OshiEvent) => [e.id, e.startAt, e.venueStation, e.homeStation, e.beautyServices.join(","), e.arriveEarlyForGoods].join("|");
+
+  const generatePlanFn = useCallback(
+    async (eventOverride?: OshiEvent) => {
+      const target = eventOverride ?? event;
+      if (!target) {
+        setError("先にイベントを登録してください");
+        return false;
+      }
+      autoTried.current.add(planSignature(target));
+      const r = await run("planning", () => api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined }));
+      if (r) {
+        applyPlan(r);
+        setChat([{ role: "agent", text: r.envelope.plan.summary }]);
+        // 顔画像は一度解析に使ったらクライアントのメモリからも破棄
+        setSelfie(null);
+      }
+      return Boolean(r);
+    },
+    [event, selfie, run, applyPlan],
+  );
+
+  // 自動プラン作成: イベントが決まっていてプランがなければ、AI が自動で提案を作る（承認するまで予約は進まない）
+  useEffect(() => {
+    if (!autoPlan || !event || envelope || busy !== null) return;
+    if (Date.parse(event.startAt) < Date.now()) return;
+    if (autoTried.current.has(planSignature(event))) return;
+    const t = setTimeout(() => void generatePlanFn(event), 400);
+    return () => clearTimeout(t);
+  }, [autoPlan, event, envelope, busy, generatePlanFn]);
+
   const store: Store = useMemo(
     () => ({
       session,
@@ -353,22 +413,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       selectEvent: (id) => {
         if (id === event?.id) return;
         setActiveId(id);
-        setEnvelope(null);
-        setChat([]);
+        restorePlan(id);
         setAvailability(null);
       },
       saveEvent: (e) => {
         setEvents((prev) => [...prev.filter((x) => x.id !== e.id), e].sort(byDate));
         setActiveId(e.id);
-        setEnvelope(null);
-        setChat([]);
+        delete planCache.current[e.id]; // 内容が変わったので作り直す
+        restorePlan(null);
       },
       removeEvent: (id) => {
         setEvents((prev) => prev.filter((x) => x.id !== id));
+        delete planCache.current[id];
         if (event?.id === id) {
           setActiveId(null);
-          setEnvelope(null);
-          setChat([]);
+          restorePlan(null);
         }
       },
       profile,
@@ -376,9 +435,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setProfile(p);
         // 取り込み済みイベントにも出発駅・美容メニューの既定値を反映
         setEvents((prev) => prev.map((e) => ({ ...e, homeStation: p.homeStation, beautyServices: p.beautyServices, arriveEarlyForGoods: p.arriveEarlyForGoods })));
-        setEnvelope(null);
+        planCache.current = {};
+        restorePlan(null);
       },
       importFromCalendar,
+      addScannedEvents: (list) => {
+        const known = new Set(eventsRef.current.map((e) => e.id));
+        const fresh = list.filter((d) => !known.has(`scan-${d.key}`));
+        if (fresh.length === 0) return 0;
+        setEvents((prev) =>
+          [
+            ...prev,
+            ...fresh.map((d) => ({
+              id: `scan-${d.key}`,
+              artist: d.artist,
+              title: d.title,
+              venue: d.venue,
+              venueStation: d.venueStation,
+              startAt: d.startAt,
+              homeStation: profile.homeStation,
+              beautyServices: profile.beautyServices,
+              arriveEarlyForGoods: profile.arriveEarlyForGoods,
+              source: "scan" as const,
+              timeUnknown: d.timeUnknown,
+            })),
+          ].sort(byDate),
+        );
+        return fresh.length;
+      },
+      autoPlan,
+      setAutoPlan: (on) => {
+        setAutoPlanState(on);
+        try {
+          localStorage.setItem("oshiready.autoPlan", on ? "on" : "off");
+        } catch {
+          /* 保存できない環境では毎回既定値 */
+        }
+      },
       lastImport,
       eventImage,
       setEventImage,
@@ -414,21 +507,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const r = await run("availability", () => api<Availability>("/api/calendar/availability", { until: event?.startAt }));
         if (r) setAvailability(r);
       },
-      generatePlan: async (eventOverride) => {
-        const target = eventOverride ?? event;
-        if (!target) {
-          setError("先にイベントを登録してください");
-          return false;
-        }
-        const r = await run("planning", () => api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined }));
-        if (r) {
-          applyPlan(r);
-          setChat([{ role: "agent", text: r.envelope.plan.summary }]);
-          // 顔画像は一度解析に使ったらクライアントのメモリからも破棄
-          setSelfie(null);
-        }
-        return Boolean(r);
-      },
+      generatePlan: generatePlanFn,
       revisePlan: async (instruction) => {
         if (!envelope) return;
         setChat((c) => [...c, { role: "user", text: instruction }]);
@@ -490,7 +569,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
