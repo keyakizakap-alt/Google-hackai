@@ -4,27 +4,35 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 
 ## プロジェクトの現状
 
-- **Google Cloud と Gemini を使う AI アプリ**を作るリポジトリ。何を作るか（アイデア）と技術スタックは**まだ決まっていない**。
-- アイデアや技術が決まったら、まずこのファイルの「技術スタック」と「開発コマンド」を更新してから実装に入る。
-- 決まっていないことは推測で決めない。複数の選択肢があるときは、推奨案と理由（前提・制約・リスク）を添えて人間に確認する。
+- **OshiReady**：ライブ（推し活）の日時から、美容院・ネイル・移動・宿泊の準備を逆算してプランを作る AI エージェント（第5回 Agentic AI Hackathon with Google Cloud 向け）。
+- プランは必ず `pending_approval`（ユーザーの承認待ち）を経由し、ユーザーの操作なしに予約へ進めない。アプリ自身は予約・決済をしない。
+- カレンダーの予定や顔画像はメモリ上で Gemini に渡すだけにし、DB・ログ（`console.log` を含む）へ出力・保存しない。
+- 仕様を変えるときは、まずこのファイルの「技術スタック」と「開発コマンド」を更新する。決まっていないことは推測で決めず、推奨案と理由（前提・制約・リスク）を添えて人間に確認する。
 
-## 技術スタック（未確定）
-
-決定したら以下を埋める。
+## 技術スタック
 
 | 項目 | 内容 |
 |---|---|
-| アイデア・対象ユーザー | 未定 |
-| フロントエンド | 未定 |
-| バックエンド／実行環境 | 未定（例: Cloud Run / Cloud Run functions / Firebase） |
-| AI | Gemini（利用経路は下記「Gemini の利用」参照） |
-| データストア | 未定 |
-| リージョン | 未定 |
+| アイデア・対象ユーザー | OshiReady（ライブに行くファン向けの準備スケジュール逆算） |
+| フロントエンド | Next.js 16（App Router）+ React 19 + TypeScript + Tailwind CSS v4 |
+| バックエンド／実行環境 | Next.js Route Handlers（`src/app/api`）。本番は Cloud Run（`Dockerfile`、standalone 出力）、プレビューは Vercel |
+| AI | Gemini（`@google/genai`、Function Calling・構造化出力）。モデルは環境変数 `GEMINI_MODEL` |
+| 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP、YouCam（モック） |
+| データストア | サーバー側は持たない（署名付きの状態をクライアントが保持）。端末側は IndexedDB / localStorage |
+| リージョン | asia-northeast1（Cloud Run） |
 
-## 開発コマンド（未確定）
+## 開発コマンド
 
-スタック決定後に、セットアップ・ローカル起動・テスト・リント・デプロイのコマンドをここに書く。
-コマンドを追加したら、実際に実行して動くことを確かめてから記載する。
+```bash
+npm ci             # 依存のインストール
+npm run dev        # ローカル起動（http://localhost:3000）
+npm run lint       # ESLint
+npm run typecheck  # 型チェック
+npm test           # Vitest
+npm run build      # 本番ビルド（standalone）
+```
+
+Cloud Run へのデプロイ手順は `docs/cloud-run-launch.md`、運用（シークレットの入れ替えなど）は `docs/operations.md` を参照。
 
 ## Gemini の利用
 
@@ -64,3 +72,13 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 - デプロイ・外部への公開
 - ファイルの削除・大規模な書き換え、データの初期化
 - IAM・認証情報・シークレットの作成や変更
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
