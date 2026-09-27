@@ -6,6 +6,7 @@ import { ArrowUpRight, CalendarPlus, Heart, ImagePlus, LoaderCircle, MapPin, Spa
 import { useState } from "react";
 import { PendingBell } from "@/components/AppShell";
 import { GoogleG } from "@/components/brand";
+import { GoogleConnectButton } from "@/components/CalendarConnect";
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
@@ -181,10 +182,8 @@ function EmptyHero() {
           Google カレンダーを連携するか、カレンダーやチケット画面のスクショを選ぶだけで、ライブを自動で登録します。
         </p>
         <div className="flex flex-wrap gap-2">
-          {session?.googleOAuthConfigured && !session.calendarConnected ? (
-            <a href="/api/auth/google" className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
-              <GoogleG className="h-4 w-4" /> Google カレンダーを連携
-            </a>
+          {!session?.calendarConnected ? (
+            <GoogleConnectButton className="btn-primary rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20" label="Google カレンダーと連携" />
           ) : (
             <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
               {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
@@ -236,10 +235,8 @@ function CalendarCard() {
               <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.busyCount} /> : "—"}</p>
             </div>
           </div>
-          {!connected && session?.googleOAuthConfigured ? (
-            <a href="/api/auth/google" className="text-xs font-bold text-lav-600 underline-offset-4 hover:underline">
-              Google アカウントを連携する →
-            </a>
+          {session && !connected ? (
+            <GoogleConnectButton className="btn-primary min-h-[44px] rounded-xl px-4 text-xs font-bold" />
           ) : (
             <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、既存予定との重なりは確認できません"}</p>
           )}
