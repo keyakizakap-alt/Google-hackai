@@ -42,3 +42,8 @@ next-env.d.ts
 
 # allow the documented example env file
 !.env.example
+
+# credentials (never commit keys)
+*-key.json
+service-account*.json
+credentials*.json
