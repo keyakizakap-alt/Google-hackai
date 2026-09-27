@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clientIp } from "@/lib/http";
+import { clientIp, redirectBase } from "@/lib/http";
 import { safeExternalUrl } from "@/lib/safeUrl";
 import { isAllowedTool } from "@/lib/services/ekispert";
 
@@ -51,5 +51,24 @@ describe("Ekispert MCP tool allowlist", () => {
     process.env.EKISPERT_ALLOWED_TOOLS = "search_course";
     expect(isAllowedTool("search_course")).toBe(true);
     expect(isAllowedTool("get_station", "駅情報")).toBe(false);
+  });
+});
+
+describe("redirectBase (Cloud Run では req.url が 0.0.0.0 になる)", () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+  const req = (headers: Record<string, string>) => new Request("https://0.0.0.0:8080/api/auth/google", { headers });
+
+  it("uses APP_BASE_URL when set", () => {
+    process.env.APP_BASE_URL = "https://oshiready-123.asia-northeast1.run.app/";
+    expect(redirectBase(req({ host: "other.a.run.app" }))).toBe("https://oshiready-123.asia-northeast1.run.app");
+  });
+  it("falls back to the Host header instead of the internal bind address", () => {
+    delete process.env.APP_BASE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    (process.env as Record<string, string>).NODE_ENV = "production";
+    expect(redirectBase(req({ host: "oshiready-abc-an.a.run.app", "x-forwarded-proto": "https" }))).toBe("https://oshiready-abc-an.a.run.app");
   });
 });

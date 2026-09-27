@@ -61,7 +61,7 @@ gcloud run deploy "$OSHIREADY_SERVICE" --source . \
   --service-account "$OSHIREADY_RUNTIME_EMAIL" \
   --allow-unauthenticated --min-instances=0 --max-instances=1 \
   --concurrency=5 --timeout=180 --memory=1Gi \
-  --set-env-vars="GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${OSHIREADY_PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-2.5-flash,AGENT_MAX_STEPS=6,AGENT_DAILY_LIMIT=25" \
+  --set-env-vars="GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${OSHIREADY_PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=${OSHIREADY_GEMINI_MODEL:-gemini-3.5-flash},AGENT_MAX_STEPS=6,AGENT_DAILY_LIMIT=25" \
   --set-secrets="SESSION_SECRET=${OSHIREADY_SECRET}:latest"
 
 OSHIREADY_URL="$(gcloud run services describe "$OSHIREADY_SERVICE" \

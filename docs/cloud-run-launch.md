@@ -24,24 +24,26 @@ bash scripts/cloud-run-bootstrap.sh
 - AI 接続エラーの場合は 503 として表示される。Cloud Run ログで `agent.gemini.failed` のエラー種別を確認する。モデルの提供リージョンと利用権限を検証する。
 - 予約サイトへの案内は外部サイトでの手続きであり、アプリ自身は予約や決済をしない。
 
-## 3. Google カレンダー OAuth（公開審査に利用する場合）
+## 3. Google カレンダー OAuth
 
-Google Auth Platform の同意画面と OAuth クライアント（ウェブアプリケーション）を作成し、承認済みリダイレクト URI に `<Cloud Run URL>/api/auth/google/callback` を登録する。必要なカレンダー読み取りスコープ、公開対象、テストユーザーと審査アクセスを確認する。クライアントシークレットは Secret Manager に保存し、実行サービスアカウントだけに Secret Accessor を付与する。
+`docs/google-calendar-setup.md` の手順で OAuth クライアントを作り、Cloud Shell で次を実行する（シークレットは非表示で入力され、Secret Manager にだけ保存される）。
 
 ```bash
-# CLIENT_SECRET をシェル履歴・リポジトリ・画面出力に残さず入力する。
-read -rsp 'Google OAuth client secret: ' OSHIREADY_CLIENT_SECRET; echo
-printf '%s' "$OSHIREADY_CLIENT_SECRET" | gcloud secrets create oshiready-google-client-secret --data-file=-
-unset OSHIREADY_CLIENT_SECRET
-gcloud secrets add-iam-policy-binding oshiready-google-client-secret \
-  --member="serviceAccount:oshiready-runtime@${OSHIREADY_PROJECT_ID}.iam.gserviceaccount.com" \
-  --role='roles/secretmanager.secretAccessor'
-gcloud run services update oshiready --region=asia-northeast1 \
-  --update-env-vars="GOOGLE_CLIENT_ID=<client-id>" \
-  --update-secrets="GOOGLE_CLIENT_SECRET=oshiready-google-client-secret:latest"
+export OSHIREADY_PROJECT_ID='your-project-id'
+bash scripts/cloud-run-enable-calendar.sh
 ```
 
 Google連携はログイン必須にしない。審査員は手動登録から実Geminiプランを操作できるようにして、本人のカレンダー連携は別導線で検証する。
+
+## うまく動かないとき
+
+```bash
+export OSHIREADY_PROJECT_ID='your-project-id'
+bash scripts/cloud-run-doctor.sh
+```
+
+API の有効化・直近のビルド・リビジョンの起動状況・設定（値は表示しない）・実行サービスアカウントの権限・直近のエラーログ（イベント名とエラー種別のみ）をまとめて表示する。読み取りのみで何も変更しない。
+Gemini のモデルは `OSHIREADY_GEMINI_MODEL` で変えられる（既定 `gemini-3.5-flash`。`gemini-2.5` 系は 2026年10月に提供終了予定）。
 
 ## 4. 提出前のゲート
 

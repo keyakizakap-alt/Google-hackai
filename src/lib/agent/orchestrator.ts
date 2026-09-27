@@ -66,7 +66,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       engine = "gemini";
       await runGeminiLoop(input, ctx, trace, usage);
     } catch (e) {
-      logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, model: config.gemini.model });
+      logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status, model: config.gemini.model });
       throw new AgentUnavailableError();
     }
   }
