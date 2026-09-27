@@ -14,14 +14,15 @@ export const STATUS_LABEL: Record<string, string> = {
   revising: "作り直し中",
   approved: "承認済み",
   rejected: "見送り",
-  booking: "手続き準備中",
-  booked: "予約手続きへ",
+  booking: "予約リストに追加中",
+  booked: "予約リストに追加済み",
 };
 
 /** ホームの「提案プラン（概要）」カード */
 export function PlanSummaryCard() {
-  const { envelope, busy } = useStore();
+  const { envelope, busy, event, planError, generatePlan, aiReady } = useStore();
   const plan = envelope?.plan;
+  const byAi = plan ? plan.generatedBy.engine === "gemini" : aiReady;
   const items = plan?.items.filter((i) => i.kind === "beauty" || i.kind === "transit").slice(0, 4) ?? [];
 
   return (
@@ -32,7 +33,7 @@ export function PlanSummaryCard() {
           <h2 id="plan-summary" className="text-[17px] font-bold text-ink">提案プラン</h2>
         </div>
         <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-500">
-          {envelope ? `AI作成・${STATUS_LABEL[envelope.status]}` : "AIが作成"}
+          {envelope ? `${byAi ? "AI作成" : "かんたんモード"}・${STATUS_LABEL[envelope.status]}` : byAi ? "AIが作成" : "かんたんモード"}
         </span>
       </div>
 
@@ -43,7 +44,20 @@ export function PlanSummaryCard() {
       ) : items.length === 0 ? (
         <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lav-200 px-4 py-10 text-center">
           <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
-          <p className="mt-2 text-xs text-mute">イベントを登録すると、AI が自動でプランを作ります。</p>
+          {planError && event ? (
+            <>
+              <p className="mt-2 text-xs text-rose-500" role="alert">プランを作れませんでした：{planError}</p>
+              <button onClick={() => void generatePlan()} disabled={busy !== null} className="mt-3 min-h-[40px] rounded-xl border border-line bg-white px-4 text-xs font-bold text-ink hover:bg-lav-50">
+                もう一度作る
+              </button>
+            </>
+          ) : envelope ? (
+            <p className="mt-2 text-xs text-mute">このプランには美容・移動の予定がありません。詳しくはプラン画面で確認できます。</p>
+          ) : (
+            <p className="mt-2 text-xs text-mute">
+              {!event ? "イベントを登録すると、ここにプランが表示されます。" : "まだプランがありません。下の「プランを作る」から作成できます。"}
+            </p>
+          )}
         </div>
       ) : (
         <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-6 space-y-5">
@@ -67,8 +81,8 @@ export function PlanSummaryCard() {
         </ol>
       )}
 
-      <Link href="/plan" className="btn-primary mt-6 flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold">
-        プランを見る
+      <Link href={event ? "/plan" : "/events"} className="btn-primary mt-6 flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold">
+        {!event ? "イベントを登録する" : envelope || busy === "planning" ? "プランを見る" : "プランを作る"}
         <ChevronRight className="h-4 w-4" />
       </Link>
     </section>

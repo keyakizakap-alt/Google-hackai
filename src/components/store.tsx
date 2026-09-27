@@ -39,7 +39,20 @@ export const OSHI_COLORS = [
 ] as const;
 export type OshiColor = (typeof OSHI_COLORS)[number]["id"];
 
-type Busy = "connecting" | "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
+type Busy = "connecting" | "disconnecting" | "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
+
+/** 処理中に画面上部へ出す説明（押せないボタンがある理由を伝える） */
+export const BUSY_LABEL: Record<Exclude<Busy, null>, string> = {
+  connecting: "カレンダーを確認しています…",
+  disconnecting: "連携を解除しています…",
+  importing: "カレンダーからライブを探しています…",
+  availability: "空き時間を確認しています…",
+  planning: "準備プランを作っています…",
+  revising: "プランを見直しています…",
+  approving: "承認を記録しています…",
+  rejecting: "見送りを記録しています…",
+  booking: "予約リストに追加しています…",
+};
 
 export interface Profile {
   homeStation: string;
@@ -119,9 +132,11 @@ interface Store {
   /** 現在プランを作る対象のイベント */
   event: OshiEvent | null;
   selectEvent: (id: string) => void;
-  saveEvent: (e: OshiEvent) => void;
+  /** 保存する。autoPlan: false なら自動のプラン作成を行わない（「保存だけする」用） */
+  saveEvent: (e: OshiEvent, opts?: { autoPlan?: boolean }) => void;
   removeEvent: (id: string) => void;
   profile: Profile;
+  /** 次回以降の既定値を更新。出発駅だけは全イベント共通なので、変わったら各イベントにも反映する */
   setProfile: (p: Profile) => void;
   importFromCalendar: () => Promise<ImportResult | null>;
   /** スクショ・文章から読み取ったイベントを登録（ユーザー確認後に呼ぶ） */
@@ -158,9 +173,17 @@ interface Store {
   busy: Busy;
   error: string | null;
   clearError: () => void;
+  /** 完了のお知らせ（数秒で消える） */
+  notice: string | null;
+  clearNotice: () => void;
+  notify: (text: string) => void;
+  /** 直近のプラン作成の失敗理由（自動作成の失敗はポップアップにせず、プラン欄に出す） */
+  planError: string | null;
+  /** AI（Gemini）でプランを作れる状態か。false ならルールによる「かんたんモード」 */
+  aiReady: boolean;
   refreshSession: () => Promise<void>;
   extractAvailability: () => Promise<void>;
-  generatePlan: (eventOverride?: OshiEvent) => Promise<boolean>;
+  generatePlan: (eventOverride?: OshiEvent, opts?: { auto?: boolean }) => Promise<boolean>;
   revisePlan: (instruction: string) => Promise<void>;
   approve: (itemIds: string[]) => Promise<void>;
   reject: () => Promise<void>;
@@ -202,7 +225,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
+  /** 削除したカレンダー取り込みイベントのキー */
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const dismissedRef = useRef<string[]>([]);
+  useEffect(() => {
+    dismissedRef.current = dismissed;
+  }, [dismissed]);
+  /** 空き時間を自動で確認済みのイベント */
+  const autoAvailability = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -213,6 +246,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setActiveId(saved.activeId ?? null);
         setProfile(saved.profile ?? DEFAULT_PROFILE);
         setReservations(saved.reservations ?? []);
+        setDismissed(saved.dismissed ?? []);
         if (saved.envelope && Date.parse(saved.envelope.expiresAt) > Date.now()) setEnvelope(saved.envelope);
       }
       setRestored(true);
@@ -223,10 +257,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope }).catch(() => setError("この端末への保存に失敗しました。空き容量とブラウザ設定を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末への保存に失敗しました。空き容量とブラウザ設定を確認してください"));
     }, 200);
     return () => clearTimeout(timer);
-  }, [restored, events, activeId, profile, reservations, envelope]);
+  }, [restored, events, activeId, profile, reservations, envelope, dismissed]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const run = useCallback(async <T,>(kind: Exclude<Busy, null>, fn: () => Promise<T>): Promise<T | undefined> => {
     setBusy(kind);
@@ -254,7 +294,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const r = await api<{ source: "calendar" | "demo"; scanned: number; events: DetectedLiveEvent[] }>("/api/calendar/detect-events", {});
-      const known = new Set(eventsRef.current.map((e) => e.id));
+      const known = new Set([...eventsRef.current.map((e) => e.id), ...dismissedRef.current]);
       const fresh = r.events.filter((d) => !known.has(`cal-${d.key}`));
       const added = fresh.length;
       setEvents((prev) => {
@@ -320,6 +360,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPersistImagesState(on);
       try {
         setAutoPlanState(localStorage.getItem("oshiready.autoPlan") !== "off");
+        const c = localStorage.getItem("oshiready.color");
+        if (c && OSHI_COLORS.some((x) => x.id === c)) setOshiColor(c as OshiColor);
       } catch {
         /* 既定（オン）のまま */
       }
@@ -405,14 +447,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const planSignature = (e: OshiEvent) => [e.id, e.startAt, e.venueStation, e.homeStation, e.beautyServices.join(","), e.arriveEarlyForGoods].join("|");
 
   const generatePlanFn = useCallback(
-    async (eventOverride?: OshiEvent) => {
+    async (eventOverride?: OshiEvent, opts?: { auto?: boolean }) => {
       const target = eventOverride ?? event;
       if (!target) {
         setError("先にイベントを登録してください");
         return false;
       }
       autoTried.current.add(planSignature(target));
-      const r = await run("planning", () => api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined }));
+      setPlanError(null);
+      setBusy("planning");
+      if (!opts?.auto) setError(null);
+      let r: PlanResponse | undefined;
+      try {
+        r = await api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined });
+      } catch (e) {
+        const message = (e as Error).message;
+        setPlanError(message);
+        // 自分で押したときだけポップアップでも知らせる（自動作成の失敗はプラン欄に表示）
+        if (!opts?.auto) setError(message);
+      } finally {
+        setBusy(null);
+      }
       if (r) {
         applyPlan(r);
         setChat([{ role: "agent", text: r.envelope.plan.summary }]);
@@ -421,7 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return Boolean(r);
     },
-    [event, selfie, run, applyPlan],
+    [event, selfie, applyPlan],
   );
 
   // 自動プラン作成: イベントが決まっていてプランがなければ、AI が自動で提案を作る（承認するまで予約は進まない）
@@ -429,15 +484,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!autoPlan || !event || envelope || busy !== null) return;
     if (Date.parse(event.startAt) < Date.now()) return;
     if (autoTried.current.has(planSignature(event))) return;
-    const t = setTimeout(() => void generatePlanFn(event), 400);
+    const t = setTimeout(() => void generatePlanFn(event, { auto: true }), 400);
     return () => clearTimeout(t);
   }, [autoPlan, event, envelope, busy, generatePlanFn]);
+
+  const extractAvailability = useCallback(async () => {
+    const r = await run("availability", () => api<Availability>("/api/calendar/availability", { until: event?.startAt }));
+    if (r) setAvailability(r);
+  }, [run, event?.startAt]);
+
+  // カレンダーと連携済みなら、イベントを選んだときに空き時間を自動で確認する（ボタンを押さなくても分かる）
+  useEffect(() => {
+    if (!restored || !session?.calendarConnected || !event || availability || busy !== null) return;
+    if (autoAvailability.current.has(event.id)) return;
+    autoAvailability.current.add(event.id);
+    const t = setTimeout(() => void extractAvailability(), 300);
+    return () => clearTimeout(t);
+  }, [restored, session?.calendarConnected, event, availability, busy, extractAvailability]);
 
   const store: Store = useMemo(
     () => ({
       session,
       oshiColor,
-      setOshiColor,
+      setOshiColor: (c) => {
+        setOshiColor(c);
+        try {
+          localStorage.setItem("oshiready.color", c);
+        } catch {
+          /* 保存できない環境では毎回既定色 */
+        }
+      },
       events,
       event,
       selectEvent: (id) => {
@@ -446,27 +522,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         restorePlan(id);
         setAvailability(null);
       },
-      saveEvent: (e) => {
+      saveEvent: (e, opts) => {
+        const before = eventsRef.current.find((x) => x.id === e.id);
+        const unchanged = before && planSignature(before) === planSignature(e) && before.title === e.title && before.artist === e.artist && before.venue === e.venue;
         setEvents((prev) => [...prev.filter((x) => x.id !== e.id), e].sort(byDate));
+        if (unchanged) {
+          // 内容が同じなら作成済みのプランはそのまま使う
+          if (event?.id !== e.id) {
+            setActiveId(e.id);
+            restorePlan(e.id);
+            setAvailability(null);
+          }
+          return;
+        }
         setActiveId(e.id);
         delete planCache.current[e.id]; // 内容が変わったので作り直す
         restorePlan(null);
+        setPlanError(null);
+        setAvailability(null);
+        // 「保存だけする」ときは自動でプランを作らない
+        if (opts?.autoPlan === false) autoTried.current.add(planSignature(e));
       },
       removeEvent: (id) => {
+        const removed = eventsRef.current.find((x) => x.id === id);
         setEvents((prev) => prev.filter((x) => x.id !== id));
         delete planCache.current[id];
+        // カレンダーから取り込んだものは、次の取り込みで復活させない
+        if (id.startsWith("cal-")) setDismissed((prev) => (prev.includes(id) ? prev : [...prev, id]));
         if (event?.id === id) {
           setActiveId(null);
           restorePlan(null);
+          setAvailability(null);
         }
+        if (removed) setNotice(`「${removed.title}」を削除しました`);
       },
       profile,
       setProfile: (p) => {
         setProfile(p);
-        // 取り込み済みイベントにも出発駅・美容メニューの既定値を反映
-        setEvents((prev) => prev.map((e) => ({ ...e, homeStation: p.homeStation, beautyServices: p.beautyServices, arriveEarlyForGoods: p.arriveEarlyForGoods })));
-        planCache.current = {};
-        restorePlan(null);
+        // 出発駅は全イベント共通。変わったイベントだけ反映し、そのプランだけ作り直す
+        // （美容メニュー・物販の希望はイベントごとの設定なので、ほかのイベントは書き換えない）
+        const changed = eventsRef.current.filter((e) => e.homeStation !== p.homeStation).map((e) => e.id);
+        if (changed.length === 0) return;
+        setEvents((prev) => prev.map((e) => (changed.includes(e.id) ? { ...e, homeStation: p.homeStation } : e)));
+        for (const id of changed) delete planCache.current[id];
+        if (event && changed.includes(event.id)) restorePlan(null);
       },
       importFromCalendar,
       addScannedEvents: (list) => {
@@ -534,17 +633,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setEvents([]);
         setActiveId(null);
         setReservations([]);
-        setEnvelope(null);
         setProfile(DEFAULT_PROFILE);
+        setDismissed([]);
+        planCache.current = {};
+        restorePlan(null);
+        setAvailability(null);
+        setLastImport(null);
+        setBookings([]);
+        setPlanError(null);
+        setNotice("この端末に保存していた公演・プラン・予約メモを削除しました");
       },
       busy,
       error,
       clearError: () => setError(null),
+      notice,
+      clearNotice: () => setNotice(null),
+      notify: setNotice,
+      planError,
+      aiReady: session?.gemini.configured ?? true,
       refreshSession,
-      extractAvailability: async () => {
-        const r = await run("availability", () => api<Availability>("/api/calendar/availability", { until: event?.startAt }));
-        if (r) setAvailability(r);
-      },
+      extractAvailability,
       generatePlan: generatePlanFn,
       revisePlan: async (instruction) => {
         if (!envelope) return;
@@ -602,18 +710,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return Boolean(r);
       },
       disconnect: async () => {
-        await run("availability", () => api("/api/auth/logout", {}));
+        await run("disconnecting", () => api("/api/auth/logout", {}));
         setAvailability(null);
         setEvents((prev) => prev.filter((e) => e.source !== "calendar"));
         await refreshSession();
       },
       connectDemoCalendar: async () => {
         const r = await run("connecting", () => api<{ ok: boolean }>("/api/calendar/demo", {}));
-        if (r?.ok) await refreshSession();
+        if (r?.ok) {
+          setNotice("デモのカレンダーとつなぎました。ライブの予定を探しています…");
+          await refreshSession();
+        }
         return Boolean(r?.ok);
       },
       stopDemoCalendar: async () => {
-        await run("availability", async () => {
+        await run("disconnecting", async () => {
           const res = await fetch("/api/calendar/demo", { method: "DELETE", cache: "no-store" });
           if (!res.ok) throw new Error("デモのカレンダーをやめられませんでした");
         });
@@ -622,7 +733,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, refreshSession, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

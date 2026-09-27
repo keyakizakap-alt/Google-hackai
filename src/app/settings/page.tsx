@@ -3,6 +3,7 @@
 import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
+import { OshiColorPicker } from "@/components/AppShell";
 import { useStore } from "@/components/store";
 
 function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; title: string; status: string; desc: string; action?: React.ReactNode }) {
@@ -61,7 +62,7 @@ export default function SettingsPage() {
                     デモをやめる
                   </button>
                 ) : (
-                  <DemoCalendarButton className="min-h-[44px] shrink-0 rounded-xl border border-line px-4 text-xs font-bold text-ink hover:bg-lav-50" label="試す" />
+                  <DemoCalendarButton className="min-h-[44px] shrink-0 rounded-xl border border-line px-4 text-xs font-bold text-ink hover:bg-lav-50" label="デモで試す" />
                 )
               }
             />
@@ -81,6 +82,11 @@ export default function SettingsPage() {
         </ul>
       </section>
 
+      <section className="card p-5" aria-label="推しカラー">
+        <p className="mb-3 text-xs leading-relaxed text-ink-soft">アプリ全体のアクセントカラーを推しの色にできます。選んだ色はこの端末に記憶されます。</p>
+        <OshiColorPicker light />
+      </section>
+
       <section className="card p-5" aria-labelledby="auto-plan">
         <div className="flex flex-wrap items-start gap-4">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
@@ -89,7 +95,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              イベントが登録されると、AI が美容・移動のプランを自動で作ります。予約はあなたが確認して承認するまで進みません。
+              カレンダーやスクショから取り込んだイベントを選ぶと、準備プランがまだなければ自動で作ります。手動で追加したイベントは「保存してプランを作る」でも作れます。予約はあなたが確認して承認するまで進みません。
             </p>
           </div>
           <button

@@ -197,7 +197,7 @@ function TracePanel() {
     <section aria-labelledby="trace" className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Activity className="h-4 w-4 text-lav-600" />
-        <h2 id="trace" className="text-sm font-bold text-ink">AIが調べたこと</h2>
+        <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AIが調べたこと" : "確認したこと"}</h2>
         <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
       <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} />
@@ -225,7 +225,8 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
   if (!envelope) return null;
   const { plan, status } = envelope;
   const selectedItems = plan.items.filter((i) => (status === "pending_approval" ? selected.has(i.id) : envelope.approvedItemIds.includes(i.id)));
-  const total = selectedItems.reduce((a, i) => a + (i.provider?.priceJpy ?? i.route?.fareJpy ?? 0), 0);
+  const priced = selectedItems.filter((i) => (i.provider?.priceJpy ?? i.route?.fareJpy) !== undefined);
+  const total = priced.reduce((a, i) => a + (i.provider?.priceJpy ?? i.route?.fareJpy ?? 0), 0);
 
   return (
     <section className="card p-5" aria-labelledby="approval">
@@ -243,7 +244,9 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
         <dt className="text-ink-soft">予約対象</dt>
         <dd className="text-right font-bold text-ink">{selectedItems.length} 件</dd>
         <dt className="text-ink-soft">目安合計</dt>
-        <dd className="text-right font-bold text-ink">¥{total.toLocaleString()}</dd>
+        <dd className="text-right font-bold text-ink">
+          {priced.length === 0 ? <span className="text-xs font-normal text-mute">料金は未確認</span> : `¥${total.toLocaleString()}${priced.length < selectedItems.length ? "〜" : ""}`}
+        </dd>
       </dl>
 
       {status === "pending_approval" && (
@@ -254,7 +257,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
             className="btn-primary flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
           >
             {busy === "approving" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            このプランを承認する
+            {selected.size === 0 ? "予約なしで承認する" : `このプランを承認する（予約 ${selectedItems.length} 件）`}
           </button>
           <button onClick={() => void reject()} disabled={busy !== null} className="rounded-xl border border-line py-2.5 text-sm text-ink-soft hover:bg-lav-50">
             今回は見送る
@@ -270,7 +273,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
               disabled={busy !== null || selectedItems.length === 0}
               className="btn-primary flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
-              予約サイトで手続きする <ChevronRight className="h-4 w-4" />
+              予約の手続きへ進む <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
@@ -297,7 +300,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
               </div>
             </div>
           )}
-          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約するものが選ばれていません。「AIに相談して直す」から作り直せます。</p>}
+          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約なしで承認しました。予約したいものがあれば「AIに相談して直す」で見直すと、もう一度選べます。</p>}
         </div>
       )}
       {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。「AIに相談して直す」から作り直せます。</p>}
@@ -311,7 +314,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
 }
 
 function EmptyPlan() {
-  const { busy, generatePlan, event, availability } = useStore();
+  const { busy, generatePlan, event, availability, planError, aiReady } = useStore();
   const planning = busy === "planning";
   return (
     <div className="space-y-6">
@@ -325,18 +328,24 @@ function EmptyPlan() {
           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
         </div>
         <div className="relative flex flex-col justify-center p-7 sm:p-10">
-          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">AI PLANNER</p>
+          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">{aiReady ? "AI PLANNER" : "PLANNER"}</p>
           <p className="mt-2 text-2xl font-bold leading-snug">
             {event ? event.title : "イベントが未登録です"}
             <span className="block text-base font-medium text-white/70">{event ? "に向けたプランを逆算します" : "先にイベントを登録してください"}</span>
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/65">
-            空き時間・美容のベストなタイミング・混雑を避けたルートを AI が調べて、スケジュールを提案します。予約はあなたが確認してからです。
+            空き時間・美容のベストなタイミング・混雑を避けたルートを{aiReady ? " AI が調べて" : "ルールにもとづいて"}、スケジュールを提案します。予約はあなたが確認してからです。
             {!availability && "（空き時間はプラン作成時に自動で確認します）"}
           </p>
+          {planError && !planning && event && (
+            <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs leading-relaxed text-rose-200" role="alert">
+              プランを作れませんでした：{planError}
+            </p>
+          )}
           {planning ? (
             <div className="mt-6">
-              <AgentConsole running />
+              <AgentConsole running label={aiReady ? undefined : "プランを組み立てています…"} />
+              <p className="mt-2 text-[11px] text-white/50">{aiReady ? "AI が調べものをしながら作るため、30 秒〜1 分ほどかかります。" : "数秒で完成します。"}</p>
             </div>
           ) : !event ? (
             <Link href="/events" className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
@@ -345,7 +354,7 @@ function EmptyPlan() {
           ) : (
             <button onClick={() => void generatePlan()} disabled={busy !== null} className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
               <Sparkles className="h-5 w-5" />
-              AI にプランを作ってもらう
+              {planError ? "もう一度作る" : aiReady ? "AI にプランを作ってもらう" : "プランを作る"}
             </button>
           )}
         </div>
@@ -379,7 +388,8 @@ export default function PlanPage() {
         <div>
           <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
-            {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]}
+            {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
+            {plan.generatedBy.engine === "gemini" ? "AI（Gemini）が作成" : "かんたんモード（ルール）で作成"}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>

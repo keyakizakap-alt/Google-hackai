@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, CalendarPlus, Heart, ImagePlus, LoaderCircle, MapPin, Sparkles, TrainFront } from "lucide-react";
-import { useState } from "react";
 import { PendingBell } from "@/components/AppShell";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
@@ -22,7 +21,6 @@ const pad = (n: number) => String(n).padStart(2, "0");
 function TicketHero({ event }: { event: OshiEvent }) {
   const { eventImage, setEventImage } = useStore();
   const cd = useCountdown(event.startAt);
-  const [liked, setLiked] = useState(true);
   return (
     <Reveal as="section" aria-labelledby="next-event" className="glow-border grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_300px]">
       <div className="relative min-h-[300px] overflow-hidden md:min-h-[340px]">
@@ -36,7 +34,6 @@ function TicketHero({ event }: { event: OshiEvent }) {
         <div className="relative flex h-full flex-col justify-between p-6 sm:p-8">
           <div className="flex items-center justify-between">
             <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-bold tracking-[0.3em] backdrop-blur">NEXT LIVE</span>
-            <div className="flex items-center gap-2">
             <label className="flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 text-xs font-bold backdrop-blur transition hover:bg-white/20">
               <ImagePlus className="h-4 w-4" />
               {eventImage ? "推し画像を変更" : "推し画像を入れる"}
@@ -51,16 +48,6 @@ function TicketHero({ event }: { event: OshiEvent }) {
                 }}
               />
             </label>
-            <button
-              type="button"
-              onClick={() => setLiked((v) => !v)}
-              aria-pressed={liked}
-              aria-label="お気に入り"
-              className="grid h-11 w-11 place-items-center rounded-full bg-white/95 text-rose-400 shadow-lg transition hover:scale-110 active:scale-95"
-            >
-              <Heart className={`h-5 w-5 transition ${liked ? "fill-rose-400" : ""}`} />
-            </button>
-            </div>
           </div>
           <div>
             <p className="font-display text-lg italic text-white/70">{event.artist}</p>
@@ -134,7 +121,7 @@ function EventSwitcher() {
         <p className="text-[10px] font-bold tracking-[0.25em] text-mute">MY LIVES · {events.length}</p>
         {lastImport && lastImport.added > 0 && busy !== "importing" && (
           <p className="pop-in text-[11px] text-ink-soft">
-            Google カレンダーから <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
+            カレンダーから <b className="text-rose-500">{lastImport.added}件</b> のライブを取り込みました
           </p>
         )}
       </div>
@@ -168,19 +155,22 @@ function EventSwitcher() {
 }
 
 function EmptyHero() {
-  const { session, busy, importFromCalendar } = useStore();
+  const { session, busy, importFromCalendar, lastImport } = useStore();
   const { demoAvailable } = useCalendarLinks();
   const importing = busy === "importing";
+  const nothingFound = !importing && session?.calendarConnected && lastImport && lastImport.found === 0;
   return (
     <Reveal as="section" className="relative grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_1fr]">
       <StageScene className="relative min-h-[240px]" />
       <div className="flex flex-col justify-center gap-4 p-7 sm:p-9">
         <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">NO LIVE YET</p>
         <h2 className="text-2xl font-bold leading-snug">
-          {importing ? "カレンダーからライブを探しています…" : "まだイベントが登録されていません"}
+          {importing ? "カレンダーからライブを探しています…" : nothingFound ? "カレンダーにライブの予定が見つかりませんでした" : "まだイベントが登録されていません"}
         </h2>
         <p className="text-sm leading-relaxed text-white/65">
-          Google カレンダーを連携するか、カレンダーやチケット画面のスクショを選ぶだけで、ライブを自動で登録します。
+          {nothingFound
+            ? `今後 6 か月の予定 ${lastImport.scanned} 件を確認しました。予定のタイトルに公演名や会場名（例: 東京ドーム）が入っていると見つけやすくなります。スクショや手入力でも登録できます。`
+            : "Google カレンダーを連携するか、カレンダーやチケット画面のスクショを選ぶだけで、ライブを自動で登録します。"}
         </p>
         <div className="flex flex-wrap gap-2">
           {!session?.calendarConnected ? (
@@ -191,7 +181,7 @@ function EmptyHero() {
           ) : (
             <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold ring-1 ring-white/20">
               {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
-              カレンダーから取り込む
+              {importing ? "探しています…" : nothingFound ? "もう一度探す" : "カレンダーから取り込む"}
             </button>
           )}
           <ScanImportButton className="flex items-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-sm font-bold text-white hover:bg-white/10" />
@@ -221,10 +211,10 @@ function CalendarCard() {
           <p className="font-display text-sm italic text-mute">Free time</p>
           <h2 id="gcal" className="flex items-center gap-2 text-[17px] font-bold text-ink">
             <GoogleG className="h-5 w-5" />
-            Googleカレンダーと連携
+            カレンダーの空き時間
           </h2>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{connected ? "連携済み" : "未連携"}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{demoConnected ? "デモ表示中" : connected ? "連携済み" : "未連携"}</span>
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間」だけから計算します。予定の中身はライブを探すときだけ確認し、保存はしません。</p>
 
@@ -232,12 +222,12 @@ function CalendarCard() {
         <div className="flex flex-col justify-between gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-cloud p-3">
-              <p className="text-[11px] font-bold text-mute">使える空き時間</p>
-              <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.freeSlots.length} /> : "—"}</p>
+              <p className="text-[11px] font-bold text-mute">空き時間（枠）</p>
+              <p className="font-display text-4xl font-semibold text-ink">{connected && availability ? <CountUp to={availability.freeSlots.length} /> : "—"}</p>
             </div>
             <div className="rounded-2xl bg-cloud p-3">
-              <p className="text-[11px] font-bold text-mute">入っている予定</p>
-              <p className="font-display text-4xl font-semibold text-ink">{availability ? <CountUp to={availability.busyCount} /> : "—"}</p>
+              <p className="text-[11px] font-bold text-mute">予定（件）</p>
+              <p className="font-display text-4xl font-semibold text-ink">{connected && availability ? <CountUp to={availability.busyCount} /> : "—"}</p>
             </div>
           </div>
           {session && !connected ? (
@@ -252,34 +242,39 @@ function CalendarCard() {
           )}
         </div>
         {event ? (
-          <MiniCalendar availability={availability} eventDate={event.startAt} scanning={scanning} />
+          <MiniCalendar availability={connected ? availability : null} eventDate={event.startAt} scanning={scanning} />
         ) : (
           <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録するとヒートマップが表示されます</div>
         )}
       </div>
 
-      <button onClick={() => void extractAvailability()} disabled={busy !== null} className="btn-primary mt-5 flex w-full items-center justify-center gap-3 rounded-xl py-3.5 text-[15px] font-bold">
-        {scanning ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <CalendarPlus className="h-5 w-5" strokeWidth={1.7} />}
-        {scanning ? "スキャン中…" : "空き時間を抽出"}
-      </button>
+      {/* 未連携のときは確認できる予定がないため、ボタンを出さずに連携を案内する（押しても意味のないボタンを置かない） */}
+      {connected && event && (
+        <button onClick={() => void extractAvailability()} disabled={busy !== null} className="btn-primary mt-5 flex w-full items-center justify-center gap-3 rounded-xl py-3.5 text-[15px] font-bold">
+          {scanning ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <CalendarPlus className="h-5 w-5" strokeWidth={1.7} />}
+          {scanning ? "空き時間を確認中…" : availability ? "空き時間を最新にする" : "空き時間を確認する"}
+        </button>
+      )}
     </Reveal>
   );
 }
 
 /** 「次にやること」をライブのセットリストとして表現 */
 function Setlist() {
-  const { availability, envelope, busy, generatePlan } = useStore();
+  const { availability, envelope, busy, generatePlan, session, event } = useStore();
   const router = useRouter();
   const steps = [
-    { icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーから空き時間を抽出", done: Boolean(availability) },
+    { icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーと連携して空き時間を確認", done: Boolean(availability && session?.calendarConnected) },
     { icon: Sparkles, t: "美容プランを作成", d: "美容・施術の候補を逆算して提案", done: Boolean(envelope) },
     { icon: TrainFront, t: "移動プランを作成", d: "混雑を避けた出発時間・ルート", done: Boolean(envelope) },
   ];
   const doneCount = steps.filter((s) => s.done).length;
-  const onStep = async (i: number) => {
+  const onStep = (i: number) => {
     if (i === 0) return document.getElementById("gcal")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (envelope) return router.push("/plan");
-    if (await generatePlan()) router.push("/plan");
+    if (!event) return router.push("/events");
+    // 先にプラン画面へ移り、作成の進み具合をそこで見せる（押したのに画面が止まって見えないように）
+    router.push("/plan");
+    if (!envelope && busy === null) void generatePlan();
   };
   return (
     <Reveal delay={80} as="section" aria-labelledby="setlist" className="card p-6">
@@ -299,11 +294,7 @@ function Setlist() {
       <ol className="mt-4 divide-y divide-line">
         {steps.map((s, i) => (
           <li key={s.t}>
-            <button
-              onClick={() => void onStep(i)}
-              disabled={busy !== null}
-              className="group flex w-full items-center gap-4 py-4 text-left transition disabled:opacity-60"
-            >
+            <button onClick={() => onStep(i)} className="group flex w-full items-center gap-4 py-4 text-left transition">
               <span className={`font-display w-10 shrink-0 text-2xl italic transition ${s.done ? "text-rose-400" : "text-lav-200 group-hover:text-lav-500"}`}>M{i + 1}</span>
               <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition duration-300 group-hover:scale-110 ${s.done ? "bg-rose-400 text-white" : "bg-lav-50 text-lav-600 group-hover:bg-night group-hover:text-white"}`}>
                 {busy === "planning" && i > 0 ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <s.icon className="h-5 w-5" strokeWidth={1.7} />}

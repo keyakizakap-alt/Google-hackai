@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarDays, ClipboardList, House, MapPin, Settings, X } from "lucide-react";
+import { Bell, CalendarDays, CheckCircle2, ClipboardList, House, LoaderCircle, MapPin, Settings, X } from "lucide-react";
 import { Suspense, type CSSProperties, type ReactNode } from "react";
 import { formatJst } from "@/lib/time";
 import { Logo } from "./brand";
 import { CalendarConnectNotice } from "./CalendarConnect";
 import { useNow } from "./motion";
-import { OSHI_COLORS, useStore } from "./store";
+import { BUSY_LABEL, OSHI_COLORS, useStore } from "./store";
 
 const NAV = [
   { href: "/", label: "ホーム", en: "Home", icon: House },
@@ -38,12 +38,14 @@ function PendingBell({ light = false }: { light?: boolean }) {
   );
 }
 
-function OshiColorPicker() {
+/** 推しカラーの選択。light はスマホでも使えるよう設定画面（明るい背景）に置く版 */
+export function OshiColorPicker({ light = false }: { light?: boolean }) {
   const { oshiColor, setOshiColor } = useStore();
+  const ring = light ? "#ffffff" : "#1b1935";
   return (
     <fieldset>
-      <legend className="text-[10px] font-bold tracking-[0.25em] text-white/50">OSHI COLOR</legend>
-      <div className="mt-2.5 flex gap-2.5">
+      <legend className={`text-[10px] font-bold tracking-[0.25em] ${light ? "text-mute" : "text-white/50"}`}>OSHI COLOR</legend>
+      <div className={`mt-2.5 flex ${light ? "gap-3" : "gap-2.5"}`}>
         {OSHI_COLORS.map((c) => (
           <button
             key={c.id}
@@ -51,10 +53,10 @@ function OshiColorPicker() {
             onClick={() => setOshiColor(c.id)}
             aria-pressed={oshiColor === c.id}
             aria-label={`推しカラーを${c.label}にする`}
-            className="grid h-7 w-7 place-items-center rounded-full transition hover:scale-110"
-            style={{ boxShadow: oshiColor === c.id ? `0 0 0 2px #1b1935, 0 0 0 3.5px ${c.hex}, 0 0 16px 2px ${c.hex}` : "none" }}
+            className={`grid place-items-center rounded-full transition hover:scale-110 ${light ? "h-11 w-11" : "h-7 w-7"}`}
+            style={{ boxShadow: oshiColor === c.id ? `0 0 0 2px ${ring}, 0 0 0 3.5px ${c.hex}, 0 0 16px 2px ${c.hex}` : "none" }}
           >
-            <span className="h-5 w-5 rounded-full" style={{ background: c.hex }} />
+            <span className={`rounded-full ${light ? "h-8 w-8" : "h-5 w-5"}`} style={{ background: c.hex }} />
           </button>
         ))}
       </div>
@@ -104,6 +106,32 @@ function LiveTicker() {
         {row}
         {row}
       </div>
+    </div>
+  );
+}
+
+/** いま何をしているかを画面上部に出す（処理中にボタンが押せない理由が分かるように） */
+function BusyIndicator() {
+  const { busy } = useStore();
+  if (!busy) return null;
+  return (
+    <div role="status" aria-live="polite" className="pop-in pointer-events-none fixed left-1/2 top-[4.5rem] z-50 lg:top-12 flex -translate-x-1/2 items-center gap-2 rounded-full bg-night/95 px-4 py-2 text-xs font-bold text-white shadow-float backdrop-blur">
+      <LoaderCircle className="h-3.5 w-3.5 animate-spin text-rose-300" />
+      {BUSY_LABEL[busy]}
+    </div>
+  );
+}
+
+function NoticeToast() {
+  const { notice, clearNotice, error } = useStore();
+  if (!notice || error) return null;
+  return (
+    <div role="status" className="pop-in fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-lav-100 bg-white px-4 py-3 text-sm text-ink shadow-float lg:bottom-8">
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-lav-600" />
+      <p className="flex-1">{notice}</p>
+      <button onClick={clearNotice} className="grid h-8 w-8 place-items-center text-mute hover:text-ink" aria-label="閉じる">
+        <X className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -167,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <br />
               <span className="pl-5">Good Live ♡</span>
             </p>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">予定や画像はこの画面の中だけで使い、閉じると消えます。</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">カレンダーの予定や顔写真は保存しません。公演と予約メモはこの端末にだけ保存します。</p>
           </div>
         </div>
       </aside>
@@ -201,6 +229,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
+      <BusyIndicator />
+      <NoticeToast />
       <ErrorToast />
     </div>
   );

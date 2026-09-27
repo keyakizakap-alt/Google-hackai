@@ -7,6 +7,8 @@ export interface SavedWorkspace {
   profile: { homeStation: string; beautyServices: OshiEvent["beautyServices"]; arriveEarlyForGoods: boolean };
   reservations: Reservation[];
   envelope: PlanEnvelope | null;
+  /** 削除したカレンダー取り込みイベント（次の取り込みで復活させない） */
+  dismissed?: string[];
 }
 
 const DB = "oshiready";

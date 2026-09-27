@@ -46,15 +46,19 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
             </>
           )}
           <ScanImportButton className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" />
-          <button onClick={() => void importFromCalendar()} disabled={busy !== null || !session?.calendarConnected} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-40">
-            {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            カレンダーから取り込む
-          </button>
+          {/* 連携していないときは押しても何も起きないので出さない */}
+          {session?.calendarConnected && (
+            <button onClick={() => void importFromCalendar()} disabled={busy !== null} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold">
+              {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {importing ? "探しています…" : "カレンダーから取り込む"}
+            </button>
+          )}
         </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mute">
-        {session?.calendarConnected ? "Google カレンダーの今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。" : "連携前は、スクショ・文章からの追加か手動で公演を登録できます。カレンダーの空き時間は連携後に確認します。"}
-        それ以外の予定の内容はすぐに捨て、どこにも保存しません。
+        {session?.calendarConnected
+          ? "カレンダーの今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。それ以外の予定の内容はすぐに捨て、どこにも保存しません。削除した取り込みイベントは、次の取り込みで戻ってきません。"
+          : "連携前は、スクショ・文章からの追加か手動で公演を登録できます。カレンダーの空き時間は連携後に確認します。"}
       </p>
       {lastImport && (
         <p className="pop-in mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-ink">
@@ -106,8 +110,8 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
   );
 }
 
-function EventForm({ editing }: { editing: OshiEvent | null }) {
-  const { saveEvent, generatePlan, busy, profile, setProfile } = useStore();
+function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (id: string) => void }) {
+  const { saveEvent, generatePlan, busy, profile, setProfile, aiReady, notify } = useStore();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     artist: editing?.artist ?? "",
@@ -123,7 +127,7 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
   const [err, setErr] = useState<string | null>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const save = () => {
+  const save = (opts?: { autoPlan?: boolean }) => {
     const parsed = OshiEventSchema.safeParse({
       id: editing?.id ?? `manual-${Math.random().toString(36).slice(2, 10)}`,
       artist: form.artist,
@@ -146,9 +150,10 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
       return null;
     }
     setErr(null);
-    saveEvent(parsed.data);
-    // 出発駅・美容メニューは次回以降の取り込みにも使う既定値として記憶（メモリ上のみ）
+    saveEvent(parsed.data, opts);
+    // 出発駅（全イベント共通）と、美容メニュー・物販の希望を次に取り込むイベントの既定値として記憶
     setProfile({ homeStation: parsed.data.homeStation, beautyServices: parsed.data.beautyServices, arriveEarlyForGoods: parsed.data.arriveEarlyForGoods });
+    onSaved(parsed.data.id);
     return parsed.data;
   };
 
@@ -201,7 +206,7 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
               <input className={field} value={form.venueStation} onChange={(e) => set("venueStation", e.target.value)} maxLength={40} />
             </label>
             <label className="text-xs font-semibold text-ink-soft sm:col-span-2">
-              出発駅（自宅最寄り・サロンもこの周辺で探します／全イベント共通）
+              出発駅（全イベント共通・サロンもこの周辺で探します）
               <input className={field} value={form.homeStation} onChange={(e) => set("homeStation", e.target.value)} maxLength={40} />
             </label>
           </div>
@@ -235,24 +240,28 @@ function EventForm({ editing }: { editing: OshiEvent | null }) {
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => {
-                if (save()) router.push("/");
+                if (save({ autoPlan: false })) notify("保存しました。プランはあとから作れます");
               }}
               className="rounded-xl border border-line px-6 py-3 text-sm font-semibold text-ink-soft hover:bg-lav-50"
             >
-              保存
+              保存だけする
             </button>
             <button
-              onClick={async () => {
+              onClick={() => {
                 const saved = save();
-                if (saved && (await generatePlan(saved))) router.push("/plan");
+                if (!saved) return;
+                // 先にプラン画面へ移り、作成の進み具合を見せる
+                router.push("/plan");
+                void generatePlan(saved);
               }}
               disabled={busy !== null}
               className="btn-primary flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
               {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              保存して AI にプランを作ってもらう
+              {aiReady ? "保存して AI にプランを作ってもらう" : "保存してプランを作る"}
             </button>
           </div>
+
       </section>
   );
 }
@@ -275,7 +284,7 @@ export default function EventsPage() {
       <RegisteredEvents editingId={targetId} onEdit={setEditingId} />
 
       <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
-        <EventForm key={editing?.id ?? "new"} editing={editing} />
+        <EventForm key={editing?.id ?? "new"} editing={editing} onSaved={setEditingId} />
 
         <div className="space-y-5">
           <section className="card p-5">

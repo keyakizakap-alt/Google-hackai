@@ -34,7 +34,7 @@ export function friendlyStep(name: string): string {
  * AI が何を調べたかをターミナル風に表示する（可観測性の可視化）。
  * running 中は実行順の目安を流し、完了後は実際の記録を 1 行ずつ再生する。内部の処理名はユーザー向けの言葉に置き換える。
  */
-export function AgentConsole({ running, trace = [], compact = false }: { running: boolean; trace?: TraceStep[]; compact?: boolean }) {
+export function AgentConsole({ running, trace = [], compact = false, label }: { running: boolean; trace?: TraceStep[]; compact?: boolean; label?: string }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -43,7 +43,8 @@ export function AgentConsole({ running, trace = [], compact = false }: { running
   }, [running]);
 
   const lines = running
-    ? THINKING.slice(0, Math.min(THINKING.length, (tick % (THINKING.length + 2)) + 1)).map(([name, text], i, arr) => ({
+    ? // 実行中は目安の手順を順に表示し、最後の手順で止めて待つ（最初に戻って繰り返すと「やり直している」ように見えるため）
+      THINKING.slice(0, Math.min(THINKING.length, tick + 1)).map(([name, text], i, arr) => ({
         key: name,
         name,
         text,
@@ -58,7 +59,7 @@ export function AgentConsole({ running, trace = [], compact = false }: { running
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
-        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? "AIがプランを考えています…" : `AIが調べたこと（${trace.length}件）`}</span>
+        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? (label ?? "AIがプランを考えています…") : `調べたこと（${trace.length}件）`}</span>
         {running && <span className="pulse-ring relative ml-auto h-2 w-2 rounded-full bg-rose-400" />}
       </div>
       <ol className={`space-y-1.5 px-4 py-3 ${compact ? "max-h-44" : "max-h-80"} overflow-y-auto`}>
