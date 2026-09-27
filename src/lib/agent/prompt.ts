@@ -29,7 +29,7 @@ export const SYSTEM_INSTRUCTION = `あなたは「OshiReady」の推し活プラ
 export function buildUserPrompt(params: {
   event: OshiEvent;
   now: string;
-  calendarSource: "google" | "demo";
+  calendarSource: "calendar" | "demo";
   hasSkinAnalysis: boolean;
   previous?: Plan;
   instruction?: string;
@@ -38,7 +38,7 @@ export function buildUserPrompt(params: {
   const lines = [
     previous ? "# タスク: 既存プランをユーザーの修正指示に沿って組み直してください" : "# タスク: 推し活プランを新規作成してください",
     `<now>${now}</now>`,
-    `<calendar_source>${calendarSource === "demo" ? "Google 未連携。既存予定は不明。空き時間と断定しない" : "Google カレンダー（マスク済み）"}</calendar_source>`,
+    `<calendar_source>${calendarSource === "demo" ? "カレンダー未連携。既存予定は不明。空き時間と断定しない" : "連携カレンダー（時間帯のみ・マスク済み）"}</calendar_source>`,
     `<event>${JSON.stringify(event)}</event>`,
     `<skin_analysis_available>${hasSkinAnalysis}</skin_analysis_available>`,
   ];

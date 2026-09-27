@@ -1,8 +1,8 @@
 import "server-only";
-import { getBusyBlocks } from "../google/calendar";
+import { collectBusy } from "../sources";
 import { redactText } from "../privacy/mask";
 import { analyzeSkin } from "../services/youcam";
-import { jstDateKey, MS_DAY } from "../time";
+import { MS_DAY } from "../time";
 import { signEnvelope } from "./envelope";
 import { runPlanningAgent } from "./orchestrator";
 import { advance } from "./stateMachine";
@@ -31,7 +31,8 @@ export async function generatePlan(params: {
   history = advance(history, from, working, "user");
 
   // 2) カレンダー取得（メモリ上でマスク済み Busy に変換）
-  const fetched = await getBusyBlocks({ days: 30, until: Date.parse(event.startAt) + MS_DAY, demoDayOff: jstDateKey(Date.parse(event.startAt)) });
+  // すべての連携カレンダーから「時間帯だけ」を集める（共通の安全チェックを通過済み）
+  const fetched = await collectBusy({ from: Date.now(), to: Math.max(Date.now() + 30 * MS_DAY, Date.parse(event.startAt) + MS_DAY) });
   const { source } = fetched;
   // ライブ本体の予定（カレンダーから取り込んだイベント自身）は「埋まり」として扱わない
   const evStart = Date.parse(event.startAt);

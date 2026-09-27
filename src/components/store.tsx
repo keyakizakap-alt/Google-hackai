@@ -10,13 +10,14 @@ import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } 
 export interface SessionInfo {
   googleOAuthConfigured: boolean;
   calendarConnected: boolean;
+  sources?: { id: string; label: string; connectPath: string | null; connected: boolean }[];
   gemini: { configured: boolean };
   ekispert: { mode: "mcp" | "mock" };
   youcam: { mode: "api" | "mock" };
 }
 
 export interface Availability {
-  source: "google" | "demo";
+  source: "calendar" | "demo";
   from: string;
   to: string;
   busyCount: number;
@@ -59,7 +60,7 @@ export interface DetectedLiveEvent {
 }
 
 export interface ImportResult {
-  source: "google" | "demo";
+  source: "calendar" | "demo";
   scanned: number;
   found: number;
   added: number;
@@ -249,7 +250,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBusy("importing");
     setError(null);
     try {
-      const r = await api<{ source: "google" | "demo"; scanned: number; events: DetectedLiveEvent[] }>("/api/calendar/detect-events", {});
+      const r = await api<{ source: "calendar" | "demo"; scanned: number; events: DetectedLiveEvent[] }>("/api/calendar/detect-events", {});
       const known = new Set(eventsRef.current.map((e) => e.id));
       const fresh = r.events.filter((d) => !known.has(`cal-${d.key}`));
       const added = fresh.length;

@@ -27,6 +27,12 @@ export const config = {
 
   /** Cookie 暗号化・プラン署名用の鍵素材（32 文字以上を推奨） */
   sessionSecret: env("SESSION_SECRET"),
+  /**
+   * 入れ替え前の古い値（任意・カンマ区切りで複数可）。
+   * 新しい値を SESSION_SECRET に入れ、古い値をここに移すと、使用中の人を締め出さずに安全に入れ替えられる。
+   * 入れ替えから 24 時間（Cookie の有効期限）たったら削除してよい。
+   */
+  sessionSecretPrevious: (env("SESSION_SECRET_PREVIOUS") ?? "").split(",").map((v) => v.trim()).filter(Boolean),
 
   google: {
     clientId: env("GOOGLE_CLIENT_ID"),

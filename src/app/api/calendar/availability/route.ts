@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { extractFreeSlots, summarizeByDay } from "@/lib/availability";
-import { getBusyBlocks } from "@/lib/google/calendar";
+import { collectBusy } from "@/lib/sources";
 import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
 import { logger } from "@/lib/logger";
-import { jstDateKey } from "@/lib/time";
 
 const Body = z.object({ until: z.string().max(40).optional() });
 
@@ -19,11 +18,9 @@ export async function POST(req: Request) {
   try {
     const body = Body.parse(await req.json().catch(() => ({})));
     const until = body.until ? Date.parse(body.until) : undefined;
-    const { source, busy, from, to } = await getBusyBlocks({
-      days: 30,
-      until: Number.isFinite(until) ? until : undefined,
-      demoDayOff: until && Number.isFinite(until) ? jstDateKey(until) : undefined,
-    });
+    const from = Date.now();
+    const to = Math.max(from + 30 * 86_400_000, until && Number.isFinite(until) ? until : 0);
+    const { source, busy } = await collectBusy({ from, to });
     const free = extractFreeSlots(busy, { from, to });
     const days = summarizeByDay(busy, free, from, to);
     logger.info("availability.ok", { ...meta, mode: source, busyCount: busy.length, slotCount: free.length });
