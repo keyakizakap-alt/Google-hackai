@@ -3,17 +3,21 @@ import type { LiveCandidate } from "../eventDetection/detect";
 import type { BusyBlock } from "../privacy/mask";
 import { gateForDetection, sanitizeBusy } from "./gate";
 import { googleSource } from "./google";
+import { sampleSource } from "./sample";
 import type { CalendarSourceAdapter } from "./types";
 
 /**
  * 連携先の一覧（ここに部品を足す／外すだけで連携先を変えられる）。
  * 例: Outlook を足すときは outlookSource を作って配列に加え、CALENDAR_SOURCES=google,outlook にする。
  */
-const ALL_SOURCES: CalendarSourceAdapter[] = [googleSource];
+const ALL_SOURCES: CalendarSourceAdapter[] = [googleSource, sampleSource];
 
-/** 環境変数 CALENDAR_SOURCES（カンマ区切り、既定 google）で有効な連携先を切り替える */
+/**
+ * 環境変数 CALENDAR_SOURCES（カンマ区切り、既定 google,sample）で有効な連携先を切り替える。
+ * sample（デモのカレンダー）は DEMO_CALENDAR_ID を設定したときだけ現れる。
+ */
 export function enabledSources(): CalendarSourceAdapter[] {
-  const allow = (process.env.CALENDAR_SOURCES ?? "google").split(",").map((v) => v.trim()).filter(Boolean);
+  const allow = (process.env.CALENDAR_SOURCES ?? "google,sample").split(",").map((v) => v.trim()).filter(Boolean);
   return ALL_SOURCES.filter((s) => allow.includes(s.id) && s.isAvailable());
 }
 

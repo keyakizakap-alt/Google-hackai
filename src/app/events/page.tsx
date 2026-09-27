@@ -7,6 +7,7 @@ import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
 import { GoogleG } from "@/components/brand";
+import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { ScanImportButton } from "@/components/ScanImport";
 import { formatJst } from "@/lib/time";
 import { matchVenue, VENUES } from "@/lib/eventDetection/venues";
@@ -28,6 +29,7 @@ type FormState = {
 /** 登録済みイベント一覧 + カレンダー取り込み */
 function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onEdit: (id: string | null) => void }) {
   const { events, event, selectEvent, removeEvent, importFromCalendar, lastImport, busy, session } = useStore();
+  const { demoAvailable } = useCalendarLinks();
   const importing = busy === "importing";
   return (
     <section className="card p-5 sm:p-6" aria-labelledby="registered">
@@ -37,10 +39,11 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
           <h2 id="registered" className="text-[17px] font-bold text-ink">登録イベント</h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          {session?.googleOAuthConfigured && !session.calendarConnected && (
-            <a href="/api/auth/google" className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50">
-              <GoogleG className="h-4 w-4" /> Google カレンダーを連携
-            </a>
+          {session && !session.calendarConnected && (
+            <>
+              <GoogleConnectButton className="min-h-[44px] rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" label="Google カレンダーと連携" />
+              {demoAvailable && <DemoCalendarButton className="min-h-[44px] rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" />}
+            </>
           )}
           <ScanImportButton className="flex min-h-[44px] items-center gap-2 rounded-xl border border-line px-4 text-sm font-bold text-ink hover:bg-lav-50" />
           <button onClick={() => void importFromCalendar()} disabled={busy !== null || !session?.calendarConnected} className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-40">

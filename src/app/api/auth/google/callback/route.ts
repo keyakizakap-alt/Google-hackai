@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { appBaseUrl, isGoogleOAuthConfigured } from "@/lib/config";
 import { createOAuthClient } from "@/lib/google/oauth";
+import { redirectBase } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { consumeOAuthState, writeTokens } from "@/lib/session";
 
@@ -9,9 +10,14 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const saved = await consumeOAuthState();
-  if (!isGoogleOAuthConfigured()) return NextResponse.redirect(new URL("/settings?error=oauth_not_configured", req.url));
+  if (!isGoogleOAuthConfigured()) return NextResponse.redirect(new URL("/settings?error=oauth_not_configured", redirectBase(req)));
   const home = new URL("/", appBaseUrl()!);
 
+  // 利用者が Google の確認画面で「キャンセル」を押した
+  if (url.searchParams.get("error") === "access_denied") {
+    home.searchParams.set("error", "oauth_denied");
+    return NextResponse.redirect(home);
+  }
   if (!code || !state || !saved || saved.state !== state) {
     logger.warn("oauth.callback.rejected", { route: "oauth.callback" });
     home.searchParams.set("error", "oauth_state");

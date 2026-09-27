@@ -31,6 +31,20 @@ export function assertSameOrigin(req: Request, requiredAction?: string): NextRes
 }
 
 /**
+ * リダイレクト先を組み立てるための基準 URL。
+ * Cloud Run（standalone）では req.url が「https://0.0.0.0:8080」になり、そのまま使うと壊れたリダイレクトになる。
+ * 公開 URL（APP_BASE_URL）があればそれを使い、無ければ Host ヘッダーから組み立てる。
+ */
+export function redirectBase(req: Request): string {
+  const base = appBaseUrl();
+  if (base) return base;
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (!host) return new URL(req.url).origin;
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0].trim() || new URL(req.url).protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
+/**
  * 利用者の IP アドレスを、偽装されにくい方法で取り出す。
  * - Vercel: X-Forwarded-For を Vercel が上書きするため先頭が実 IP（https://vercel.com/docs/headers/request-headers）
  * - Cloud Run 等: ロードバランサーは既存ヘッダーの末尾に追記するため、先頭は利用者が偽装できる。

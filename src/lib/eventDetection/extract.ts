@@ -84,7 +84,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
     logger.info("detect.gemini", { requestId, latencyMs: Date.now() - started, itemCount: out.length, model: config.gemini.model });
     return out;
   } catch (e) {
-    logger.warn("detect.gemini.failed", { requestId, latencyMs: Date.now() - started, errorCode: (e as Error).name });
+    logger.warn("detect.gemini.failed", { requestId, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status });
     return candidates.map(extractByRules);
   }
 }

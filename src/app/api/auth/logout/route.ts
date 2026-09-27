@@ -3,10 +3,10 @@ import { isGoogleOAuthConfigured } from "@/lib/config";
 import { createOAuthClient } from "@/lib/google/oauth";
 import { assertSameOrigin, requestMeta } from "@/lib/http";
 import { logger } from "@/lib/logger";
-import { clearTokens, readTokens } from "@/lib/session";
+import { clearTokens, readTokens, writeDemoCalendarChoice } from "@/lib/session";
 
 /**
- * Google 連携の解除。Cookie を消すだけでなく、Google 側の許可（トークン）も取り消す。
+ * カレンダー連携の解除（Google・デモのカレンダーとも）。Cookie を消すだけでなく、Google 側の許可（トークン）も取り消す。
  * 取り消しに失敗しても Cookie は必ず削除する。
  */
 export async function POST(req: Request) {
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     }
   }
   await clearTokens();
+  await writeDemoCalendarChoice(false);
   logger.info("oauth.disconnected", { ...meta, status: revoked ? "revoked" : "cleared" });
   return NextResponse.json({ ok: true, revoked });
 }

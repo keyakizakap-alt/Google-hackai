@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, CalendarDays, ClipboardList, House, MapPin, Settings, X } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { Suspense, type CSSProperties, type ReactNode } from "react";
 import { formatJst } from "@/lib/time";
 import { Logo } from "./brand";
+import { CalendarConnectNotice } from "./CalendarConnect";
 import { useNow } from "./motion";
 import { OSHI_COLORS, useStore } from "./store";
 
@@ -180,7 +181,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <PendingBell light />
         </header>
 
-        <main className="mx-auto max-w-[1240px] px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-14 lg:pt-6">{children}</main>
+        <main className="mx-auto max-w-[1240px] px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-14 lg:pt-6">
+          <Suspense>
+            <CalendarConnectNotice />
+          </Suspense>
+          {children}
+        </main>
       </div>
 
       <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl bg-night/95 pb-[env(safe-area-inset-bottom)] text-white shadow-float backdrop-blur lg:hidden" aria-label="メイン（モバイル）">
