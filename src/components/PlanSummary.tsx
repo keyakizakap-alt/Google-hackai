@@ -15,8 +15,8 @@ export const STATUS_LABEL: Record<string, string> = {
   revising: "作り直し中",
   approved: "承認済み",
   rejected: "見送り",
-  booking: "予約リストに追加中",
-  booked: "予約リストに追加済み",
+  booking: "予約中",
+  booked: "予約済み",
 };
 
 /** ホームの「提案プラン（概要）」カード */

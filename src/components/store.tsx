@@ -14,6 +14,8 @@ export interface SessionInfo {
   gemini: { configured: boolean };
   ekispert: { mode: "mcp" | "mock" };
   youcam: { mode: "api" | "mock" };
+  /** アプリ内予約。inApp=false なら予約サイトへの案内のみ。demo=true なら実在の店舗には届かない */
+  booking?: { inApp: boolean; demo: boolean };
 }
 
 export interface Availability {
@@ -39,7 +41,7 @@ export const OSHI_COLORS = [
 ] as const;
 export type OshiColor = (typeof OSHI_COLORS)[number]["id"];
 
-type Busy = "connecting" | "disconnecting" | "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
+type Busy = "cancelling" | "connecting" | "disconnecting" | "importing" | "availability" | "planning" | "revising" | "approving" | "rejecting" | "booking" | null;
 
 /** 処理中に画面上部へ出す説明（押せないボタンがある理由を伝える） */
 export const BUSY_LABEL: Record<Exclude<Busy, null>, string> = {
@@ -51,7 +53,8 @@ export const BUSY_LABEL: Record<Exclude<Busy, null>, string> = {
   revising: "プランを見直しています…",
   approving: "承認を記録しています…",
   rejecting: "見送りを記録しています…",
-  booking: "予約リストに追加しています…",
+  booking: "承認した内容で予約しています…",
+  cancelling: "キャンセルしています…",
 };
 
 export interface Profile {
@@ -97,6 +100,11 @@ export interface Reservation {
   status: ReservationStatus;
   confirmationNo?: string;
   memo?: string;
+  /** アプリ内で予約した場合の窓口名と、デモ予約かどうか */
+  provider?: string;
+  demo?: boolean;
+  /** アプリ内キャンセル用の控え（暗号化済み。キャンセル時にだけサーバーへ送る） */
+  cancelTicket?: string;
   updatedAt: string;
 }
 
@@ -188,6 +196,8 @@ interface Store {
   approve: (itemIds: string[]) => Promise<void>;
   reject: () => Promise<void>;
   book: () => Promise<boolean>;
+  /** アプリ内で予約したものをキャンセルする（画面で確認したあとに呼ぶ） */
+  cancelReservation: (id: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
   /** デモのカレンダーで試す（ログイン不要）。成功すると自動でライブを取り込む */
   connectDemoCalendar: () => Promise<boolean>;
@@ -699,13 +709,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               priceJpy: item.provider?.priceJpy ?? item.route?.fareJpy,
               url: b.externalUrl,
               note: b.note,
-              status: "todo" as const,
+              status: b.status === "reserved" ? ("reserved" as const) : ("todo" as const),
+              confirmationNo: b.confirmationNo,
+              provider: b.provider,
+              demo: b.demo,
+              cancelTicket: b.cancelTicket,
               updatedAt: now,
             }];
           });
           setReservations((prev) => [...prev.filter((x) => !added.some((a) => a.id === x.id)), ...added].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)));
+          const reserved = added.filter((a) => a.status === "reserved").length;
+          setNotice(
+            reserved > 0
+              ? `${reserved} 件を予約しました${added.some((a) => a.demo) ? "（デモ予約）" : ""}。リマインドも自動で設定されます`
+              : `${added.length} 件を予約リストに追加しました`,
+          );
         }
         return Boolean(r);
+      },
+      cancelReservation: async (id) => {
+        const target = reservations.find((x) => x.id === id);
+        if (!target?.cancelTicket) return false;
+        const r = await run("cancelling", () => api<{ ok: boolean }>("/api/booking/cancel", { ticket: target.cancelTicket, confirm: true }, "cancel"));
+        if (!r?.ok) return false;
+        setReservations((prev) => prev.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelTicket: undefined, updatedAt: new Date().toISOString() } : x)));
+        setNotice(`「${target.title}」をキャンセルしました${target.demo ? "（デモ予約）" : ""}`);
+        return true;
       },
       disconnect: async () => {
         await run("disconnecting", () => api("/api/auth/logout", {}));

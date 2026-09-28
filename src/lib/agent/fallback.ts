@@ -1,7 +1,7 @@
 import "server-only";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
 import { EKISPERT_ROUTE_URL } from "../safeUrl";
-import { MS_MIN, toJstIso } from "../time";
+import { formatJst, MS_MIN, toJstIso } from "../time";
 import { daysBefore, executeTool, type AgentContext } from "./tools";
 import type { TimelineItem, TraceStep } from "./types";
 
@@ -67,7 +67,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     start: toJstIso(checkAt),
     end: toJstIso(checkAt + MS_MIN),
     provider: { name: "駅すぱあとで経路を検索", bookingUrl: EKISPERT_ROUTE_URL },
-    rationale: `経路データを取得できていません。${toJstIso(arriveBy)} 頃の現地到着を目安に、実際の列車・所要時間・運賃を確認してください。`,
+    rationale: `経路データを取得できていません。${formatJst(toJstIso(arriveBy))} 頃の現地到着を目安に、実際の列車・所要時間・運賃を確認してください。`,
     requiresBooking: true,
   });
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
-import { CircleCheck, ExternalLink, Info, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { CircleCheck, ExternalLink, Info, LoaderCircle, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { ItemIcon } from "@/components/icons";
 import { useStore, type Reservation, type ReservationStatus } from "@/components/store";
 import { safeExternalUrl } from "@/lib/safeUrl";
@@ -22,7 +22,10 @@ const FILTERS: { id: "all" | ReservationStatus; label: string }[] = [
 ];
 
 function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
-  const { updateReservation, removeReservation } = useStore();
+  const { updateReservation, removeReservation, cancelReservation, busy } = useStore();
+  // アプリ内で予約したもの（キャンセル後も「手続き前に戻す」は出さない）。キャンセルできるのは控えがあるときだけ
+  const inApp = Boolean(raw.provider);
+  const canCancelInApp = Boolean(raw.cancelTicket);
   // 念のため表示側でも許可リスト外のリンクは出さない
   const r = { ...raw, url: safeExternalUrl(raw.url) };
   const [mode, setMode] = useState<"view" | "reserve" | "cancel">("view");
@@ -40,6 +43,7 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
           <div className="flex flex-wrap items-center gap-2">
             <p className={`text-[15px] font-bold text-ink ${r.status === "cancelled" ? "line-through" : ""}`}>{r.title}</p>
             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${st.tone}`}>{st.label}</span>
+            {r.demo && <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-bold text-rose-500">デモ予約</span>}
           </div>
           <p className="mt-1 text-xs text-ink-soft">
             {formatJst(r.start)}〜{formatJst(r.end, { time: true })}
@@ -54,7 +58,7 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
 
       {mode === "view" && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {r.url && r.status !== "cancelled" && (
+          {r.url && r.status !== "cancelled" && !inApp && (
             <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn-primary flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 text-xs font-bold">
               {r.status === "reserved" ? "予約内容を確認・変更" : "予約サイトを開く"} <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -67,14 +71,14 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
           {r.status === "reserved" && (
             <>
               <button onClick={() => setMode("reserve")} className="min-h-[44px] rounded-xl border border-line px-4 text-xs font-bold text-ink-soft hover:bg-lav-50">
-                予約番号・メモを編集
+                {inApp ? "メモを編集" : "予約番号・メモを編集"}
               </button>
               <button onClick={() => setMode("cancel")} className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-line px-4 text-xs font-bold text-rose-500 hover:bg-rose-50">
                 <XCircle className="h-4 w-4" /> キャンセルする
               </button>
             </>
           )}
-          {r.status === "cancelled" && (
+          {r.status === "cancelled" && !inApp && (
             <button onClick={() => updateReservation(r.id, { status: "todo" })} className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-line px-4 text-xs font-bold text-ink-soft hover:bg-lav-50">
               <RotateCcw className="h-4 w-4" /> 手続き前に戻す
             </button>
@@ -90,14 +94,16 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
           className="pop-in mt-4 grid gap-3 rounded-2xl bg-cloud p-4 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
-            updateReservation(r.id, { status: "reserved", confirmationNo: no.trim() || undefined, memo: memo.trim() || undefined });
+            updateReservation(r.id, inApp ? { memo: memo.trim() || undefined } : { status: "reserved", confirmationNo: no.trim() || undefined, memo: memo.trim() || undefined });
             setMode("view");
           }}
         >
-          <label className="text-xs font-semibold text-ink-soft">
-            予約番号（任意）
-            <input value={no} onChange={(e) => setNo(e.target.value)} maxLength={40} className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-lav-400" placeholder="例: ABC-12345" />
-          </label>
+          {!inApp && (
+            <label className="text-xs font-semibold text-ink-soft">
+              予約番号（任意）
+              <input value={no} onChange={(e) => setNo(e.target.value)} maxLength={40} className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-lav-400" placeholder="例: ABC-12345" />
+            </label>
+          )}
           <label className="text-xs font-semibold text-ink-soft">
             メモ（任意）
             <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={100} className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-lav-400" placeholder="例: 当日は5分前に到着" />
@@ -107,13 +113,36 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
               戻る
             </button>
             <button type="submit" className="btn-primary min-h-[44px] flex-1 rounded-xl text-xs font-bold">
-              予約済みにする
+              {inApp ? "メモを保存" : r.status === "reserved" ? "保存" : "予約済みにする"}
             </button>
           </div>
         </form>
       )}
 
-      {mode === "cancel" && (
+      {mode === "cancel" && canCancelInApp && (
+        <div className="pop-in mt-4 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
+          <p className="text-xs leading-relaxed text-ink">
+            この予約をアプリ内でキャンセルします。{r.demo ? "デモ予約のため、実在の店舗への連絡や料金は発生しません。" : "キャンセル料は予約先の規定にしたがいます。"}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => setMode("view")} disabled={busy !== null} className="min-h-[44px] rounded-xl border border-line bg-white px-4 text-xs">
+              やめる
+            </button>
+            <button
+              onClick={async () => {
+                if (await cancelReservation(r.id)) setMode("view");
+              }}
+              disabled={busy !== null}
+              className="flex min-h-[44px] items-center gap-1.5 rounded-xl bg-rose-500 px-4 text-xs font-bold text-white hover:brightness-105"
+            >
+              {busy === "cancelling" && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+              キャンセルを確定する
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "cancel" && !canCancelInApp && (
         <div className="pop-in mt-4 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
           <p className="text-xs leading-relaxed text-ink">
             キャンセルは予約したサイトで手続きしてください。サイトでキャンセルが完了したら「キャンセルした」を押すと、ここに記録されます。
@@ -144,7 +173,7 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
 }
 
 export default function BookingsPage() {
-  const { reservations } = useStore();
+  const { reservations, session } = useStore();
   const [filter, setFilter] = useState<"all" | ReservationStatus>("all");
   const count = (s: ReservationStatus) => reservations.filter((r) => r.status === s).length;
   const list = reservations.filter((r) => filter === "all" || r.status === filter);
@@ -160,8 +189,8 @@ export default function BookingsPage() {
       <div className="flex items-start gap-3 rounded-2xl bg-lav-50 px-4 py-3 text-xs leading-relaxed text-ink-soft">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-lav-600" />
         <p>
-          OshiReady が代わりに予約・支払いをすることはありません。「予約サイトを開く」から各サイトで予約し、終わったら「予約できた」を押して記録してください。公演と予約メモはこの端末のブラウザに保存されます。
-          キャンセルも予約したサイトで行い、ここで状況を管理できます。
+          プランで承認して「予約する」を押したものは、アプリ内で予約され、ここからキャンセルできます{session?.booking?.demo ? "（いまはデモ予約：実在の店舗には届きません）" : ""}。
+          アプリ内で予約できないものは「予約サイトを開く」から各サイトで予約し、終わったら「予約できた」を押して記録してください。支払いが発生することはありません。予約と予約メモはこの端末のブラウザに保存されます。
         </p>
       </div>
 

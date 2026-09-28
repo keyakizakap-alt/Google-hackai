@@ -9,6 +9,7 @@ import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/com
 import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
+import { RemindersCard } from "@/components/Reminders";
 import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
@@ -358,7 +359,10 @@ export default function Home() {
         <CalendarCard />
         <PlanSummaryCard />
       </div>
-      <Setlist />
+      <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
+        <Setlist />
+        <RemindersCard />
+      </div>
     </div>
   );
 }

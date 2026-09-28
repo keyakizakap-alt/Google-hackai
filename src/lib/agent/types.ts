@@ -137,11 +137,21 @@ export interface SkinAnalysis {
   advice: string[];
 }
 
-/** 承認後に返す「予約サイトへの案内」（OshiReady は予約・決済を代行しない） */
+/**
+ * 承認後の予約結果。
+ * - reserved: アプリ内で予約した（予約の部品が対応している項目。デモ予約なら demo: true）
+ * - handoff: 対応する部品がないため、予約サイトへ案内した
+ * 決済は行わない。
+ */
 export interface BookingResult {
   itemId: string;
   title: string;
-  status: "handoff";
+  status: "reserved" | "handoff";
   externalUrl?: string;
   note: string;
+  confirmationNo?: string;
+  provider?: string;
+  demo?: boolean;
+  /** キャンセル用の控え（暗号化済み。アプリ内キャンセルのときだけ送り返す） */
+  cancelTicket?: string;
 }

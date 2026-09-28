@@ -7,6 +7,7 @@ import { Suspense, type CSSProperties, type ReactNode } from "react";
 import { formatJst } from "@/lib/time";
 import { Logo } from "./brand";
 import { CalendarConnectNotice } from "./CalendarConnect";
+import { ReminderAgent } from "./Reminders";
 import { useNow } from "./motion";
 import { BUSY_LABEL, OSHI_COLORS, useStore } from "./store";
 
@@ -235,6 +236,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
+      <ReminderAgent />
       <BusyIndicator />
       <NoticeToast />
       <ErrorToast />
