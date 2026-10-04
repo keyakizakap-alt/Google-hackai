@@ -32,4 +32,10 @@ describe("plan envelope signature", () => {
     const env = signEnvelope({ plan, status: "pending_approval", approvedItemIds: [], history: [] }, Date.now() - 3 * 3600_000);
     expect(() => verifyEnvelope(env)).toThrow(/有効期限/);
   });
+
+  it("項目の並び順が違うプランでも、署名と検証が一致する", () => {
+    const reordered = { decisions: [{ topic: "t", chosen: "c", alternatives: [], reason: "r" }], ...plan } as Plan;
+    const env = signEnvelope({ plan: reordered, status: "pending_approval", approvedItemIds: [], history: [] });
+    expect(verifyEnvelope(JSON.parse(JSON.stringify(env))).plan.decisions).toHaveLength(1);
+  });
 });

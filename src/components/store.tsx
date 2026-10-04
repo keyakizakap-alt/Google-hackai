@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
+import { formatJst } from "@/lib/time";
 
 /** 公演と予約メモはこのブラウザの IndexedDB に保存する。顔画像と OAuth トークンは保存しない。 */
 
@@ -111,6 +112,7 @@ export interface Reservation {
 const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true };
 
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
+const formatJstShort = (iso: string) => formatJst(iso);
 
 async function api<T>(path: string, body?: unknown, action?: string): Promise<T> {
   const res = await fetch(path, {
@@ -122,6 +124,13 @@ async function api<T>(path: string, body?: unknown, action?: string): Promise<T>
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
   return json as T;
+}
+
+export interface Conflict {
+  id: string;
+  title: string;
+  start: string;
+  source: "plan" | "reservation";
 }
 
 interface PlanResponse {
@@ -196,6 +205,10 @@ interface Store {
   approve: (itemIds: string[]) => Promise<void>;
   reject: () => Promise<void>;
   book: () => Promise<boolean>;
+  /** カレンダーに後から入った予定と重なったプラン・予約（予定の中身は持たない） */
+  conflicts: Conflict[];
+  /** 重なりを解消するよう、エージェントにプランを組み直してもらう */
+  replanForConflicts: () => Promise<void>;
   /** アプリ内で予約したものをキャンセルする（画面で確認したあとに呼ぶ） */
   cancelReservation: (id: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
@@ -244,6 +257,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     dismissedRef.current = dismissed;
   }, [dismissed]);
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
   /** 空き時間を自動で確認済みのイベント */
   const autoAvailability = useRef<Set<string>>(new Set());
 
@@ -267,7 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末への保存に失敗しました。空き容量とブラウザ設定を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
     }, 200);
     return () => clearTimeout(timer);
   }, [restored, events, activeId, profile, reservations, envelope, dismissed]);
@@ -512,6 +526,77 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [restored, session?.calendarConnected, event, availability, busy, extractAvailability]);
 
+  const revisePlanFn = useCallback(
+    async (instruction: string) => {
+      if (!envelope) return;
+      setChat((c) => [...c, { role: "user", text: instruction }]);
+      const r = await run("revising", () => api<PlanResponse>("/api/agent/revise", { envelope, instruction }));
+      if (r) {
+        applyPlan(r);
+        setChat((c) => [...c, { role: "agent", text: `修正しました（改訂 ${r.envelope.plan.revision}）。${r.envelope.plan.summary}` }]);
+      } else {
+        setChat((c) => [...c, { role: "system", text: "修正に失敗しました。もう一度お試しください。" }]);
+      }
+    },
+    [envelope, run, applyPlan],
+  );
+
+  // カレンダーに後から入った予定とプラン・予約が重なっていないか、開いたとき・10 分ごと・画面に戻ったときに確かめる
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+  const connected = Boolean(session?.calendarConnected);
+  const conflictTargets = useMemo(() => {
+    const list: (Conflict & { end: string; until?: string })[] = [];
+    if (envelope) {
+      for (const i of envelope.plan.items) {
+        if (i.kind !== "event") list.push({ id: `plan:${i.id}`, title: i.title, start: i.start, end: i.end, source: "plan", until: envelope.expiresAt });
+      }
+    }
+    for (const r of reservations) {
+      if (r.status !== "cancelled" && !list.some((x) => x.id === `plan:${r.id.split(":").pop()}`)) {
+        list.push({ id: `res:${r.id}`, title: r.title, start: r.start, end: r.end, source: "reservation" });
+      }
+    }
+    return list;
+  }, [envelope, reservations]);
+  useEffect(() => {
+    if (!restored || !connected || conflictTargets.length === 0) {
+      const t = setTimeout(() => setConflicts([]), 0);
+      return () => clearTimeout(t);
+    }
+    let alive = true;
+    const check = async () => {
+      if (busyRef.current !== null) return;
+      const now = Date.now();
+      // これから先の項目だけ（期限切れのプランは見直せないため、予約だけを対象にする）
+      const targets = conflictTargets.filter((x) => Date.parse(x.start) > now && (!x.until || Date.parse(x.until) > now)).slice(0, 20);
+      if (targets.length === 0) {
+        if (alive) setConflicts([]);
+        return;
+      }
+      try {
+        const r = await api<{ checked: boolean; conflicts: string[] }>("/api/plan/conflicts", {
+          items: targets.map((x) => ({ id: x.id, start: x.start, end: x.end })),
+        });
+        if (alive) setConflicts(targets.filter((x) => r.conflicts.includes(x.id)).map(({ id, title, start, source }) => ({ id, title, start, source })));
+      } catch {
+        /* 確認できなかったときは前回の結果のまま */
+      }
+    };
+    const first = setTimeout(() => void check(), 1500);
+    const timer = setInterval(() => void check(), 10 * 60_000);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [restored, connected, conflictTargets]);
+
   const store: Store = useMemo(
     () => ({
       session,
@@ -662,15 +747,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshSession,
       extractAvailability,
       generatePlan: generatePlanFn,
-      revisePlan: async (instruction) => {
-        if (!envelope) return;
-        setChat((c) => [...c, { role: "user", text: instruction }]);
-        const r = await run("revising", () => api<PlanResponse>("/api/agent/revise", { envelope, instruction }));
-        if (r) {
-          applyPlan(r);
-          setChat((c) => [...c, { role: "agent", text: `修正しました（改訂 ${r.envelope.plan.revision}）。${r.envelope.plan.summary}` }]);
-        } else {
-          setChat((c) => [...c, { role: "system", text: "修正に失敗しました。もう一度お試しください。" }]);
+      revisePlan: revisePlanFn,
+      conflicts,
+      replanForConflicts: async () => {
+        if (conflicts.length === 0) return;
+        const list = conflicts.map((c) => `${c.title}（${formatJstShort(c.start)}）`).join("、");
+        // 見直せるプランがあれば修正、期限切れ・予約済みなら今のカレンダーで新しく作り直す
+        if (envelope && ["pending_approval", "approved", "rejected"].includes(envelope.status) && Date.parse(envelope.expiresAt) > Date.now()) {
+          await revisePlanFn(`カレンダーに新しい予定が入り、次の項目と時間が重なりました：${list}。重ならない時間に組み直してください。`);
+        } else if (event) {
+          const ok = await generatePlanFn(event);
+          if (ok) setNotice("今のカレンダーで準備プランを作り直しました。予約済みのものは予約の管理で見直してください");
         }
       },
       approve: async (itemIds) => {
@@ -760,7 +847,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

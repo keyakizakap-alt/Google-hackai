@@ -93,17 +93,18 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       return { ...it, provider: { ...it.provider, bookingUrl: fallback } };
     });
   if (replacedLinks > 0) {
-    trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全が確認できないリンク ${replacedLinks} 件を公式の検索ページに差し替えました` });
+    trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か確かめられないリンク ${replacedLinks} 件を、公式の検索ページに置き換えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
   if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
-  if (!items.some((i) => i.kind === "transit")) warnings.push("実際の移動経路と所要時間は確認できていません。交通機関の検索サイトで確認してください。");
+  if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
   if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");
 
   const plan: Plan = {
     id: input.previous?.id ?? randomId(8),
     event: input.event,
     summary: ctx.submitted.summary,
+    decisions: ctx.submitted.decisions.slice(0, 6),
     items,
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? config.gemini.model : "rules-v1" },
@@ -134,7 +135,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     name: "plan",
     ok: true,
     latencyMs: 0,
-    summary: `AI が調べものを開始しました（乗換案内: ${ekispert ? "連携中" : "目安で計算"}）`,
+    summary: `AI が調べものを始めました（乗り換えは${ekispert ? "乗り換え案内で調べます" : "目安で計算します"}）`,
   });
 
   const contents: Content[] = [

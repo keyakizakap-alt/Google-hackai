@@ -8,7 +8,7 @@ import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
 import { estimateCrowd } from "../services/transit";
 import { jstAt, MS_DAY } from "../time";
 import { validateTimeline } from "./validate";
-import { BEAUTY_SERVICES, TimelineItemSchema, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
+import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
 
 /** 1 リクエスト分のエージェント実行コンテキスト（メモリ上のみ・リクエスト終了で破棄） */
 export interface AgentContext {
@@ -16,7 +16,7 @@ export interface AgentContext {
   busy: readonly BusyBlock[];
   skin?: SkinAnalysis;
   now: number;
-  submitted?: { summary: string; items: TimelineItem[]; warnings: string[] };
+  submitted?: { summary: string; items: TimelineItem[]; warnings: string[]; decisions: Decision[] };
   rejectedSubmissions: number;
   ekispertSucceeded?: boolean;
 }
@@ -97,6 +97,21 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
       type: "object",
       properties: {
         summary: { type: "string", description: "プラン全体の要約（日本語・200字以内）" },
+        decisions: {
+          type: "array",
+          maxItems: 5,
+          description: "主な判断の記録。ユーザーに根拠として表示する（例: ヘアカットの日時、現地到着時刻）",
+          items: {
+            type: "object",
+            properties: {
+              topic: { type: "string", description: "何を決めたか（例: ヘアカットの日時）" },
+              chosen: { type: "string", description: "選んだもの（例: 10/27(火) 11:00）" },
+              alternatives: { type: "array", maxItems: 3, items: { type: "string" }, description: "比べたが選ばなかった候補" },
+              reason: { type: "string", description: "選んだ理由（ツールで確かめた事実にもとづく）" },
+            },
+            required: ["topic", "chosen", "reason"],
+          },
+        },
         warnings: { type: "array", items: { type: "string" }, description: "ユーザーに伝えるべき注意点" },
         items: {
           type: "array",
@@ -163,6 +178,7 @@ export const NATIVE_TOOL_NAMES = new Set(NATIVE_DECLARATIONS.map((d) => d.name!)
 
 const SubmitSchema = z.object({
   summary: z.string().max(400),
+  decisions: z.array(DecisionSchema).max(6).default([]),
   warnings: z.array(z.string().max(200)).max(10).default([]),
   items: z.array(TimelineItemSchema).min(1).max(20),
 });
@@ -227,14 +243,14 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
     }
     case "search_transit_route_mock": {
-      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "経路データを取得できませんでした。時刻は作らず検索をご案内します" };
+      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "乗り換えの情報を調べられなかったため、時刻は決めずに調べ方をご案内します" };
     }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
-        return { ok: false, response: { accepted: false, errors: issues }, summary: `内容に不備があったため作り直します（${issues.length}件）` };
+        return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
       if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
@@ -245,10 +261,10 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return {
           ok: false,
           response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください" },
-          summary: `予定の重なりなどが見つかったため作り直します（${errors.length}件）`,
+          summary: `予定の重なりなどが見つかったので作り直します（${errors.length}件）`,
         };
       }
-      ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings] };
+      ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings], decisions: parsed.data.decisions };
       return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `スケジュール ${parsed.data.items.length} 件が完成しました` };
     }
     default:

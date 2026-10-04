@@ -10,6 +10,7 @@ import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
 import { RemindersCard } from "@/components/Reminders";
+import { ConflictBanner } from "@/components/AgentInsights";
 import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
@@ -245,7 +246,7 @@ function CalendarCard() {
         {event ? (
           <MiniCalendar availability={connected ? availability : null} eventDate={event.startAt} scanning={scanning} />
         ) : (
-          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録するとヒートマップが表示されます</div>
+          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録すると、空き時間のカレンダーが表示されます</div>
         )}
       </div>
 
@@ -354,6 +355,7 @@ export default function Home() {
     <div className="space-y-6">
       <Greeting />
       <EventSwitcher />
+      <ConflictBanner />
       <Hero />
       <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
         <CalendarCard />

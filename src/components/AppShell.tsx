@@ -117,9 +117,9 @@ function BusyIndicator() {
   if (!busy) return null;
   const text =
     aiReady && busy === "planning"
-      ? "AI エージェントが調べながらプランを作っています…"
+      ? "AI が調べながらプランを作っています…"
       : aiReady && busy === "revising"
-        ? "AI エージェントがプランを見直しています…"
+        ? "AI がプランを見直しています…"
         : BUSY_LABEL[busy];
   return (
     <div role="status" aria-live="polite" className="pop-in pointer-events-none fixed left-1/2 top-[4.5rem] z-50 lg:top-12 flex -translate-x-1/2 items-center gap-2 rounded-full bg-night/95 px-4 py-2 text-xs font-bold text-white shadow-float backdrop-blur">

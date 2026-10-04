@@ -1,7 +1,7 @@
 import "server-only";
 import { hmac, verifyHmac } from "../crypto";
 import { GuardrailError } from "./stateMachine";
-import { PlanEnvelopeSchema, type PlanEnvelope } from "./types";
+import { PlanEnvelopeSchema, PlanSchema, type PlanEnvelope } from "./types";
 
 const TTL_MS = 2 * 60 * 60 * 1000; // 2 時間で失効（古い提案で予約させない）
 
@@ -19,7 +19,8 @@ function canonical(env: Omit<PlanEnvelope, "sig">): string {
 }
 
 export function signEnvelope(env: Unsigned, now = Date.now()): PlanEnvelope {
-  const body = { ...env, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + TTL_MS).toISOString() };
+  // 検証側（スキーマで読み直した形）と同じ項目の並び・既定値にそろえてから署名する
+  const body = { ...env, plan: PlanSchema.parse(env.plan), issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + TTL_MS).toISOString() };
   return { ...body, sig: hmac(canonical(body), "plan") };
 }
 

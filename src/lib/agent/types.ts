@@ -76,12 +76,23 @@ export const TimelineItemSchema = z.object({
 });
 export type TimelineItem = z.infer<typeof TimelineItemSchema>;
 
+/** エージェントの判断の記録（何と何を比べて、なぜそれを選んだか）。画面で根拠として見せる */
+export const DecisionSchema = z.object({
+  topic: z.string().max(40),
+  chosen: z.string().max(80),
+  alternatives: z.array(z.string().max(60)).max(3).default([]),
+  reason: z.string().max(200),
+});
+export type Decision = z.infer<typeof DecisionSchema>;
+
 export const PlanSchema = z.object({
   id: z.string().max(40),
   event: OshiEventSchema,
   summary: z.string().max(400),
   items: z.array(TimelineItemSchema).min(1).max(20),
   warnings: z.array(z.string().max(200)).max(10),
+  /** 省略可（以前に作ったプランの署名を壊さないため） */
+  decisions: z.array(DecisionSchema).max(6).optional(),
   generatedBy: z.object({ engine: z.enum(["gemini", "rule-based"]), model: z.string().max(60) }),
   revision: z.number().int().min(0).max(50),
   createdAt: isoDate,

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
+import { ConflictBanner, DecisionsCard } from "@/components/AgentInsights";
 import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
@@ -27,7 +28,7 @@ const HISTORY_LABEL: Record<string, string> = {
   booking: "予約を実行",
   booked: "予約完了",
 };
-const FLOW_LABEL = ["AIが提案", "あなたが確認", "承認", "予約"];
+const FLOW_LABEL = ["提案", "あなたが確認", "承認", "予約"];
 
 function StatusStepper({ status }: { status: string }) {
   const idx = status === "revising" ? 0 : status === "rejected" ? 1 : status === "booking" ? 3 : FLOW.indexOf(status as (typeof FLOW)[number]);
@@ -199,7 +200,7 @@ function TracePanel() {
     <section aria-labelledby="trace" className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Activity className="h-4 w-4 text-lav-600" />
-        <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI エージェントが調べたこと" : "確認したこと"}</h2>
+        <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI が調べたこと" : "確認したこと"}</h2>
         <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
       <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
@@ -244,7 +245,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
         <p className="flex items-center gap-1.5 font-semibold text-ink">
           <Lock className="h-3.5 w-3.5" /> あなたが承認して「予約する」を押すまで、予約は一切行われません。
         </p>
-        <p className="mt-1">AI エージェントは提案するだけで、勝手に予約・キャンセル・決済をすることはありません。</p>
+        <p className="mt-1">AI は提案するだけで、勝手に予約・キャンセル・支払いをすることはありません。</p>
         {inApp && demo && <p className="mt-1 font-semibold text-rose-500">いまはデモ予約です。予約番号は発行されますが、実在の店舗・交通機関・宿には届きません。</p>}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -353,7 +354,7 @@ function EmptyPlan() {
             <span className="block text-base font-medium text-white/70">{event ? "に向けたプランを逆算します" : "先にイベントを登録してください"}</span>
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/65">
-            空き時間・美容のベストなタイミング・混雑を避けたルートを{aiReady ? " AI が調べて" : "ルールにもとづいて"}、スケジュールを提案します。予約はあなたが確認してからです。
+            空き時間・美容のベストなタイミング・混雑を避けたルートを{aiReady ? " AI が調べて" : "決まった目安にそって"}、スケジュールを提案します。予約はあなたが確認してからです。
             {!availability && "（空き時間はプラン作成時に自動で確認します）"}
           </p>
           {planError && !planning && event && (
@@ -408,12 +409,14 @@ export default function PlanPage() {
           <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
-            {plan.generatedBy.engine === "gemini" ? "AI エージェント（Gemini）が作成" : "かんたんモード（ルール）で作成"}
+            {plan.generatedBy.engine === "gemini" ? "AI が作成" : "かんたん提案で作成"}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
         <StatusStepper status={status} />
       </div>
+
+      <ConflictBanner />
 
       {isPending && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
@@ -439,6 +442,8 @@ export default function PlanPage() {
               </ul>
             )}
           </section>
+
+          <DecisionsCard decisions={plan.decisions} agentic={plan.generatedBy.engine === "gemini"} />
 
           <section className="card p-4 sm:p-6" aria-label="タイムライン">
             <ol className="relative space-y-4">
