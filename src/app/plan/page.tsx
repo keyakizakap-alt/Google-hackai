@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
+import { ConflictBanner, DecisionsCard } from "@/components/AgentInsights";
 import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
@@ -415,6 +416,8 @@ export default function PlanPage() {
         <StatusStepper status={status} />
       </div>
 
+      <ConflictBanner />
+
       {isPending && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
           <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-rose-400" />
@@ -439,6 +442,8 @@ export default function PlanPage() {
               </ul>
             )}
           </section>
+
+          <DecisionsCard decisions={plan.decisions} agentic={plan.generatedBy.engine === "gemini"} />
 
           <section className="card p-4 sm:p-6" aria-label="タイムライン">
             <ol className="relative space-y-4">

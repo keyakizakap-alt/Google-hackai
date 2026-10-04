@@ -104,6 +104,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     id: input.previous?.id ?? randomId(8),
     event: input.event,
     summary: ctx.submitted.summary,
+    decisions: ctx.submitted.decisions.slice(0, 6),
     items,
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? config.gemini.model : "rules-v1" },

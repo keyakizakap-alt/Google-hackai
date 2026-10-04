@@ -89,3 +89,20 @@ describe("デモのカレンダー（sample）", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("プランと新しい予定の重なり", () => {
+  it("重なった項目だけを返し、プラン自身・終日の予定は数えない", async () => {
+    const { findConflicts } = await import("@/lib/agent/conflicts");
+    const items = [
+      { id: "a", start: "2030-10-28T10:00:00+09:00", end: "2030-10-28T11:00:00+09:00" },
+      { id: "b", start: "2030-10-29T10:00:00+09:00", end: "2030-10-29T11:00:00+09:00" },
+      { id: "c", start: "2030-10-30T10:00:00+09:00", end: "2030-10-30T11:00:00+09:00" },
+    ];
+    const busy = [
+      { start: "2030-10-28T10:30:00+09:00", end: "2030-10-28T12:00:00+09:00", allDay: false, label: "予定あり" as const },
+      { start: "2030-10-29T10:00:00+09:00", end: "2030-10-29T11:00:00+09:00", allDay: false, label: "予定あり" as const },
+      { start: "2030-10-30T00:00:00+09:00", end: "2030-10-31T00:00:00+09:00", allDay: true, label: "予定あり" as const },
+    ];
+    expect(findConflicts(items, busy)).toEqual(["a"]);
+  });
+});

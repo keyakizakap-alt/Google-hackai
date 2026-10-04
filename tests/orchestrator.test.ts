@@ -64,13 +64,14 @@ describe("runPlanningAgent (Gemini loop)", () => {
     scripted.push(
       { calls: [{ name: "get_free_time_slots", args: { from_date: day, to_date: day } }, { name: "book_salon_now", args: {} }] },
       { calls: [{ name: "submit_timeline", args: { summary: "s", items: [transit("17:50")] } }] }, // 開演 10 分前着 → 差し戻し
-      { calls: [{ name: "submit_timeline", args: { summary: "ok", items: [transit("15:00")] } }] },
+      { calls: [{ name: "submit_timeline", args: { summary: "ok", items: [transit("15:00")], decisions: [{ topic: "出発時刻", chosen: "10:00", alternatives: ["12:00"], reason: "混雑前に着くため" }] } }] },
     );
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
     const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "t" });
 
     expect(out.engine).toBe("gemini");
     expect(out.plan.summary).toBe("ok");
+    expect(out.plan.decisions).toEqual([{ topic: "出発時刻", chosen: "10:00", alternatives: ["12:00"], reason: "混雑前に着くため" }]);
     expect(out.usage.totalTokens).toBe(360);
     const names = out.trace.map((t) => `${t.name}:${t.ok}`);
     expect(names).toContain("book_salon_now:false"); // 許可リスト外は拒否

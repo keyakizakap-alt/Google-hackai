@@ -27,6 +27,18 @@ describe("planning tools + validation", () => {
     expect(validateTimeline(ctx.submitted!.items, event, ctx.busy, now).errors).toEqual([]);
   });
 
+  it("rule-based planner records why it chose each time (decisions)", async () => {
+    const now = Date.now();
+    const ctx: AgentContext = { event, busy: demoBusyBlocks(now, now + 25 * MS_DAY), now, rejectedSubmissions: 0 };
+    await runRuleBasedPlanner(ctx, []);
+    const topics = ctx.submitted!.decisions.map((d) => d.topic);
+    expect(topics).toEqual(expect.arrayContaining(["眉毛サロンの日時", "現地に着く時刻"]));
+    for (const d of ctx.submitted!.decisions) {
+      expect(d.reason.length).toBeGreaterThan(5);
+      expect(d.alternatives.length).toBeGreaterThan(0);
+    }
+  });
+
   it("submit_timeline rejects items overlapping calendar busy blocks", async () => {
     const now = Date.now();
     const busy = [{ start: "2099-01-01T00:00:00+09:00", end: "2099-01-01T01:00:00+09:00", allDay: false, label: "予定あり" as const }];
