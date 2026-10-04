@@ -70,8 +70,8 @@ export default function SettingsPage() {
           <Row
             icon={<Bot className="h-5 w-5" />}
             title="AI プランナー"
-            status={session?.gemini.configured ? "利用中" : "かんたんモード"}
-            desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えない場合はルールによる提案に切り替わります。"
+            status={session?.gemini.configured ? "利用中" : "かんたん提案"}
+            desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えないときは、美容や移動の一般的な目安にそって提案します。"
           />
           <Row
             icon={<ShieldCheck className="h-5 w-5" />}
@@ -79,15 +79,15 @@ export default function SettingsPage() {
             status={session?.booking?.inApp ? (session.booking.demo ? "デモ予約" : "利用中") : "予約サイトへ案内"}
             desc={
               session?.booking?.inApp
-                ? `プランを承認して「予約する」を押したものだけ、アプリ内で予約し、予約の管理からキャンセルできます。AI エージェントが勝手に予約・キャンセルすることはありません。${session.booking.demo ? "いまはデモ予約のため、予約番号は発行されますが実在の店舗・交通機関・宿には届きません。" : ""}`
+                ? `プランを承認して「予約する」を押したものだけ、アプリ内で予約し、予約の管理からキャンセルできます。AI が勝手に予約・キャンセルすることはありません。${session.booking.demo ? "いまはデモ予約のため、予約番号は発行されますが実在の店舗・交通機関・宿には届きません。" : ""}`
                 : "予約は各予約サイトで行い、アプリでは手続きの状況を管理します。"
             }
           />
           <Row
             icon={<TrainFront className="h-5 w-5" />}
             title="乗換案内（駅すぱあと）"
-            status={session?.ekispert.mode === "mcp" ? "接続設定済み" : "未連携"}
-            desc="経路データを取得できたときだけ時刻・乗り換え・運賃を表示します。取得できないときは検索サイトをご案内します。"
+            status={session?.ekispert.mode === "mcp" ? "利用中" : "未連携"}
+            desc="乗り換えの情報を調べられたときだけ、時刻・乗り換え・運賃を表示します。調べられないときは乗り換え案内のサイトをご案内します。"
           />
         </ul>
       </section>
@@ -105,7 +105,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              イベントが登録されると、AI エージェントが空き時間・美容のタイミング・混雑と移動を自分で調べて、準備プランを自動で作ります。予約はあなたが確認して承認するまで進みません。
+              イベントが登録されると、AI が空き時間・美容のタイミング・混雑と移動を自分で調べて、準備プランを自動で作ります。予約はあなたが確認して承認するまで進みません。
             </p>
           </div>
           <button
@@ -129,7 +129,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="img-save" className="font-bold text-ink">推し画像をこの端末に保存する</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              オンにすると、推し画像をこのブラウザの中だけに保存し、次に開いたときも表示します。サーバーには送信しません。
+              オンにすると、推し画像をこの端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
               共用のパソコンではオフにするか、使い終わったら削除してください。
             </p>
           </div>
@@ -164,11 +164,11 @@ export default function SettingsPage() {
           <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末のブラウザに保存します。Google カレンダーの予定や顔写真は保存しません。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI エージェントが勝手に予約・キャンセル・支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中だけで作ります。予定をサーバーに保存したり送ったりしません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末に保存します。Google カレンダーの予定や顔写真は保存しません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約・キャンセル・支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中だけで作ります。予定を端末の外に送ったり保存したりしません。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携情報は暗号化してこのブラウザにだけ保存し、24 時間で自動的に切れます。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携は、鍵をかけてこの端末にだけ記録し、24 時間で自動的に切れます。</li>
         </ul>
         <button type="button" onClick={() => {
           if (window.confirm("この端末に保存した公演・プラン・予約メモを削除しますか？")) void clearLocalData();

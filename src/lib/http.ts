@@ -71,7 +71,7 @@ export function rateLimit(req: Request, key: string, limit: number, windowMs = 6
     return null;
   }
   b.count++;
-  if (b.count > limit) return NextResponse.json({ error: "リクエストが多すぎます。少し待ってから再度お試しください。" }, { status: 429 });
+  if (b.count > limit) return NextResponse.json({ error: "操作が続いたため、少しお休みしています。1 分ほど待ってからもう一度お試しください。" }, { status: 429 });
   return null;
 }
 
@@ -88,7 +88,7 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
     // 秘密の値そのものは出さず、どの設定が足りないかだけを伝える
     logger.error("config.missing", { ...meta, errorCode: e.setting });
     return NextResponse.json(
-      { error: `アプリのサーバー設定が不足しています（${e.setting}）。管理者の方は Cloud Run の設定を確認してください。`, code: "CONFIG_MISSING", requestId: meta.requestId },
+      { error: "アプリの準備がまだ整っていないため、プランを作れませんでした。しばらくしてからもう一度お試しください。（管理者の方へ：初期設定が足りていません）", code: "CONFIG_MISSING", requestId: meta.requestId },
       { status: 503 },
     );
   }

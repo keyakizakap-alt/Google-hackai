@@ -83,7 +83,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     start: toJstIso(checkAt),
     end: toJstIso(checkAt + MS_MIN),
     provider: { name: "駅すぱあとで経路を検索", bookingUrl: EKISPERT_ROUTE_URL },
-    rationale: `経路データを取得できていません。${formatJst(toJstIso(arriveBy))} 頃の現地到着を目安に、実際の列車・所要時間・運賃を確認してください。`,
+    rationale: `乗り換えの情報はまだ調べられていません。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くことを目安に、乗る電車・かかる時間・運賃を確かめてください。`,
     requiresBooking: true,
   });
 
@@ -113,9 +113,9 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     requiresBooking: false,
   });
   await call("submit_timeline", {
-    summary: `${event.title} に向けて、美容 ${items.filter((i) => i.kind === "beauty").length} 件の候補日時を選びました。移動と宿泊の要否は経路検索で確認してください。`,
+    summary: `${event.title} に向けて、美容 ${items.filter((i) => i.kind === "beauty").length} 件の候補日時を選びました。移動のしかたと、泊まりが必要かどうかは乗り換え案内で確かめてください。`,
     items,
-    warnings: ["実際のサロン空席・料金と移動経路は未取得です。予約前に確認してください。"],
+    warnings: ["サロンの空きや料金、移動のしかたはまだ確認できていません。予約の前に確かめてください。"],
     decisions,
   });
 }

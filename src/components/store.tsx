@@ -281,7 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末への保存に失敗しました。空き容量とブラウザ設定を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
     }, 200);
     return () => clearTimeout(timer);
   }, [restored, events, activeId, profile, reservations, envelope, dismissed]);

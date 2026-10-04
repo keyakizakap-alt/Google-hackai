@@ -243,14 +243,14 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
     }
     case "search_transit_route_mock": {
-      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "経路データを取得できませんでした。時刻は作らず検索をご案内します" };
+      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "乗り換えの情報を調べられなかったため、時刻は決めずに調べ方をご案内します" };
     }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
-        return { ok: false, response: { accepted: false, errors: issues }, summary: `内容に不備があったため作り直します（${issues.length}件）` };
+        return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
       if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
@@ -261,7 +261,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return {
           ok: false,
           response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください" },
-          summary: `予定の重なりなどが見つかったため作り直します（${errors.length}件）`,
+          summary: `予定の重なりなどが見つかったので作り直します（${errors.length}件）`,
         };
       }
       ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings], decisions: parsed.data.decisions };

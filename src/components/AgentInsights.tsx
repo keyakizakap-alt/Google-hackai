@@ -16,7 +16,7 @@ export function DecisionsCard({ decisions, agentic }: { decisions?: Decision[]; 
     <section className="card p-5" aria-labelledby="decisions">
       <h2 id="decisions" className="flex items-center gap-2 text-[15px] font-bold text-ink">
         <GitCompareArrows className="h-5 w-5 text-lav-600" />
-        {agentic ? "エージェントの判断" : "判断の根拠"}
+        {agentic ? "AI が選んだ理由" : "選んだ理由"}
       </h2>
       <p className="mt-1 text-xs text-mute">比べた候補と、選んだ理由です。気になるところは「AIに相談して直す」から伝えられます。</p>
       <ol className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -78,7 +78,7 @@ export function ConflictBanner() {
           className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-xs font-bold text-white"
         >
           {working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {aiReady ? "エージェントに組み直してもらう" : "重ならないように組み直す"}
+          {aiReady ? "AI に組み直してもらう" : "重ならないように組み直す"}
         </button>
       </div>
     </section>

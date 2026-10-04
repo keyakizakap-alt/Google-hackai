@@ -74,13 +74,14 @@ describe("redirectBase (Cloud Run では req.url が 0.0.0.0 になる)", () => 
 });
 
 describe("errorResponse（設定不足）", () => {
-  it("SESSION_SECRET が無いときは値を出さずに、どの設定が足りないかを 503 で返す", async () => {
+  it("SESSION_SECRET が無いときは 503 で返し、利用者には設定名などの技術的な言葉を見せない", async () => {
     const { errorResponse } = await import("@/lib/http");
     const { ConfigError } = await import("@/lib/config");
     const res = errorResponse(new ConfigError("SESSION_SECRET"), { requestId: "r", route: "t" });
     expect(res.status).toBe(503);
     const body = (await res.json()) as { error: string; code: string };
     expect(body.code).toBe("CONFIG_MISSING");
-    expect(body.error).toContain("SESSION_SECRET");
+    expect(body.error).not.toContain("SESSION_SECRET");
+    expect(body.error).toContain("準備がまだ整っていない");
   });
 });

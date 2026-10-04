@@ -246,7 +246,7 @@ function CalendarCard() {
         {event ? (
           <MiniCalendar availability={connected ? availability : null} eventDate={event.startAt} scanning={scanning} />
         ) : (
-          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録するとヒートマップが表示されます</div>
+          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録すると、空き時間のカレンダーが表示されます</div>
         )}
       </div>
 

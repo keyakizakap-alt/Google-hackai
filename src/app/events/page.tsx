@@ -240,7 +240,7 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => {
-                if (save()) notify(autoPlan ? "保存しました。AI エージェントが準備プランを作り始めます" : "保存しました");
+                if (save()) notify(autoPlan ? "保存しました。AI が準備プランを作り始めます" : "保存しました");
               }}
               className="rounded-xl border border-line px-6 py-3 text-sm font-semibold text-ink-soft hover:bg-lav-50"
             >
@@ -258,13 +258,13 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
               className="btn-primary flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
               {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {aiReady ? "保存して AI エージェントに任せる" : "保存してプランを作る"}
+              {aiReady ? "保存して AI に任せる" : "保存してプランを作る"}
             </button>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-mute">
             {autoPlan
-              ? "どちらのボタンでも、保存すると AI エージェントが空き時間・美容・移動を自分で調べて準備プランを作ります。予約はあなたが承認するまで進みません。"
-              : "自動作成はオフです。「保存して AI エージェントに任せる」を押すとプランを作ります（設定で自動作成をオンにできます）。"}
+              ? "どちらのボタンでも、保存すると AI が空き時間・美容・移動を自分で調べて準備プランを作ります。予約はあなたが承認するまで進みません。"
+              : "自動作成はオフです。「保存して AI に任せる」を押すとプランを作ります（設定で自動作成をオンにできます）。"}
           </p>
 
       </section>
@@ -296,7 +296,7 @@ export default function EventsPage() {
             <h2 className="text-[15px] font-bold text-ink">推し画像</h2>
             <p className="mt-1 text-xs text-mute">
               {event ? `${event.artist} ` : "選択中のアーティスト"}の推し画像として、同じアーティストのイベントすべてに表示されます。
-              画像はサーバーに送信しません。{persistImages ? "このブラウザに保存されるので、次に開いたときも表示されます。" : "設定で「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
+              画像はこの端末の外には送りません。{persistImages ? "この端末に保存されるので、次に開いたときも表示されます。" : "設定で「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
             </p>
             <div className="relative mt-3 h-44 overflow-hidden rounded-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element */}

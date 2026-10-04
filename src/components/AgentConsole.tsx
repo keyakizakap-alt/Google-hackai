@@ -59,7 +59,7 @@ export function AgentConsole({ running, trace = [], compact = false, label, agen
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
-        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? (label ?? "AI エージェントが調べながら考えています…") : `${agentic ? "AI エージェントが調べたこと" : "確認したこと"}（${trace.length}件）`}</span>
+        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? (label ?? "AI が調べながら考えています…") : `${agentic ? "AI が調べたこと" : "確認したこと"}（${trace.length}件）`}</span>
         {running && <span className="pulse-ring relative ml-auto h-2 w-2 rounded-full bg-rose-400" />}
       </div>
       <ol className={`space-y-1.5 px-4 py-3 ${compact ? "max-h-44" : "max-h-80"} overflow-y-auto`}>
