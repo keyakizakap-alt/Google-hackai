@@ -15,7 +15,13 @@ const isBeautyService = (c?: string): c is BeautyService => !!c && (BEAUTY_SERVI
  * エージェントが提出したタイムラインを検証する（自己修正ループの判定器）。
  * errors があれば submit_timeline は差し戻され、Gemini が自律的に組み直す。
  */
-export function validateTimeline(items: readonly TimelineItem[], event: OshiEvent, busy: readonly BusyBlock[], now = Date.now()): ValidationResult {
+export function validateTimeline(
+  items: readonly TimelineItem[],
+  event: OshiEvent,
+  busy: readonly BusyBlock[],
+  now = Date.now(),
+  forecast?: { sky: string; needsRainGear: boolean },
+): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const eventStart = Date.parse(event.startAt);
@@ -37,6 +43,22 @@ export function validateTimeline(items: readonly TimelineItem[], event: OshiEven
         const [minD, maxD] = BEAUTY_GUIDELINES[it.category].idealDaysBefore;
         const d = jstDayDiff(event.startAt, it.start);
         if (d < minD || d > maxD) warnings.push(`${it.title} は推奨（${minD}〜${maxD}日前）から外れています（${d}日前）`);
+      }
+    }
+
+    if (it.kind === "spot") {
+      // 立ち寄りは公演の妨げにならないこと。遅れると入場に影響するのでエラー扱い
+      if (s < eventStart && (eventStart - e) / MS_MIN < 60) {
+        errors.push(`${it.id}: 立ち寄りが開演 60 分前より後まで続いています。開演前は余裕を持たせてください`);
+      }
+      if (overlapsBusy(busy, s, e, 15)) {
+        errors.push(`${it.id}: カレンダーの既存予定と重なっています`);
+      }
+      if (it.provider?.priceJpy !== undefined || it.provider?.slotId) {
+        errors.push(`${it.id}: 立ち寄り先の価格・予約枠は取得していません。案内だけにしてください`);
+      }
+      if (forecast?.needsRainGear && it.category === "photo") {
+        warnings.push(`${it.title} は雨・雪の予報です。屋内の候補に変えるか、濡れない経路を案内してください`);
       }
     }
 
@@ -66,6 +88,17 @@ export function validateTimeline(items: readonly TimelineItem[], event: OshiEven
   }
   if (!sorted.some((it) => it.kind === "transit" || (it.kind === "prep" && it.category === "transit-check"))) {
     errors.push("移動経路、または経路を確認する手順が含まれていません");
+  }
+
+  // 雨・雪の予報を調べたのにプランへ反映していない場合は作り直させる。
+  // ヘアセットは濡れると崩れるため、当日の屋外移動とセットで考える必要がある。
+  if (forecast?.needsRainGear) {
+    const mentionsRain = sorted.some(
+      (it) => /雨|雪|傘|濡れ|レイン/.test(it.title) || /雨|雪|傘|濡れ|レイン/.test(it.rationale ?? ""),
+    );
+    if (!mentionsRain) {
+      errors.push("公演日は雨・雪の予報です。持ち物や当日の動き方に、濡れ対策の項目か説明を入れてください");
+    }
   }
 
   return { errors, warnings };

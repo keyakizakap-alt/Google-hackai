@@ -4,6 +4,7 @@ import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
 import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
+import { venueArea } from "../eventDetection/venues";
 import { getEkispertDeclarations } from "../services/ekispert";
 import { hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
 import { toJstIso } from "../time";
@@ -55,7 +56,14 @@ function genai() {
  * - エージェントの出力は常に pending_approval としてユーザーに返す（呼び出し側で状態遷移を強制）
  */
 export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOutput> {
-  const ctx: AgentContext = { event: input.event, busy: input.busy, skin: input.skin, now: Date.now(), rejectedSubmissions: 0 };
+  const ctx: AgentContext = {
+    event: input.event,
+    busy: input.busy,
+    skin: input.skin,
+    now: Date.now(),
+    rejectedSubmissions: 0,
+    venueArea: venueArea(input.event.venue, input.event.venueStation),
+  };
   const trace: TraceStep[] = [];
   const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
   let engine: AgentRunOutput["engine"] = "rule-based";

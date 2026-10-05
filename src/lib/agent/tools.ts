@@ -5,7 +5,9 @@ import { extractFreeSlots, overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
 import { BEAUTY_GUIDELINES, searchSalonSlots } from "../services/beauty";
 import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
+import { searchSpots, SPOT_CATEGORIES, SPOT_CATEGORY_LABEL, type SpotCategory } from "../services/spots";
 import { estimateCrowd } from "../services/transit";
+import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
 import { jstAt, MS_DAY } from "../time";
 import { validateTimeline } from "./validate";
 import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
@@ -19,6 +21,10 @@ export interface AgentContext {
   submitted?: { summary: string; items: TimelineItem[]; warnings: string[]; decisions: Decision[] };
   rejectedSubmissions: number;
   ekispertSucceeded?: boolean;
+  /** 公演日の天気。エージェントが調べた場合だけ入り、検証にも使う */
+  forecast?: Forecast;
+  /** 会場のエリア（都道府県）。天気・立ち寄り先の検索キー */
+  venueArea?: string;
 }
 
 const ISO = { type: "string", description: "ISO 8601 日時（例: 2026-10-27T11:00:00+09:00）" } as const;
@@ -80,6 +86,30 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
     parametersJsonSchema: { type: "object", properties: { at: ISO }, required: ["at"] },
   },
   {
+    name: "get_weather_forecast",
+    description:
+      "公演日の天気（気象庁）を返す。雨・雪ならヘアセットの時間帯や持ち物、屋外での待機時間の判断に使う。公演が1週間以上先だと available=false になる。",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { date: DATE },
+      required: [],
+    },
+  },
+  {
+    name: "search_nearby_spots",
+    description:
+      "会場周辺で空き時間に立ち寄れる場所（ご当地グルメ・写真を撮れる場所・座って待てる場所）を探す。開演前や終演後にまとまった時間があるときだけ使う。営業時間は未取得なので、プランには確認を促す一文を添えること。",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        available_minutes: { type: "integer", description: "立ち寄りに使える時間（分）", minimum: 20, maximum: 480 },
+        category: { type: "string", enum: [...SPOT_CATEGORIES], description: "省略すると全種類" },
+        indoor_only: { type: "boolean", description: "雨・雪のときは true にする" },
+      },
+      required: ["available_minutes"],
+    },
+  },
+  {
     name: "search_transit_route_mock",
     description:
       "経路データが取得できないことを返す。具体的な列車・所要時間・運賃は生成しない。",
@@ -121,8 +151,8 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
             type: "object",
             properties: {
               id: { type: "string", description: "一意な ID（例: brow-1, transit-out）" },
-              kind: { type: "string", enum: ["beauty", "transit", "prep", "stay", "event"] },
-              category: { type: "string", description: "beauty の場合は brow/hair/nail/eyelash/skincare、それ以外は train/hotel/goods/selfcare など" },
+              kind: { type: "string", enum: ["beauty", "transit", "prep", "stay", "event", "spot"] },
+              category: { type: "string", description: "beauty の場合は brow/hair/nail/eyelash/skincare、spot の場合は gourmet/photo/rest、それ以外は train/hotel/goods/selfcare など" },
               title: { type: "string" },
               start: ISO,
               end: ISO,
@@ -242,6 +272,51 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       const r = estimateCrowd({ eventStart: ctx.event.startAt, at: str(args.at, 40) });
       return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
     }
+    case "get_weather_forecast": {
+      if (!ctx.venueArea) {
+        return { ok: true, response: { available: false, reason: "会場のエリアが特定できていません" }, summary: "会場のエリアが分からず、天気は調べられませんでした" };
+      }
+      const date = str(args.date, 10) || jstDateKey(ctx.event.startAt);
+      const f = await getForecast(ctx.venueArea, `${date}T12:00:00+09:00`, ctx.now);
+      if (!f) {
+        return {
+          ok: true,
+          response: { available: false, reason: "予報の範囲外（公演が先すぎる）か、取得できませんでした。天気は断定しないこと" },
+          summary: "公演日の天気はまだ分かりませんでした",
+        };
+      }
+      // 検証で使うため、提出前の文脈に残す
+      if (date === jstDateKey(ctx.event.startAt)) ctx.forecast = f;
+      const label = { clear: "晴れ", cloudy: "くもり", rain: "雨", snow: "雪" }[f.sky];
+      return {
+        ok: true,
+        response: { available: true, date: f.date, sky: f.sky, text: f.text, needsRainGear: f.needsRainGear, source: "気象庁" },
+        summary: `${f.date.slice(5).replace("-", "/")}の${ctx.venueArea}は${label}の予報です`,
+      };
+    }
+    case "search_nearby_spots": {
+      if (!ctx.venueArea) {
+        return { ok: true, response: { spots: [], reason: "会場のエリアが特定できていません" }, summary: "会場のエリアが分からず、立ち寄り先は探せませんでした" };
+      }
+      const category = str(args.category, 10);
+      const spots = searchSpots({
+        area: ctx.venueArea,
+        availableMinutes: num(args.available_minutes, 60),
+        category: (SPOT_CATEGORIES as readonly string[]).includes(category) ? (category as SpotCategory) : undefined,
+        // 雨・雪を調べ済みなら、明示されなくても屋内に寄せる
+        indoorOnly: args.indoor_only === true || ctx.forecast?.needsRainGear === true,
+      }).slice(0, 5);
+      return {
+        ok: true,
+        response: {
+          spots: spots.map((s) => ({ ...s, categoryLabel: SPOT_CATEGORY_LABEL[s.category] })),
+          note: "営業時間・定休日は未取得。立ち寄る前に確認するよう案内すること",
+        },
+        summary: spots.length
+          ? `${ctx.venueArea}で立ち寄れる場所を ${spots.length} 件見つけました`
+          : "その時間で立ち寄れる場所は見つかりませんでした",
+      };
+    }
     case "search_transit_route_mock": {
       return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "乗り換えの情報を調べられなかったため、時刻は決めずに調べ方をご案内します" };
     }
@@ -252,7 +327,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
         return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
-      const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now);
+      const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
       if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
         errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
       }
