@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
+import { fenceJson } from "../agent/fence";
 import { logger } from "../logger";
 import { extractByRules, type DetectedLiveEvent, type LiveCandidate } from "./detect";
 import { matchVenue } from "./venues";
@@ -58,7 +59,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
     const input = candidates.map(({ key, summary, location, startAt }) => ({ key, summary, location, startAt }));
     const res = await ai.models.generateContent({
       model: config.gemini.model,
-      contents: [{ role: "user", parts: [{ text: `<candidates>${JSON.stringify(input)}</candidates>` }] }],
+      contents: [{ role: "user", parts: [{ text: `<candidates>${fenceJson(input)}</candidates>` }] }],
       config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA },
     });
     const rows = (JSON.parse(res.text ?? "{}") as { events?: GeminiRow[] }).events ?? [];

@@ -12,6 +12,18 @@ export interface ValidationResult {
 const isBeautyService = (c?: string): c is BeautyService => !!c && (BEAUTY_SERVICES as readonly string[]).includes(c);
 
 /**
+ * 要約に「予約・決済を済ませた」と受け取れる書き方がないかを調べる。
+ * エージェントには予約・決済の手段がないので、そう書かれていれば事実ではない（指示に乗せられた可能性もある）。
+ */
+export const CLAIMS_EXECUTED = /(予約|決済|支払い?|購入)(を)?(しました|済ませました|完了しました|が完了|完了です)|(予約|決済)完了/;
+
+export function validateSummary(summary: string): string[] {
+  return CLAIMS_EXECUTED.test(summary)
+    ? ["summary に予約・決済を実行したような書き方があります。あなたは予約・決済をしていません。「提案」として書き直してください"]
+    : [];
+}
+
+/**
  * エージェントが提出したタイムラインを検証する（自己修正ループの判定器）。
  * errors があれば submit_timeline は差し戻され、Gemini が自律的に組み直す。
  */
