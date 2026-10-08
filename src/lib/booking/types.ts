@@ -15,8 +15,11 @@ export interface BookingProvider {
   demo: boolean;
   /** この項目を予約できるか */
   supports(item: TimelineItem): boolean;
-  /** 予約する。返す ref はキャンセル時にだけ使う（利用者には見せない） */
-  reserve(item: TimelineItem): Promise<{ confirmationNo: string; ref: string }>;
+  /**
+   * 予約する。返す ref はキャンセル時にだけ使う（利用者には見せない）。
+   * idempotencyKey は「同じ承認・同じ項目」で同じ値になる。実サービスの部品は予約 API の冪等キーに使い、二重予約を防ぐ
+   */
+  reserve(item: TimelineItem, opts?: { idempotencyKey: string }): Promise<{ confirmationNo: string; ref: string }>;
   /** キャンセルする */
   cancel(ref: string): Promise<void>;
 }

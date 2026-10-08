@@ -50,6 +50,14 @@ describe("アプリ内予約（デモ予約）", () => {
     expect(readCancelTicket(body.results[0].cancelTicket!)).toMatchObject({ provider: "demo", itemId: "b1", planId: "p1" });
   });
 
+  it("同じ承認で 2 回目の予約はできない（二重予約の防止）", async () => {
+    const envelope = signEnvelope({ plan: { ...plan, id: "p-once" }, status: "approved", approvedItemIds: ["b1"], history: approvedHistory });
+    expect((await book(req("/api/booking", { envelope, confirm: true }, "book"))).status).toBe(200);
+    const again = await book(req("/api/booking", { envelope, confirm: true }, "book"));
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: string }).error).toContain("すでに予約の手続き");
+  });
+
   it("あなたの承認がないプランは予約できない", async () => {
     const envelope = signEnvelope({ plan, status: "pending_approval", approvedItemIds: ["b1"], history: approvedHistory.slice(0, 3) });
     const res = await book(req("/api/booking", { envelope, confirm: true }, "book"));
