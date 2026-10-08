@@ -152,6 +152,8 @@ export interface WatchState {
 /** 見張りの対象にする状態 */
 const WATCH_STATUSES: readonly PlanEnvelope["status"][] = ["pending_approval", "approved", "booked"];
 const HANDLED_KEY = "oshiready.watch.handled";
+/** 自動でプランを作ったイベント（内容ごと）の記録 */
+const AUTO_TRIED_KEY = "oshiready.autoTried";
 
 interface Store {
   session: SessionInfo | null;
@@ -254,6 +256,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const planCache = useRef<Record<string, { envelope: PlanEnvelope; trace: TraceStep[]; usage: PlanResponse["usage"] | null; engine: PlanResponse["engine"] | null; chat: ChatMessage[] }>>({});
   /** 自動作成を試みたイベント（同じ内容で何度も AI を呼ばない） */
   const autoTried = useRef<Set<string>>(new Set());
+  // 自動作成は端末ごとに 1 回（開き直すたびに AI を呼ばない）。localStorage が使えなければこの画面の中だけ
+  useEffect(() => {
+    try {
+      for (const k of JSON.parse(localStorage.getItem(AUTO_TRIED_KEY) ?? "[]") as string[]) autoTried.current.add(k);
+    } catch {
+      /* 記録が読めなければ空のまま */
+    }
+  }, []);
   const event = events.find((e) => e.id === activeId) ?? events[0] ?? null;
   const eventsRef = useRef(events);
   useEffect(() => {
@@ -298,7 +308,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setReservations(saved.reservations ?? []);
         setDismissed(saved.dismissed ?? []);
         setWatched(saved.watched ?? null);
-        if (saved.envelope && Date.parse(saved.envelope.expiresAt) > Date.now()) setEnvelope(saved.envelope);
+        // 承認待ちのプランは期限（2 時間）が切れたら捨てる。承認・予約したプランは、期限が切れても表示だけは残す
+        // （予約には進めない。消えると、自動作成で AI が同じイベントのプランを作り直してしまう）
+        const env = saved.envelope;
+        if (env && (Date.parse(env.expiresAt) > Date.now() || env.status === "approved" || env.status === "booked")) setEnvelope(env);
       }
       setRestored(true);
     }).catch(() => { if (alive) setRestored(true); });
@@ -506,6 +519,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false;
       }
       autoTried.current.add(planSignature(target));
+      try {
+        localStorage.setItem(AUTO_TRIED_KEY, JSON.stringify([...autoTried.current].slice(-50)));
+      } catch {
+        /* 保存できない環境では、この画面の中だけの記録になる */
+      }
       setPlanError(null);
       setBusy("planning");
       if (!opts?.auto) setError(null);

@@ -117,6 +117,31 @@ describe("自動の見直し（system が始め、必ず承認待ちで止まる
     expect(out.envelope.history.map((h) => `${h.status}:${h.actor}`)).toEqual(["draft:system", "generating:system", "pending_approval:agent"]);
   });
 
+  it("期限切れの承認済みプランへの修正指示は、古い承認を引き継がず新しい承認待ちとして作り直す", async () => {
+    const { signEnvelope } = await import("@/lib/agent/envelope");
+    const { POST: revise } = await import("@/app/api/agent/revise/route");
+    const history = [
+      { status: "draft" as const, at: new Date(NOW).toISOString(), actor: "user" as const },
+      { status: "generating" as const, at: new Date(NOW).toISOString(), actor: "user" as const },
+      { status: "pending_approval" as const, at: new Date(NOW).toISOString(), actor: "agent" as const },
+      { status: "approved" as const, at: new Date(NOW).toISOString(), actor: "user" as const },
+    ];
+    const old = signEnvelope({ plan, status: "approved", approvedItemIds: ["b1"], history }, NOW - 3 * 3_600_000);
+    const res = await revise(
+      new Request("http://localhost:3000/api/agent/revise", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:3000", host: "localhost:3000" },
+        body: JSON.stringify({ envelope: old, instruction: "雨なので傘を入れて" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { envelope: { status: string; approvedItemIds: string[]; history: { status: string; actor: string }[]; plan: { revision: number } } };
+    expect(body.envelope.status).toBe("pending_approval");
+    expect(body.envelope.approvedItemIds).toEqual([]);
+    expect(body.envelope.history.map((h) => `${h.status}:${h.actor}`)).toEqual(["draft:user", "generating:user", "pending_approval:agent"]);
+    expect(body.envelope.plan.revision).toBe(3);
+  });
+
   it("期限切れの封筒は、参照（allowExpired）はできても状態を進める検証には通らない", async () => {
     const { signEnvelope, verifyEnvelope } = await import("@/lib/agent/envelope");
     const old = signEnvelope({ plan, status: "approved", approvedItemIds: ["b1"], history: [] }, NOW - 3 * 3_600_000);

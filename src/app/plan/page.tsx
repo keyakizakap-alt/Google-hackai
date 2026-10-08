@@ -13,6 +13,7 @@ import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
 import { STATUS_LABEL } from "@/components/PlanSummary";
+import { useNow } from "@/components/motion";
 import { useStore } from "@/components/store";
 import type { TimelineItem } from "@/lib/agent/types";
 import { formatJst, relativeDayLabel } from "@/lib/time";
@@ -225,6 +226,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
   const { envelope, busy, approve, reject, book, session } = useStore();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const now = useNow(30_000);
   const inApp = session?.booking?.inApp ?? false;
   const demo = session?.booking?.demo ?? false;
   if (!envelope) return null;
@@ -233,6 +235,7 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
   const priced = selectedItems.filter((i) => (i.provider?.priceJpy ?? i.route?.fareJpy) !== undefined);
   const total = priced.reduce((a, i) => a + (i.provider?.priceJpy ?? i.route?.fareJpy ?? 0), 0);
   const inAppCount = inApp ? selectedItems.filter(isInAppBookable).length : 0;
+  const expired = now !== null && Date.parse(envelope.expiresAt) < now;
   const guideCount = selectedItems.length - inAppCount;
 
   return (
@@ -273,7 +276,14 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
         </div>
       )}
 
-      {status === "approved" && (
+      {status === "approved" && expired && (
+        <p className="mt-4 rounded-xl border border-line bg-cloud px-3 py-2.5 text-xs leading-relaxed text-ink-soft" role="status">
+          承認から 2 時間が過ぎたため、このプランでは予約に進めません（古い提案のまま予約しないためです）。
+          「AIに相談して直す」で今の状況に合わせて作り直し、もう一度承認してください。
+        </p>
+      )}
+
+      {status === "approved" && !expired && (
         <div className="mt-4 grid gap-2">
           {!confirming ? (
             <button
