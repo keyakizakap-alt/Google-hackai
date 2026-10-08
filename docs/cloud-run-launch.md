@@ -5,13 +5,16 @@
 ## 1. Google Cloud アカウント側
 
 1. Google Cloud コンソールで Cloud Billing アカウントを作成・確認し、アカウント ID を控える。Cloud Shell の `gcloud billing accounts list` でも確認できる。
-2. Cloud Shell を開き、公開 PR の作業ブランチを取得する。
+2. Cloud Shell を開き、`main` ブランチを取得する（提出する版は `main`。古い作業ブランチを取得しない）。
 
 ```bash
-git clone --branch claude/oshiready-ai-schedule-j80qa7 https://github.com/keyakizakap-alt/Google-hackai.git
+git clone --branch main https://github.com/keyakizakap-alt/Google-hackai.git
 cd Google-hackai
 export OSHIREADY_PROJECT_ID='oshiready-unique-id'  # 全世界で一意な英小文字・数字・ハイフン
 export OSHIREADY_BILLING_ACCOUNT='XXXXXX-XXXXXX-XXXXXX'
+# 任意: モデル名と 1 日の AI 呼び出し上限（既定 gemini-3.5-flash / 25 回）
+# export OSHIREADY_GEMINI_MODEL='<公式ドキュメントで確認したモデル名>'
+# export OSHIREADY_AGENT_DAILY_LIMIT=25
 bash scripts/cloud-run-bootstrap.sh
 ```
 
@@ -22,7 +25,7 @@ bash scripts/cloud-run-bootstrap.sh
 - 手動で未来の公演、出発駅、希望する美容メニューを登録してプランを生成する。
 - 画面の生成方法が「Gemini」であり、ツールログと提案が表示されることを確認する。
 - AI 接続エラーの場合は 503 として表示される。Cloud Run ログで `agent.gemini.failed` のエラー種別を確認する。モデルの提供リージョンと利用権限を検証する。
-- 予約サイトへの案内は外部サイトでの手続きであり、アプリ自身は予約や決済をしない。
+- 予約は承認して「予約する」を押した項目だけ。既定はデモ予約（`BOOKING_PROVIDERS=demo`）で、実在の店舗には届かず、決済もしない。部品が対応しない項目は予約サイトへ案内する。
 
 ## 3. Google カレンダー OAuth
 

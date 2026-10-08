@@ -95,6 +95,7 @@ draft → generating → pending_approval ─┬→ approved ─→ booking → 
 ```
 
 - `approved` / `rejected` / `booking` に遷移できるのは `actor: "user"` だけ。エージェントとシステムには遷移させない
+- 封筒は 2 時間で失効する。承認・予約したプランは、期限が切れても画面に残すが予約には進めない（作り直すと新しい承認待ちになり、古い承認は引き継がない）。自動作成は端末ごとに 1 回で、開き直しても AI を呼び直さない
 - `approved` へは `pending_approval` からしか遷移できない。テストでは遷移グラフを探索し、承認を経由しない経路が存在しないことを確認している
 - **エージェントには予約・決済・カレンダー書き込みのツールを渡していない**。許可リストにないツール名は実行を拒否し、行動ログに記録する
 - 予約 API は、署名が正しいこと・期限内であること・`status === "approved"`・履歴に「ユーザーによる承認」があること・`confirm: true`・専用ヘッダー・同一オリジン、をすべて満たす場合だけ動く
@@ -170,7 +171,7 @@ EVAL_REPEATS=3 npm run eval
 
 ## Cloud Run へのデプロイ
 
-初回のプロジェクト作成、Billing、最小権限の実行アカウント、Secret Manager、Dockerfile を使う Cloud Run ソースデプロイは [初回公開手順](docs/cloud-run-launch.md) を参照。`scripts/cloud-run-bootstrap.sh` は Google Cloud Shell で実行する。スクリプトはまだ実プロジェクトで未検証。Google カレンダー OAuth はデプロイ後に設定する。
+提出までの手順は [提出チェックリスト](docs/submission-checklist.md) にまとめている。初回のプロジェクト作成、Billing、最小権限の実行アカウント、Secret Manager、Dockerfile を使う Cloud Run ソースデプロイは [初回公開手順](docs/cloud-run-launch.md) を参照。`scripts/cloud-run-bootstrap.sh` は Google Cloud Shell で実行する。スクリプトはまだ実プロジェクトで未検証。Google カレンダー OAuth はデプロイ後に設定する。
 
 ## 審査基準との対応
 
