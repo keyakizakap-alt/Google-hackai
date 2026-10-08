@@ -71,3 +71,14 @@ export function matchVenue(text: string): { name: string; station: string } | nu
   const hit = KEYS.find(({ key }) => t.includes(key));
   return hit ? { name: hit.v.name, station: hit.v.station } : null;
 }
+
+/**
+ * 会場名・最寄り駅からエリア（都道府県）を引く。
+ * 天気の予報区と立ち寄り先の検索キーに使う。見つからなければ undefined。
+ */
+export function venueArea(venue: string, station?: string): string | undefined {
+  const hit =
+    VENUES.find((v) => venue.includes(v.name) || v.aliases.some((a) => venue.includes(a))) ??
+    (station ? VENUES.find((v) => v.station === station) : undefined);
+  return hit?.area;
+}

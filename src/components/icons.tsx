@@ -1,4 +1,4 @@
-import { Eye, Heart, Hotel, Palette, Scissors, Sparkles, TrainFront } from "lucide-react";
+import { Camera, Coffee, Eye, Heart, Hotel, Palette, Scissors, Sparkles, TrainFront, Utensils } from "lucide-react";
 import type { TimelineItem } from "@/lib/agent/types";
 
 /** タイムライン項目の種別に対応するアイコン */
@@ -7,6 +7,11 @@ export function ItemIcon({ item, className = "h-5 w-5" }: { item: Pick<TimelineI
   if (item.kind === "transit") return <TrainFront {...p} />;
   if (item.kind === "stay") return <Hotel {...p} />;
   if (item.kind === "event") return <Heart {...p} />;
+  if (item.kind === "spot") {
+    if (item.category === "gourmet") return <Utensils {...p} />;
+    if (item.category === "photo") return <Camera {...p} />;
+    return <Coffee {...p} />;
+  }
   switch (item.category) {
     case "brow":
     case "eyelash":

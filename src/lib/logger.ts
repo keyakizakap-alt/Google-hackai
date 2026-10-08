@@ -38,6 +38,9 @@ const ALLOWED_FIELDS = new Set([
   "validationErrors",
   "scanned",
   "candidates",
+  "weather",
+  "cached",
+  "spotCount",
 ]);
 
 export type LogFields = Partial<Record<string, string | number | boolean | undefined>>;

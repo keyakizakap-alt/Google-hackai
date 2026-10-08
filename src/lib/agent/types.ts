@@ -47,7 +47,7 @@ export const RouteLegSchema = z.object({
 
 export const TimelineItemSchema = z.object({
   id: z.string().max(40),
-  kind: z.enum(["beauty", "transit", "prep", "stay", "event"]),
+  kind: z.enum(["beauty", "transit", "prep", "stay", "event", "spot"]),
   category: z.string().max(20).optional(),
   title: z.string().min(1).max(60),
   start: isoDate,
