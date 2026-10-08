@@ -7,6 +7,7 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 - **OshiReady**：ライブ（推し活）の日時から、美容院・ネイル・移動・宿泊の準備を逆算してプランを作る AI エージェント（第5回 Agentic AI Hackathon with Google Cloud 向け）。
 - プランは必ず `pending_approval`（ユーザーの承認待ち）を経由し、ユーザーの操作なしに予約へ進めない。
 - 予約・キャンセルは、ユーザーが承認し「予約する」「キャンセルを確定する」を押したときだけ、予約の部品（`src/lib/booking`）で実行する。AI エージェントには予約・キャンセルのツールを渡さない。決済はしない。いまの部品はデモ予約（実在の店舗には届かない）で、画面に必ず明記する。
+- 見張り（`/api/plan/watch`・`/api/agent/review`）は、承認後の変化を調べて見直し案を作るだけ。見直し案も必ず `pending_approval` で止め、今のプランや予約は変えない。
 - リマインドは端末の中だけで組み立てる（アプリ内通知と、アラーム付き .ics）。予定をサーバーに保存しない。
 - カレンダーの予定や顔画像はメモリ上で Gemini に渡すだけにし、DB・ログ（`console.log` を含む）へ出力・保存しない。
 - 仕様を変えるときは、まずこのファイルの「技術スタック」と「開発コマンド」を更新する。決まっていないことは推測で決めず、推奨案と理由（前提・制約・リスク）を添えて人間に確認する。
@@ -32,7 +33,10 @@ npm run lint       # ESLint
 npm run typecheck  # 型チェック
 npm test           # Vitest
 npm run build      # 本番ビルド（standalone）
+npm run eval       # 実際の Gemini でエージェントを評価（費用がかかるため、実行前に人間に確認する）
 ```
+
+CI（`.github/workflows/ci.yml`）で lint・型チェック・テスト・ビルドを実行する。`npm run eval` は CI に含めない。
 
 Cloud Run へのデプロイ手順は `docs/cloud-run-launch.md`、運用（シークレットの入れ替えなど）は `docs/operations.md` を参照。
 

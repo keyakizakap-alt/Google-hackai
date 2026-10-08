@@ -9,7 +9,7 @@ import { searchSpots, SPOT_CATEGORIES, SPOT_CATEGORY_LABEL, type SpotCategory } 
 import { estimateCrowd } from "../services/transit";
 import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
 import { jstAt, MS_DAY } from "../time";
-import { validateTimeline } from "./validate";
+import { validateSummary, validateTimeline } from "./validate";
 import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
 
 /** 1 リクエスト分のエージェント実行コンテキスト（メモリ上のみ・リクエスト終了で破棄） */
@@ -328,6 +328,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
       const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
+      errors.push(...validateSummary(parsed.data.summary));
       if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
         errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
       }

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
-import { ConflictBanner, DecisionsCard } from "@/components/AgentInsights";
+import { ConflictBanner, DecisionsCard, WatchCard } from "@/components/AgentInsights";
 import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
@@ -417,6 +417,7 @@ export default function PlanPage() {
       </div>
 
       <ConflictBanner />
+      <WatchCard />
 
       {isPending && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">

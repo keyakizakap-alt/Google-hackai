@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
+import { fenceText } from "../agent/fence";
 import { logger } from "../logger";
 import { redactText } from "../privacy/mask";
 import { toJstIso } from "../time";
@@ -68,7 +69,7 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
       : new GoogleGenAI({ apiKey: config.gemini.apiKey, httpOptions: { timeout: 45_000 } });
     const parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [{ text: `<today>${toJstIso(now).slice(0, 10)}</today>` }];
     if (input.image) parts.push({ inlineData: { mimeType: input.image.mime, data: input.image.data.toString("base64") } });
-    if (text) parts.push({ text: `<pasted_text>${text}</pasted_text>` });
+    if (text) parts.push({ text: `<pasted_text>${fenceText(text)}</pasted_text>` });
 
     const res = await ai.models.generateContent({
       model: config.gemini.model,

@@ -21,3 +21,16 @@ export function findConflicts(items: { id: string; start: string; end: string }[
   }
   return out;
 }
+
+/**
+ * ライブ本体の予定（カレンダーから取り込んだイベント自身）を「埋まり」から外す。
+ * 開演の 3 時間前〜1 時間後に始まり、開演後 6 時間以内に終わる予定を、公演そのものとみなす。
+ */
+export function withoutEventBlock(busy: readonly BusyBlock[], eventStartIso: string): BusyBlock[] {
+  const evStart = Date.parse(eventStartIso);
+  return busy.filter((b) => {
+    const s = Date.parse(b.start);
+    const e = Date.parse(b.end);
+    return !(!b.allDay && s >= evStart - 3 * 3_600_000 && s <= evStart + 3_600_000 && e >= evStart && e <= evStart + 6 * 3_600_000);
+  });
+}

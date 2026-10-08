@@ -4,6 +4,7 @@ import { signEnvelope, verifyEnvelope } from "@/lib/agent/envelope";
 import { advance, GuardrailError, hasUserApproval } from "@/lib/agent/stateMachine";
 import type { BookingResult, TimelineItem } from "@/lib/agent/types";
 import { issueCancelTicket, providerFor } from "@/lib/booking";
+import { claimApproval, releaseApproval } from "@/lib/booking/once";
 import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
 import { EKISPERT_ROUTE_URL, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "@/lib/safeUrl";
 import { logger } from "@/lib/logger";
@@ -66,6 +67,10 @@ export async function POST(req: Request) {
       throw new GuardrailError("承認されていないプランは予約の手続きに進めません", "USER_ACTION_REQUIRED");
     }
     let history = advance(env.history, "approved", "booking", "user");
+    // 同じ承認での 2 回目は受け付けない（二重予約の防止）
+    if (!claimApproval(env.sig, env.expiresAt)) {
+      throw new GuardrailError("このプランは、すでに予約の手続きをしました。予約の管理で確認してください", "INVALID_TRANSITION");
+    }
     const approved = new Set(env.approvedItemIds);
     const targets = env.plan.items.filter((i) => i.requiresBooking && approved.has(i.id));
     const results: BookingResult[] = [];
@@ -75,7 +80,14 @@ export async function POST(req: Request) {
         results.push(handoff(item));
         continue;
       }
-      const r = await provider.reserve(item);
+      let r;
+      try {
+        r = await provider.reserve(item, { idempotencyKey: `${env.sig.slice(0, 32)}:${item.id}` });
+      } catch (e) {
+        // 1 件も予約できていなければ、同じ承認でやり直せるようにする
+        if (!results.some((x) => x.status === "reserved")) releaseApproval(env.sig);
+        throw e;
+      }
       results.push({
         itemId: item.id,
         // 店舗が決まっていない仮の名前（予約サイトで店舗と空きを確認）は予約名に入れない

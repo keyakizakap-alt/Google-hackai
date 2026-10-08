@@ -9,6 +9,8 @@ export interface SavedWorkspace {
   envelope: PlanEnvelope | null;
   /** 削除したカレンダー取り込みイベント（次の取り込みで復活させない） */
   dismissed?: string[];
+  /** 見張りの対象（承認・予約した最新のプラン）。期限切れでも署名で改ざんを確かめられるので残しておく */
+  watched?: PlanEnvelope | null;
 }
 
 const DB = "oshiready";

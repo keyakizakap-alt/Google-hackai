@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, CalendarHeart, ImageIcon, Radar, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
@@ -23,7 +23,7 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
+  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan, autoReview, setAutoReview } = useStore();
   const saved = Object.keys(oshiImages).length;
   const { googleConnected, demoAvailable, demoConnected } = useCalendarLinks();
   return (
@@ -92,6 +92,38 @@ export default function SettingsPage() {
         </ul>
       </section>
 
+      <section className="card p-5" aria-labelledby="ai-permissions">
+        <h2 id="ai-permissions" className="flex items-center gap-2 font-bold text-ink">
+          <ShieldCheck className="h-5 w-5 text-lav-600" />
+          AI ができること・できないこと
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+          AI には「調べて提案する」道具だけを渡しています。決めること・実行することは、あなたの操作でしか進みません（仕組みとテストで確かめています）。
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[480px] text-left text-xs">
+            <thead>
+              <tr className="border-b border-line text-mute">
+                <th className="py-2 pr-3 font-bold">操作</th>
+                <th className="px-3 py-2 font-bold">AI</th>
+                <th className="px-3 py-2 font-bold">見張り（自動）</th>
+                <th className="py-2 pl-3 font-bold">あなた</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line text-ink">
+              {PERMISSIONS.map(([what, ai, watch, you]) => (
+                <tr key={what}>
+                  <td className="py-2.5 pr-3 font-bold">{what}</td>
+                  <PermCell v={ai} />
+                  <PermCell v={watch} />
+                  <PermCell v={you} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section className="card p-5" aria-label="推しカラー">
         <p className="mb-3 text-xs leading-relaxed text-ink-soft">アプリ全体のアクセントカラーを推しの色にできます。選んだ色はこの端末に記憶されます。</p>
         <OshiColorPicker light />
@@ -117,6 +149,31 @@ export default function SettingsPage() {
             className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoPlan ? "bg-rose-400" : "bg-lav-200"}`}
           >
             <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoPlan ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
+      </section>
+
+      <section className="card p-5" aria-labelledby="auto-review">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <Radar className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="auto-review" className="font-bold text-ink">承認したあとも見張って、見直し案を作る</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              承認したプランと、カレンダーに後から入った予定・公演日の天気を見比べます（調べるだけなら AI は使いません）。
+              困ることが見つかったら、AI が見直し案を作ります（同じ変化につき 1 回）。今のプランや予約は変えず、切り替えるかはあなたが決めます。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoReview}
+            aria-labelledby="auto-review"
+            onClick={() => setAutoReview(!autoReview)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoReview ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoReview ? "left-7" : "left-1"}`} />
           </button>
         </div>
       </section>
@@ -178,4 +235,21 @@ export default function SettingsPage() {
       </section>
     </div>
   );
+}
+
+/** [操作, AI, 見張り, あなた]。値は「○」「×」か、条件つきの短い説明 */
+const PERMISSIONS: readonly (readonly [string, string, string, string])[] = [
+  ["カレンダーを読む", "○ 時間帯だけ", "○ 時間帯だけ", "○"],
+  ["カレンダーに書き込む", "×", "×", "× アプリにその権限がありません"],
+  ["天気・乗り換え・立ち寄り先を調べる", "○", "○ 天気", "—"],
+  ["プランを作る・直す", "○ 提案まで", "○ 変化があるときだけ見直し案", "○"],
+  ["承認・見送り", "×", "×", "○"],
+  ["予約・キャンセル", "×", "×", "○ 確認のうえ（同じ承認は 1 回まで）"],
+  ["支払い", "×", "×", "× アプリに機能がありません"],
+  ["予約サイトのリンクを出す", "許可したサイトだけ", "—", "—"],
+];
+
+function PermCell({ v }: { v: string }) {
+  const tone = v.startsWith("○") ? "text-lav-700" : v.startsWith("×") ? "text-rose-500" : "text-ink-soft";
+  return <td className={`px-3 py-2.5 ${tone}`}>{v}</td>;
 }

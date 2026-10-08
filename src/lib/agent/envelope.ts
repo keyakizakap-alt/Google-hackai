@@ -24,8 +24,11 @@ export function signEnvelope(env: Unsigned, now = Date.now()): PlanEnvelope {
   return { ...body, sig: hmac(canonical(body), "plan") };
 }
 
-/** クライアントから戻ってきた封筒を検証する。改ざん・期限切れは GuardrailError */
-export function verifyEnvelope(input: unknown, now = Date.now()): PlanEnvelope {
+/**
+ * クライアントから戻ってきた封筒を検証する。改ざん・期限切れは GuardrailError。
+ * allowExpired は「中身を参照するだけ」の用途（見張り）に限る。承認・予約など状態を進める処理では使わない。
+ */
+export function verifyEnvelope(input: unknown, now = Date.now(), opts: { allowExpired?: boolean } = {}): PlanEnvelope {
   const parsed = PlanEnvelopeSchema.safeParse(input);
   if (!parsed.success) throw new GuardrailError("プランを読み込めませんでした。もう一度作成してください", "SIGNATURE_INVALID");
   const env = parsed.data;
@@ -33,7 +36,7 @@ export function verifyEnvelope(input: unknown, now = Date.now()): PlanEnvelope {
   if (!verifyHmac(canonical(rest), sig, "plan")) {
     throw new GuardrailError("プランの内容を確認できませんでした。もう一度作成してください", "SIGNATURE_INVALID");
   }
-  if (Date.parse(env.expiresAt) < now) {
+  if (!opts.allowExpired && Date.parse(env.expiresAt) < now) {
     throw new GuardrailError("プランの有効期限（2時間）が切れました。もう一度作成してください", "EXPIRED");
   }
   return env;

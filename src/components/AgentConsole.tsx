@@ -22,6 +22,8 @@ export function friendlyStep(name: string): string {
     search_beauty_salons: "サロン",
     get_skin_analysis: "肌診断",
     estimate_crowd: "混雑",
+    get_weather_forecast: "天気",
+    search_nearby_spots: "立ち寄り先",
     search_transit_route_mock: "移動",
     submit_timeline: "最終チェック",
     plan: "準備",

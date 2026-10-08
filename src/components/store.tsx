@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
+import type { WatchSignal } from "@/lib/agent/watch";
 import { formatJst } from "@/lib/time";
 
 /** 公演と予約メモはこのブラウザの IndexedDB に保存する。顔画像と OAuth トークンは保存しない。 */
@@ -140,6 +141,18 @@ interface PlanResponse {
   engine: "gemini" | "rule-based";
 }
 
+/** 見張りで見つけた変化と、それを受けて AI が作った見直し案（採用するまで今のプランは変えない） */
+export interface WatchState {
+  signals: WatchSignal[];
+  proposal: (PlanResponse & { signals: WatchSignal[] }) | null;
+  reviewing: boolean;
+  error: string | null;
+}
+
+/** 見張りの対象にする状態 */
+const WATCH_STATUSES: readonly PlanEnvelope["status"][] = ["pending_approval", "approved", "booked"];
+const HANDLED_KEY = "oshiready.watch.handled";
+
 interface Store {
   session: SessionInfo | null;
   oshiColor: OshiColor;
@@ -209,6 +222,16 @@ interface Store {
   conflicts: Conflict[];
   /** 重なりを解消するよう、エージェントにプランを組み直してもらう */
   replanForConflicts: () => Promise<void>;
+  /** 見張り（承認後のカレンダーの変化・天気）と見直し案 */
+  watch: WatchState;
+  /** 変化を見つけたら、AI に見直し案を自動で作らせるか */
+  autoReview: boolean;
+  setAutoReview: (on: boolean) => void;
+  /** 見直し案を作らせる（自動作成がオフのとき用） */
+  requestReview: () => Promise<void>;
+  /** 見直し案に切り替える（改めて承認が必要） */
+  adoptProposal: () => void;
+  dismissProposal: () => void;
   /** アプリ内で予約したものをキャンセルする（画面で確認したあとに呼ぶ） */
   cancelReservation: (id: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
@@ -258,6 +281,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissedRef.current = dismissed;
   }, [dismissed]);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [watched, setWatched] = useState<PlanEnvelope | null>(null);
+  const [watch, setWatch] = useState<WatchState>({ signals: [], proposal: null, reviewing: false, error: null });
+  const [autoReview, setAutoReviewState] = useState(true);
   /** 空き時間を自動で確認済みのイベント */
   const autoAvailability = useRef<Set<string>>(new Set());
 
@@ -271,6 +297,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setProfile(saved.profile ?? DEFAULT_PROFILE);
         setReservations(saved.reservations ?? []);
         setDismissed(saved.dismissed ?? []);
+        setWatched(saved.watched ?? null);
         if (saved.envelope && Date.parse(saved.envelope.expiresAt) > Date.now()) setEnvelope(saved.envelope);
       }
       setRestored(true);
@@ -281,10 +308,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed, watched }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
     }, 200);
     return () => clearTimeout(timer);
-  }, [restored, events, activeId, profile, reservations, envelope, dismissed]);
+  }, [restored, events, activeId, profile, reservations, envelope, dismissed, watched]);
 
   useEffect(() => {
     if (!notice) return;
@@ -384,6 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPersistImagesState(on);
       try {
         setAutoPlanState(localStorage.getItem("oshiready.autoPlan") !== "off");
+        setAutoReviewState(localStorage.getItem("oshiready.autoReview") !== "off");
         const c = localStorage.getItem("oshiready.color");
         if (c && OSHI_COLORS.some((x) => x.id === c)) setOshiColor(c as OshiColor);
       } catch {
@@ -597,6 +625,81 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [restored, connected, conflictTargets]);
 
+  // 見張り: 承認・予約したプランを覚えておく（2 時間の期限が切れても、署名付きなので見張りに使える）
+  useEffect(() => {
+    if (envelope && (envelope.status === "approved" || envelope.status === "booked")) {
+      const t = setTimeout(() => setWatched(envelope), 0);
+      return () => clearTimeout(t);
+    }
+  }, [envelope]);
+
+  /** 見張りの対象: 表示中のプラン（承認待ち以降）か、このイベントで最後に承認したプラン */
+  const watchTarget = useMemo(() => {
+    if (envelope && WATCH_STATUSES.includes(envelope.status)) return envelope;
+    if (watched && event && watched.plan.event.id === event.id) return watched;
+    return null;
+  }, [envelope, watched, event]);
+  const watchRef = useRef(watch);
+  useEffect(() => {
+    watchRef.current = watch;
+  }, [watch]);
+
+  const requestReviewFor = useCallback(async (target: PlanEnvelope) => {
+    setWatch((w) => ({ ...w, reviewing: true, error: null }));
+    try {
+      const r = await api<{ proposal: PlanResponse | null; signals: WatchSignal[] }>("/api/agent/review", { envelope: target });
+      setWatch((w) => ({ ...w, reviewing: false, signals: r.signals, proposal: r.proposal ? { ...r.proposal, signals: r.signals } : null }));
+      if (r.proposal) setNotice("見張りで変化を見つけたので、AI が見直し案を作りました。今のプランはそのままです");
+    } catch (e) {
+      setWatch((w) => ({ ...w, reviewing: false, error: (e as Error).message || "見直し案を作れませんでした" }));
+    }
+  }, []);
+
+  // 開いたとき・10 分ごと・画面に戻ったときに確かめる。調べるだけなら AI は呼ばない。
+  // 変化があり、自動の見直しがオンなら、同じ変化につき 1 回だけ AI に見直し案を作らせる
+  const aiReady = session?.gemini.configured ?? true;
+  useEffect(() => {
+    if (!restored || !watchTarget || Date.parse(watchTarget.plan.event.startAt) < Date.now()) {
+      const t = setTimeout(() => setWatch((w) => (w.signals.length || w.proposal ? { ...w, signals: [], proposal: null } : w)), 0);
+      return () => clearTimeout(t);
+    }
+    let alive = true;
+    const check = async () => {
+      if (busyRef.current !== null || watchRef.current.reviewing) return;
+      try {
+        const r = await api<{ signals: WatchSignal[]; key: string | null }>("/api/plan/watch", { envelope: watchTarget });
+        if (!alive) return;
+        setWatch((w) => ({ ...w, signals: r.signals }));
+        if (!r.key || r.signals.length === 0 || !autoReview || !aiReady || watchRef.current.proposal) return;
+        let handled: string[] = [];
+        try {
+          handled = JSON.parse(localStorage.getItem(HANDLED_KEY) ?? "[]") as string[];
+        } catch {
+          handled = [];
+        }
+        if (handled.includes(r.key)) return;
+        try {
+          localStorage.setItem(HANDLED_KEY, JSON.stringify([...handled, r.key].slice(-30)));
+        } catch {
+          /* 記録できない環境では、この画面を開いている間だけの判定になる */
+        }
+        await requestReviewFor(watchTarget);
+      } catch {
+        /* 確認できなかったときは前回の結果のまま */
+      }
+    };
+    const first = setTimeout(() => void check(), 2500);
+    const timer = setInterval(() => void check(), 10 * 60_000);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [restored, watchTarget, autoReview, aiReady, requestReviewFor]);
+
   const store: Store = useMemo(
     () => ({
       session,
@@ -728,6 +831,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setReservations([]);
         setProfile(DEFAULT_PROFILE);
         setDismissed([]);
+        setWatched(null);
+        setWatch({ signals: [], proposal: null, reviewing: false, error: null });
         planCache.current = {};
         restorePlan(null);
         setAvailability(null);
@@ -743,12 +848,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       clearNotice: () => setNotice(null),
       notify: setNotice,
       planError,
-      aiReady: session?.gemini.configured ?? true,
+      aiReady,
       refreshSession,
       extractAvailability,
       generatePlan: generatePlanFn,
       revisePlan: revisePlanFn,
       conflicts,
+      watch,
+      autoReview,
+      setAutoReview: (on) => {
+        setAutoReviewState(on);
+        try {
+          localStorage.setItem("oshiready.autoReview", on ? "on" : "off");
+        } catch {
+          /* 保存できない環境では毎回既定値 */
+        }
+      },
+      requestReview: async () => {
+        if (watchTarget) await requestReviewFor(watchTarget);
+      },
+      adoptProposal: () => {
+        const p = watch.proposal;
+        if (!p) return;
+        applyPlan(p);
+        setChat((c) => [...c, { role: "agent", text: `見張りで変化を見つけたので見直しました（改訂 ${p.envelope.plan.revision}）。${p.envelope.plan.summary}` }]);
+        setWatch({ signals: [], proposal: null, reviewing: false, error: null });
+      },
+      dismissProposal: () => setWatch((w) => ({ ...w, proposal: null })),
       replanForConflicts: async () => {
         if (conflicts.length === 0) return;
         const list = conflicts.map((c) => `${c.title}（${formatJstShort(c.start)}）`).join("、");
@@ -847,7 +973,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts],
+    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
