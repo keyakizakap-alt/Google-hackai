@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>OshiReady Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#211f3f; --ink-soft:#55537a; --mute:#8a88a5; --line:#e9e5f2; --paper:#fff;
+    --night:#1b1935; --night-2:#2a2654;
+    --lav-50:#f6f3fc; --lav-100:#eee9f8; --lav-200:#ddd5f1; --lav-400:#9d93cf; --lav-500:#7a71b5; --lav-600:#655da3; --lav-700:#4d4687;
+    --rose:#e0679a; --rose-50:#fdf0f6; --gold:#c9a24a;
+    --gc-blue:#4285f4; --gc-green:#34a853; --gc-yellow:#fbbc04; --gc-red:#ea4335;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px}
+  body{
+    font-family:"Zen Kaku Gothic New",sans-serif;color:var(--ink);
+    background:
+      radial-gradient(900px 500px at 8% -10%, #efe9fb 0%, transparent 60%),
+      radial-gradient(700px 420px at 100% 110%, #fbeef5 0%, transparent 60%),
+      #fbfaff;
+    position:relative;overflow:hidden;
+  }
+  .serif{font-family:"Cormorant Garamond",serif}
+  header{position:absolute;left:56px;top:34px;right:56px;display:flex;align-items:flex-end;justify-content:space-between}
+  header h1{font-family:"Cormorant Garamond",serif;font-weight:600;font-size:52px;letter-spacing:.5px;line-height:1}
+  header h1 em{font-style:italic;color:var(--lav-600)}
+  header p{font-size:19px;color:var(--ink-soft);margin-top:8px}
+  .legend{display:flex;gap:22px;font-size:15px;color:var(--ink-soft);align-items:center}
+  .legend i{display:inline-block;width:34px;height:0;border-top:3px solid var(--lav-500);vertical-align:middle;margin-right:8px}
+  .legend i.user{border-top:3px dashed var(--rose)}
+  .legend i.ext{border-top:2px solid var(--mute)}
+
+  .box{position:absolute;border-radius:18px;background:var(--paper);border:1.5px solid var(--line);box-shadow:0 10px 30px -18px rgba(33,31,63,.35)}
+  .tag{display:inline-block;font-size:12.5px;font-weight:700;letter-spacing:.08em;padding:3px 10px;border-radius:99px;background:var(--lav-100);color:var(--lav-700)}
+  .ttl{font-weight:700;font-size:20px;margin:8px 0 4px}
+  .sub{font-size:14px;color:var(--ink-soft);line-height:1.55}
+
+  /* ユーザー */
+  #user{left:56px;top:150px;width:300px;height:620px;background:linear-gradient(165deg,var(--night) 0%,var(--night-2) 100%);color:#fff;border:none;padding:24px}
+  #user .tag{background:rgba(255,255,255,.12);color:#e6defc}
+  #user .sub{color:#cfc8ee}
+  .chip{display:block;margin-top:10px;font-size:14px;padding:9px 12px;border-radius:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);line-height:1.45}
+  .chip b{color:#fff}
+  .glow{position:absolute;right:-30px;top:-30px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(224,103,154,.55),transparent 70%)}
+
+  /* Cloud Run */
+  #run{left:420px;top:130px;width:1010px;height:770px;background:rgba(255,255,255,.72);border:2px solid var(--gc-blue);padding:22px 24px}
+  #run .head{display:flex;align-items:center;gap:12px}
+  .gc{display:inline-flex;gap:3px}
+  .gc span{width:9px;height:9px;border-radius:50%}
+  #run .ttl{margin:0;font-size:23px}
+  #run .meta{margin-left:auto;font-size:13.5px;color:var(--ink-soft)}
+
+  .api{position:absolute;left:24px;top:76px;width:300px;height:670px;background:var(--lav-50);border:1px solid var(--lav-200);border-radius:14px;padding:16px}
+  .api h3,.agent h3,.gate h3{font-size:15px;font-weight:700;color:var(--lav-700);letter-spacing:.06em;margin-bottom:10px}
+  .route{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:9px;font-size:13px;line-height:1.45;color:var(--ink-soft)}
+  .route code{display:block;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--ink);font-weight:600}
+  .route.user{border-left:4px solid var(--rose)}
+  .route.ai{border-left:4px solid var(--lav-500)}
+
+  .agent{position:absolute;left:346px;top:76px;width:640px;height:450px;background:#fff;border:1.5px solid var(--lav-400);border-radius:14px;padding:16px 18px}
+  .loop{display:flex;gap:14px;margin-top:2px}
+  .gem{width:200px;flex:none;border-radius:12px;padding:14px;background:linear-gradient(160deg,#eef3ff,#f6f0ff);border:1px solid #d6defa}
+  .gem .ttl{font-size:17px;margin:4px 0}
+  .tools{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .tool{font-family:ui-monospace,Menlo,monospace;font-size:12.2px;padding:6px 8px;border-radius:8px;background:var(--lav-50);border:1px solid var(--lav-100);color:var(--ink)}
+  .tool small{display:block;font-family:"Zen Kaku Gothic New",sans-serif;font-size:11.5px;color:var(--mute);margin-top:1px}
+  .tool.new{background:var(--rose-50);border-color:#f6d3e3}
+  .tool.submit{grid-column:1 / -1;background:var(--night);color:#fff;border:none}
+  .tool.submit small{color:#cfc8ee}
+  .correct{margin-top:12px;display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-soft);background:#fffaf0;border:1px dashed var(--gold);border-radius:10px;padding:8px 12px}
+  .correct b{color:#8a6a1c}
+  .limits{margin-top:8px;font-size:12.5px;color:var(--mute)}
+
+  .gate{position:absolute;left:346px;top:548px;width:640px;height:198px;background:linear-gradient(180deg,#fff,var(--rose-50));border:1.5px solid #f2c4d8;border-radius:14px;padding:14px 18px}
+  .sm{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;margin:6px 0 10px}
+  .st{font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:5px 7px;border-radius:7px;background:#fff;border:1px solid var(--line);white-space:nowrap}
+  .st.hl{background:var(--night);color:#fff;border:none}
+  .st.u{border:1.5px solid var(--rose);color:#b03a6e;font-weight:700}
+  .ar{color:var(--mute);font-size:13px}
+  .gate ul{list-style:none;font-size:13px;color:var(--ink-soft);line-height:1.6}
+  .gate li::before{content:"◆";color:var(--rose);font-size:9px;margin-right:8px;vertical-align:2px}
+
+  /* 右カラム */
+  .col-ttl{position:absolute;font-size:14px;font-weight:700;letter-spacing:.1em;color:var(--ink-soft)}
+  .svc{left:1500px;width:364px;padding:13px 16px}
+  .svc .ttl{font-size:16.5px;margin:3px 0 2px}
+  .svc .sub{font-size:13px}
+  .svc.gcp{border-left:5px solid var(--gc-blue)}
+  .svc.ext{border-left:5px solid var(--mute);background:#fdfcff}
+
+  /* 下帯 */
+  #guard{left:56px;top:925px;width:1808px;height:118px;background:var(--night);border:none;color:#fff;padding:16px 24px;display:flex;gap:18px;align-items:stretch}
+  #guard .lead{width:210px;flex:none}
+  #guard .lead .tag{background:rgba(255,255,255,.12);color:#e6defc}
+  #guard .lead p{font-family:"Cormorant Garamond",serif;font-size:27px;font-style:italic;margin-top:6px;line-height:1.1}
+  .g{flex:1;border-left:1px solid rgba(255,255,255,.14);padding-left:16px}
+  .g b{display:block;font-size:15px;margin-bottom:4px}
+  .g span{font-size:12.8px;color:#cfc8ee;line-height:1.5;display:block}
+
+  svg#wires{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none;overflow:visible}
+  .lbl{position:absolute;font-size:12.5px;font-weight:700;color:var(--lav-700);background:#fbfaff;padding:2px 8px;border-radius:99px;border:1px solid var(--lav-200);white-space:nowrap;transform:translate(-50%,-50%)}
+  .lbl.user{color:#b03a6e;border-color:#f2c4d8}
+  .lbl.ext{color:var(--ink-soft);border-color:var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>OshiReady <em>— System Architecture</em></h1>
+    <p>推し活の公演日から、美容・移動・宿泊・当日の準備を逆算する AI エージェント（Cloud Run × Gemini）</p>
+  </div>
+  <div class="legend"><span><i></i>アプリ内の処理</span><span><i class="user"></i>ユーザー操作だけが通る経路</span><span><i class="ext"></i>外部サービス</span></div>
+</header>
+
+<!-- ユーザー -->
+<div class="box" id="user">
+  <div class="glow"></div>
+  <span class="tag">USER / BROWSER</span>
+  <div class="ttl" style="font-size:22px">ファン（利用者）</div>
+  <div class="sub">Next.js 16 App Router・React 19・Tailwind v4</div>
+  <span class="chip"><b>IndexedDB</b>：公演・予約メモ・期限内プラン<br>サーバーには保存しない</span>
+  <span class="chip"><b>署名付きプラン</b>（HMAC）をクライアントが保持</span>
+  <span class="chip"><b>承認・予約・キャンセル</b>は<br>この画面のボタン操作だけ</span>
+  <span class="chip"><b>リマインド</b>：アプリ内通知と .ics（端末内で生成）</span>
+  <span class="chip"><b>審査用デモカレンダー</b><br>Google ログインなしで試せる</span>
+</div>
+
+<!-- Cloud Run -->
+<div class="box" id="run">
+  <div class="head">
+    <span class="gc"><span style="background:var(--gc-blue)"></span><span style="background:var(--gc-red)"></span><span style="background:var(--gc-yellow)"></span><span style="background:var(--gc-green)"></span></span>
+    <span class="ttl">Cloud Run <span class="serif" style="font-weight:500;color:var(--ink-soft);font-size:21px">— asia-northeast1</span></span>
+    <span class="meta">Next.js standalone ・ Node 22 ・ 非 root ・ CSP nonce ・ レート制限 ＋ 1 日の AI 呼び出し上限</span>
+  </div>
+
+  <div class="api" id="api">
+    <h3>ROUTE HANDLERS（/api）</h3>
+    <div class="route"><code>/auth/google/*</code>OAuth 2.0 + PKCE。トークンは暗号化 httpOnly Cookie</div>
+    <div class="route" id="r-cal"><code>/calendar/availability</code>予定は時間帯だけ受信 → maskEvents()</div>
+    <div class="route"><code>/calendar/detect-events</code>ライブ候補だけ抽出（構造化出力・ツールなし）</div>
+    <div class="route ai" id="r-agent"><code>/agent/plan ・ /agent/revise</code>エージェントを起動。修正指示は redactText() 後に渡す</div>
+    <div class="route user" id="r-approve"><code>/plan/approve ・ /plan/reject</code>actor = user のみ。Origin 検証 + 専用ヘッダー</div>
+    <div class="route user" id="r-book"><code>/booking ・ /booking/cancel</code>approved + 署名 + 承認履歴 + confirm がそろったときだけ</div>
+    <div class="route"><code>/health</code>起動確認</div>
+  </div>
+
+  <div class="agent" id="agent">
+    <h3>AGENT ORCHESTRATOR — 自律ループ</h3>
+    <div class="loop">
+      <div class="gem" id="gem">
+        <span class="tag" style="background:#e3ebff;color:#2c56b8">GEMINI</span>
+        <div class="ttl">Function Calling</div>
+        <div class="sub" style="font-size:12.5px">Vertex AI の Gemini と往復。<br>mode = ANY・ツールは許可リスト制。<br>どのツールをいつ呼ぶかはモデルが判断。終盤は submit_timeline だけに絞る</div>
+      </div>
+      <div class="tools">
+        <div class="tool">get_free_time_slots<small>マスク済みの空き時間</small></div>
+        <div class="tool">get_beauty_guideline<small>施術の推奨タイミング</small></div>
+        <div class="tool">search_beauty_salons<small>施術の候補日時</small></div>
+        <div class="tool">estimate_crowd<small>会場周辺の混雑</small></div>
+        <div class="tool new">search_nearby_spots<small>遠征先の立ち寄り先</small></div>
+        <div class="tool new" id="t-weather">get_weather_forecast<small>気象庁の予報（取れなければ断定しない）</small></div>
+        <div class="tool">search_transit_route_mock<small>MCP 未接続時の代替</small></div>
+        <div class="tool" id="t-eki">ekispert_*<small>駅すぱあと MCP を動的に取り込み</small></div>
+        <div class="tool submit" id="t-submit">submit_timeline → validateTimeline()<small>zod の型検証 ＋ 時間の重なり・開演前の余裕・雨対策・価格の捏造などを検査</small></div>
+      </div>
+    </div>
+    <div class="correct">↺ <span><b>差し戻し → 自己修正</b>：検証エラーをそのままモデルに返し、エージェントが自分で直して再提出する</span></div>
+    <div class="limits">最大ステップ数（既定 12）・全体 110 秒・予約／決済／カレンダー書き込みのツールは渡さない</div>
+  </div>
+
+  <div class="gate" id="gate">
+    <h3 style="color:#b03a6e">HUMAN-IN-THE-LOOP GATE — stateMachine.ts</h3>
+    <div class="sm">
+      <span class="st hl" id="s-pending">pending_approval</span><span class="ar">→</span>
+      <span class="st u">approved</span><span class="ar">→</span>
+      <span class="st u">booking</span><span class="ar">→</span>
+      <span class="st">booked</span>
+      <span class="ar" style="margin-left:6px">／</span><span class="st u">rejected</span><span class="ar">→</span><span class="st">revising</span>
+    </div>
+    <ul>
+      <li>赤枠の状態へはユーザー操作でしか進めない（エージェント・システムは不可）</li>
+      <li>承認を経由しない経路が無いことをテストで遷移グラフを探索して確認</li>
+      <li>予約はデモ予約（実在の店舗には届かない）・決済はしない、と画面に明記</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 右カラム -->
+<div class="col-ttl" style="left:1500px;top:132px">GOOGLE CLOUD</div>
+<div class="box svc gcp" id="vertex" style="top:156px">
+  <span class="tag" style="background:#e3ebff;color:#2c56b8">AI</span>
+  <div class="ttl">Gemini（Vertex AI）</div>
+  <div class="sub">@google/genai。モデル名は環境変数 GEMINI_MODEL。サービスアカウントの IAM で呼び出し（API キー不要）</div>
+</div>
+<div class="box svc gcp" id="secret" style="top:290px">
+  <div class="ttl">Secret Manager</div>
+  <div class="sub">セッション署名鍵・OAuth クライアントシークレット</div>
+</div>
+<div class="box svc gcp" id="logging" style="top:376px">
+  <div class="ttl">Cloud Logging</div>
+  <div class="sub">許可リストのキーだけを構造化ログで出力（予定・顔画像は出さない）</div>
+</div>
+<div class="box svc gcp" id="build" style="top:480px">
+  <div class="ttl">Cloud Build → Artifact Registry</div>
+  <div class="sub">Dockerfile（マルチステージ）からビルドしてデプロイ</div>
+</div>
+
+<div class="col-ttl" style="left:1500px;top:590px">EXTERNAL</div>
+<div class="box svc ext" id="gcal" style="top:614px">
+  <div class="ttl">Google カレンダー API</div>
+  <div class="sub">読み取り専用。審査用はデモカレンダー（ログイン不要）</div>
+</div>
+<div class="box svc ext" id="eki" style="top:700px">
+  <div class="ttl">駅すぱあと API MCP</div>
+  <div class="sub">tools/list を Gemini のツール定義へ変換</div>
+</div>
+<div class="box svc ext" id="jma" style="top:786px">
+  <div class="ttl">気象庁 予報 JSON</div>
+  <div class="sub">キー不要・無料。失敗時は 10 分間再試行しない</div>
+</div>
+
+<!-- 下帯 -->
+<div class="box" id="guard">
+  <div class="lead"><span class="tag">GUARDRAILS</span><p>Autonomy, governed.</p></div>
+  <div class="g"><b>プライバシー</b><span>予定のタイトル・場所・参加者は受信しない（fields 指定）＋ maskEvents()。サーバーに DB なし</span></div>
+  <div class="g"><b>プロンプトインジェクション</b><span>ユーザー入力は &lt;user_instruction&gt; でデータとして分離。連絡先・カード番号は redactText() でマスク</span></div>
+  <div class="g"><b>外部リンク</b><span>AI が出したリンクは https・許可ドメインだけ表示（safeExternalUrl）</span></div>
+  <div class="g"><b>可観測性</b><span>思考ログ（ツール呼び出し・差し戻し）を画面に表示。サーバーは許可リスト方式のロガー</span></div>
+  <div class="g"><b>コスト</b><span>IP 単位のレート制限 ＋ AGENT_DAILY_LIMIT。min-instances=0 でアイドル時は課金なし</span></div>
+</div>
+
+<svg id="wires">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a71b5"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e0679a"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a88a5"/></marker>
+  </defs>
+</svg>
+
+<script>
+  const svg = document.getElementById("wires");
+  const NS = "http://www.w3.org/2000/svg";
+  const r = (id) => document.getElementById(id).getBoundingClientRect();
+  function path(d, kind, both){
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d); p.setAttribute("fill", "none");
+    const c = {main:"#7a71b5", user:"#e0679a", ext:"#8a88a5"}[kind];
+    p.setAttribute("stroke", c); p.setAttribute("stroke-width", kind==="ext" ? 2 : 2.6);
+    if (kind==="user") p.setAttribute("stroke-dasharray", "8 6");
+    const m = {main:"a", user:"ar", ext:"ag"}[kind];
+    p.setAttribute("marker-end", `url(#${m})`);
+    if (both) p.setAttribute("marker-start", `url(#${m})`);
+    svg.appendChild(p);
+  }
+  function label(x, y, text, kind){
+    const d = document.createElement("div");
+    d.className = "lbl " + (kind || "");
+    d.textContent = text; d.style.left = x + "px"; d.style.top = y + "px";
+    document.body.appendChild(d);
+  }
+  function draw(){
+    const u = r("user"), api = r("api"), ag = r("r-agent"), ap = r("r-approve"), bk = r("r-book");
+    const gem = r("gem"), vx = r("vertex"), cal = r("r-cal"), gcal = r("gcal");
+    const eki = r("eki"), teki = r("t-eki"), jma = r("jma"), tw = r("t-weather");
+    const sub = r("t-submit"), gate = r("gate"), run = r("run"), sec = r("secret"), lg = r("logging"), bd = r("build");
+
+    // ユーザー → API（通常リクエスト）
+    let y1 = ag.top + ag.height/2;
+    path(`M${u.right},${y1} L${api.left-4},${y1}`, "main");
+    label((u.right+api.left)/2, y1-20, "プラン作成");
+    // ユーザー → 承認・予約（ユーザー操作のみ）
+    let y2 = ap.top + ap.height/2, y3 = bk.top + bk.height/2;
+    path(`M${u.right},${y2} L${api.left-4},${y2}`, "user");
+    path(`M${u.right},${y3} L${api.left-4},${y3}`, "user");
+    label((u.right+api.left)/2, y2-20, "承認", "user");
+    label((u.right+api.left)/2, y3-20, "予約", "user");
+
+    // API → エージェント
+    const agentBox = r("agent");
+    path(`M${api.right},${y1} L${agentBox.left-4},${y1}`, "main");
+    // submit → HITL gate
+    const sx = sub.left + sub.width/2;
+    path(`M${sx},${agentBox.bottom} L${sx},${gate.top-4}`, "main");
+    label(sx + 92, (agentBox.bottom + gate.top)/2, "検証を通ったプランだけ");
+    // 承認ルート → gate
+    path(`M${api.right},${y2} L${gate.left-4},${y2}`, "user");
+
+    // Gemini ⇄ Vertex（エージェント枠の見出し行から出す）
+    const vy = vx.top + vx.height/2;
+    const hy = agentBox.top + 26;
+    path(`M${agentBox.right},${hy} L${run.right+30},${hy} L${run.right+30},${vy} L${vx.left-4},${vy}`, "main", true);
+    label(agentBox.right - 80, hy, "Function Calling");
+
+    // ツール → 外部
+    const ey = eki.top + eki.height/2, jy = jma.top + jma.height/2, cy = gcal.top + gcal.height/2;
+    path(`M${teki.right},${teki.top+teki.height/2} L${run.right+46},${teki.top+teki.height/2} L${run.right+46},${ey} L${eki.left-4},${ey}`, "ext");
+    path(`M${tw.right},${tw.top+tw.height/2+4} L${run.right+62},${tw.top+tw.height/2+4} L${run.right+62},${jy} L${jma.left-4},${jy}`, "ext");
+    // カレンダー
+    path(`M${api.left+api.width/2},${api.bottom} L${api.left+api.width/2},${run.bottom+14} L${run.right+14},${run.bottom+14} L${run.right+14},${cy} L${gcal.left-4},${cy}`, "ext");
+    label(api.left+api.width/2 + 210, run.bottom+14, "空き時間（時間帯だけ）・ライブ候補", "ext");
+
+    // Secret / Logging / Build（Cloud Run 側から）
+    for (const b of [sec, lg]) {
+      const yy = b.top + b.height/2;
+      path(`M${run.right},${yy} L${b.left-4},${yy}`, "ext");
+    }
+    const by = bd.top + bd.height/2;
+    path(`M${bd.left},${by} L${run.right+4},${by}`, "ext");
+    label((run.right+bd.left)/2, by-14, "deploy", "ext");
+  }
+  document.fonts.ready.then(() => { draw(); document.body.dataset.ready = "1"; });
+</script>
+</body>
+</html>
