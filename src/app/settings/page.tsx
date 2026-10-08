@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, CalendarHeart, ImageIcon, Radar, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
@@ -23,7 +23,7 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan } = useStore();
+  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan, autoReview, setAutoReview } = useStore();
   const saved = Object.keys(oshiImages).length;
   const { googleConnected, demoAvailable, demoConnected } = useCalendarLinks();
   return (
@@ -117,6 +117,31 @@ export default function SettingsPage() {
             className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoPlan ? "bg-rose-400" : "bg-lav-200"}`}
           >
             <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoPlan ? "left-7" : "left-1"}`} />
+          </button>
+        </div>
+      </section>
+
+      <section className="card p-5" aria-labelledby="auto-review">
+        <div className="flex flex-wrap items-start gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+            <Radar className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="auto-review" className="font-bold text-ink">承認したあとも見張って、見直し案を作る</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              承認したプランと、カレンダーに後から入った予定・公演日の天気を見比べます（調べるだけなら AI は使いません）。
+              困ることが見つかったら、AI が見直し案を作ります（同じ変化につき 1 回）。今のプランや予約は変えず、切り替えるかはあなたが決めます。
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoReview}
+            aria-labelledby="auto-review"
+            onClick={() => setAutoReview(!autoReview)}
+            className={`relative h-8 w-14 shrink-0 rounded-full transition ${autoReview ? "bg-rose-400" : "bg-lav-200"}`}
+          >
+            <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${autoReview ? "left-7" : "left-1"}`} />
           </button>
         </div>
       </section>

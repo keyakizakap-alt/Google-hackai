@@ -10,7 +10,7 @@ import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
 import { RemindersCard } from "@/components/Reminders";
-import { ConflictBanner } from "@/components/AgentInsights";
+import { ConflictBanner, WatchCard } from "@/components/AgentInsights";
 import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
@@ -356,6 +356,7 @@ export default function Home() {
       <Greeting />
       <EventSwitcher />
       <ConflictBanner />
+      <WatchCard />
       <Hero />
       <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
         <CalendarCard />

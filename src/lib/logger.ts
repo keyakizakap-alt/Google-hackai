@@ -41,6 +41,8 @@ const ALLOWED_FIELDS = new Set([
   "weather",
   "cached",
   "spotCount",
+  "signalCount",
+  "calendarChecked",
 ]);
 
 export type LogFields = Partial<Record<string, string | number | boolean | undefined>>;
