@@ -144,8 +144,8 @@
     <div class="route"><code>/calendar/detect-events</code>ライブ候補だけ抽出（構造化出力・ツールなし）</div>
     <div class="route ai" id="r-agent"><code>/agent/plan ・ /agent/revise</code>エージェントを起動。修正指示は redactText() 後に渡す</div>
     <div class="route user" id="r-approve"><code>/plan/approve ・ /plan/reject</code>actor = user のみ。Origin 検証 + 専用ヘッダー</div>
-    <div class="route user" id="r-book"><code>/booking ・ /booking/cancel</code>approved + 署名 + 承認履歴 + confirm がそろったときだけ</div>
-    <div class="route"><code>/health</code>起動確認</div>
+    <div class="route user" id="r-book"><code>/booking ・ /booking/cancel</code>approved + 署名 + 承認履歴 + confirm。同じ承認は 1 回まで</div>
+    <div class="route ai" id="r-watch"><code>/plan/watch → /agent/review</code>見張り: 予定の重なり・雨予報を確認（AI なし）→ 変化があれば見直し案（承認待ち）</div>
   </div>
 
   <div class="agent" id="agent">
@@ -185,6 +185,7 @@
       <li>赤枠の状態へはユーザー操作でしか進めない（エージェント・システムは不可）</li>
       <li>承認を経由しない経路が無いことをテストで遷移グラフを探索して確認</li>
       <li>予約はデモ予約（実在の店舗には届かない）・決済はしない、と画面に明記</li>
+      <li>見張りが作る見直し案も、新しい承認待ちで止まる（今のプラン・予約は変えない）</li>
     </ul>
   </div>
 </div>
@@ -227,9 +228,9 @@
 <div class="box" id="guard">
   <div class="lead"><span class="tag">GUARDRAILS</span><p>Autonomy, governed.</p></div>
   <div class="g"><b>プライバシー</b><span>予定のタイトル・場所・参加者は受信しない（fields 指定）＋ maskEvents()。サーバーに DB なし</span></div>
-  <div class="g"><b>プロンプトインジェクション</b><span>ユーザー入力は &lt;user_instruction&gt; でデータとして分離。連絡先・カード番号は redactText() でマスク</span></div>
+  <div class="g"><b>プロンプトインジェクション</b><span>入力・予定名はタグ抜けを防いで埋め込む。攻撃文 12 種 × 乗っ取られたモデルでも予約に届かないことをテスト</span></div>
   <div class="g"><b>外部リンク</b><span>AI が出したリンクは https・許可ドメインだけ表示（safeExternalUrl）</span></div>
-  <div class="g"><b>可観測性</b><span>思考ログ（ツール呼び出し・差し戻し）を画面に表示。サーバーは許可リスト方式のロガー</span></div>
+  <div class="g"><b>可観測性</b><span>思考ログを画面に表示。npm run eval で自己修正率・攻撃耐性・費用を実測</span></div>
   <div class="g"><b>コスト</b><span>IP 単位のレート制限 ＋ AGENT_DAILY_LIMIT。min-instances=0 でアイドル時は課金なし</span></div>
 </div>
 
