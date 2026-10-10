@@ -220,7 +220,7 @@ Dockerfile             Cloud Run 用のマルチステージビルド
 
 Copyright (c) 2026 keyakizakap-alt. All rights reserved.
 
-本プロジェクトのソースコード・ドキュメント・画像の利用・複製・改変・再配布は、著作権者の許可なく行えない（ハッカソンの審査・評価のための閲覧と動作確認を除く）。詳細は [LICENSE](LICENSE) を参照。
+本プロジェクトで独自に作成したソースコード・ドキュメント・画像の利用・複製・改変・再配布は、著作権者の許可なく行えない（ハッカソンの審査・評価のための閲覧と動作確認を除く）。詳細は [LICENSE](LICENSE) を参照。
 
 ### 使用しているオープンソースソフトウェア
 
@@ -248,6 +248,13 @@ Copyright (c) 2026 keyakizakap-alt. All rights reserved.
 | [sharp](https://github.com/lovell/sharp) が同梱する [libvips](https://github.com/libvips/libvips)（`@img/sharp-libvips-*`） | LGPL-3.0-or-later | Next.js が画像最適化のために依存する。改変はしておらず、共有ライブラリとして動的にリンクされる（`sharp` 本体は Apache-2.0） |
 | [caniuse-lite](https://github.com/browserslist/caniuse-lite) | CC-BY-4.0 | ビルド時のブラウザ対応判定。データは [Can I use](https://caniuse.com/)（Alexis Deveria） |
 
+開発・ビルド時だけに使い、アプリには含まれないもの:
+
+| パッケージ | ライセンス | 用途 |
+|---|---|---|
+| [Lightning CSS](https://github.com/parcel-bundler/lightningcss)（`lightningcss` と `lightningcss-*`） | MPL-2.0 | Tailwind CSS・Vite が使う CSS の変換 |
+| [axe-core](https://github.com/dequelabs/axe-core) | MPL-2.0 | `eslint-config-next` 経由の `eslint-plugin-jsx-a11y` が使うアクセシビリティの検査 |
+
 ### フォント
 
 Google Fonts から読み込んで使用している（フォントファイルは同梱していない）。
@@ -256,6 +263,10 @@ Google Fonts から読み込んで使用している（フォントファイル�
 |---|---|---|
 | [Cormorant Garamond](https://fonts.google.com/specimen/Cormorant+Garamond) | SIL Open Font License 1.1 | Copyright 2015 the Cormorant Project Authors |
 | [Zen Kaku Gothic New](https://fonts.google.com/specimen/Zen+Kaku+Gothic+New) | SIL Open Font License 1.1 | Copyright 2022 The Zen Kaku Gothic Project Authors |
+
+### 取り込んだエージェント向けスキル
+
+`.rulesync/skills/gc-hackathon-vol5*` と、そこから生成した `.claude/skills/`・`.agents/skills/`・`.cursor/skills/` 内の同名スキルは、[zenn-dev/hackathon-agent-skills](https://github.com/zenn-dev/hackathon-agent-skills)（コミット `854d1b7`）の `gc-hackathon-vol5` を、ハッカソン参加者向けに案内されている rulesync の手順で取り込んだもの。本プロジェクトの著作物ではなく、権利は取得元に帰属する。取得元にライセンスの記載はないため、参加者向けの利用の範囲で使う。
 
 ### 外部データ・サービス
 
