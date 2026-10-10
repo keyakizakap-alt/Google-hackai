@@ -106,3 +106,41 @@ describe("プランと新しい予定の重なり", () => {
     expect(findConflicts(items, busy)).toEqual(["a"]);
   });
 });
+
+describe("審査期間中の安全策（デモのカレンダーのライブがすべて過去になった場合）", () => {
+  const mockSources = (items: { summary: string; location?: string; start: { dateTime: string } }[]) => {
+    vi.resetModules();
+    process.env.CALENDAR_SOURCES = "google,sample";
+    vi.doMock("@/lib/sources/google", () => ({ googleSource: { id: "google", isAvailable: () => false } }));
+    vi.doMock("@/lib/sources/sample", () => ({
+      sampleSource: { id: "sample", isAvailable: () => true, isConnected: async () => true, fetchItemsForDetection: async () => items },
+    }));
+  };
+  const cleanup = () => {
+    vi.doUnmock("@/lib/sources/google");
+    vi.doUnmock("@/lib/sources/sample");
+    delete process.env.CALENDAR_SOURCES;
+  };
+
+  it("これからのライブが無いときは、アプリ内蔵の架空のライブ（今日からの日付）で補う", async () => {
+    mockSources([{ summary: "歯医者", start: { dateTime: new Date(Date.now() + 86_400_000).toISOString() } }]);
+    const { collectLiveCandidates } = await import("@/lib/sources");
+    const now = Date.now();
+    const out = await collectLiveCandidates({ from: now, to: now + 180 * 86_400_000 });
+    expect(out.candidates.length).toBeGreaterThan(0);
+    expect(out.candidates.every((c) => Date.parse(c.startAt) > now)).toBe(true);
+    expect(out.scanned).toBe(1);
+    cleanup();
+  });
+
+  it("これからのライブがあるときは、デモのカレンダーの内容だけを使う", async () => {
+    const start = new Date(Date.now() + 40 * 86_400_000).toISOString();
+    mockSources([{ summary: "IVE ライブ 東京ドーム", location: "東京ドーム", start: { dateTime: start } }]);
+    const { collectLiveCandidates } = await import("@/lib/sources");
+    const now = Date.now();
+    const out = await collectLiveCandidates({ from: now, to: now + 180 * 86_400_000 });
+    expect(out.candidates).toHaveLength(1);
+    expect(out.candidates[0].summary).toContain("IVE");
+    cleanup();
+  });
+});

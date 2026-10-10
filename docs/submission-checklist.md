@@ -42,6 +42,8 @@ gcloud run services update oshiready --region asia-northeast1 --project "$OSHIRE
 ```
 
 - [ ] 上限を決めて設定した（費用の見積もりは手順 4 の結果で確認できる）
+- [ ] 提出したら `bash scripts/cloud-run-demo-mode.sh judging` で審査期間用（常に 1 台起動・AI 300 回/日、12/2 まで）に切り替えた → [審査期間の運用](judging-period.md)
+- [ ] デモのカレンダーに 12/2 より後の日付のライブを入れた
 
 ## 4. エージェントを実測する（課金あり・任意だが推奨）
 
