@@ -218,8 +218,9 @@ Dockerfile             Cloud Run 用のマルチステージビルド
 
 ### 本プロジェクト
 
-<!-- TODO: 本プロジェクト自体のライセンスを決めて記載する（例: MIT。公開しない場合は「All rights reserved」） -->
-未定（決定後に記載）。
+Copyright (c) 2026 keyakizakap-alt. All rights reserved.
+
+本プロジェクトのソースコード・ドキュメント・画像の利用・複製・改変・再配布は、著作権者の許可なく行えない（ハッカソンの審査・評価のための閲覧と動作確認を除く）。詳細は [LICENSE](LICENSE) を参照。
 
 ### 使用しているオープンソースソフトウェア
 
