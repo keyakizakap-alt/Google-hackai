@@ -33,7 +33,7 @@ process.env.GEMINI_API_KEY = "test-key";
 
 const day = new Date(Date.now() + 20 * 86_400_000 + 9 * 3600_000).toISOString().slice(0, 10);
 const event = {
-  id: "e1", artist: "IVE", title: "IVE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
+  id: "e1", artist: "LUMIRISE", title: "LUMIRISE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
   startAt: `${day}T18:00:00+09:00`, homeStation: "長崎", beautyServices: [] as never[], arriveEarlyForGoods: true,
 };
 const transit = (end: string) => ({ id: "t1", kind: "transit", title: "長崎駅 出発", start: `${day}T10:00:00+09:00`, end: `${day}T${end}:00+09:00`, rationale: "r", requiresBooking: true });

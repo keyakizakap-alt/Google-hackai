@@ -1,6 +1,6 @@
 import "server-only";
-import { GoogleGenAI } from "@google/genai";
-import { config, isGeminiConfigured } from "../config";
+import { isGeminiConfigured } from "../config";
+import { createGenAI, generateWithFallback } from "../gemini";
 import { fenceJson } from "../agent/fence";
 import { logger } from "../logger";
 import { extractByRules, type DetectedLiveEvent, type LiveCandidate } from "./detect";
@@ -53,15 +53,16 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
 
   const started = Date.now();
   try {
-    const ai = config.gemini.useVertex
-      ? new GoogleGenAI({ vertexai: true, project: config.gemini.project, location: config.gemini.location, httpOptions: { timeout: 30_000 } })
-      : new GoogleGenAI({ apiKey: config.gemini.apiKey, httpOptions: { timeout: 30_000 } });
+    const ai = createGenAI(30_000);
     const input = candidates.map(({ key, summary, location, startAt }) => ({ key, summary, location, startAt }));
-    const res = await ai.models.generateContent({
-      model: config.gemini.model,
-      contents: [{ role: "user", parts: [{ text: `<candidates>${fenceJson(input)}</candidates>` }] }],
-      config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA },
-    });
+    const { res, model } = await generateWithFallback(
+      ai,
+      {
+        contents: [{ role: "user", parts: [{ text: `<candidates>${fenceJson(input)}</candidates>` }] }],
+        config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA },
+      },
+      { requestId, route: "detect" },
+    );
     const rows = (JSON.parse(res.text ?? "{}") as { events?: GeminiRow[] }).events ?? [];
     const byKey = new Map(candidates.map((c) => [c.key, c]));
     const out: DetectedLiveEvent[] = [];
@@ -82,7 +83,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
         source: "gemini",
       });
     }
-    logger.info("detect.gemini", { requestId, latencyMs: Date.now() - started, itemCount: out.length, model: config.gemini.model });
+    logger.info("detect.gemini", { requestId, latencyMs: Date.now() - started, itemCount: out.length, model });
     return out;
   } catch (e) {
     logger.warn("detect.gemini.failed", { requestId, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status });

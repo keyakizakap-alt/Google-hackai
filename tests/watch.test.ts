@@ -44,7 +44,7 @@ const hair: TimelineItem = {
 };
 const plan: Plan = {
   id: "plan1",
-  event: { id: "e1", artist: "IVE", title: "公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎", startAt, homeStation: "大阪", beautyServices: ["hair"], arriveEarlyForGoods: false },
+  event: { id: "e1", artist: "LUMIRISE", title: "公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎", startAt, homeStation: "大阪", beautyServices: ["hair"], arriveEarlyForGoods: false },
   summary: "提案です",
   decisions: [],
   items: [hair, prep("p1", "経路の確認", 1, "21:00"), { id: "ev", kind: "event", title: "公演", start: startAt, end: `${eventDay}T21:00:00+09:00`, rationale: "本番", requiresBooking: false }],

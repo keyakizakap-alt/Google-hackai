@@ -9,7 +9,7 @@ const future = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10)
 const plan: Plan = {
   id: "p1",
   event: {
-    id: "e1", artist: "IVE", title: "IVE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
+    id: "e1", artist: "LUMIRISE", title: "LUMIRISE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
     startAt: `${future}T18:00:00+09:00`, homeStation: "長崎", beautyServices: ["brow"], arriveEarlyForGoods: true,
   },
   summary: "s",

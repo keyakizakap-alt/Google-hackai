@@ -55,6 +55,11 @@ export const config = {
     location: env("GOOGLE_CLOUD_LOCATION") ?? "global",
     model: env("GEMINI_MODEL") ?? "gemini-3.5-flash",
     /**
+     * 予備のモデル（任意）。メインが混雑・障害・提供終了で使えないときだけ使う。
+     * 例: Flash-Lite。未設定なら切り替えない。モデル名は公式ドキュメントで確認したものを入れる
+     */
+    fallbackModel: env("GEMINI_FALLBACK_MODEL"),
+    /**
      * 1 回のプラン作成で AI が道具（ツール）を使える回数。手順が 7 段階あるため最低 8 回は確保する。
      * 残り 2 回になると提出（submit_timeline）だけを許可する。
      */

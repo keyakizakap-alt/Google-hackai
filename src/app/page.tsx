@@ -11,6 +11,7 @@ import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
 import { RemindersCard } from "@/components/Reminders";
 import { ConflictBanner, WatchCard } from "@/components/AgentInsights";
+import { FirstSteps } from "@/components/FirstSteps";
 import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
 import { useStore } from "@/components/store";
@@ -354,6 +355,7 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <Greeting />
+      <FirstSteps />
       <EventSwitcher />
       <ConflictBanner />
       <WatchCard />
