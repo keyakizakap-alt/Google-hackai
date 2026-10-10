@@ -67,6 +67,8 @@ Gemini のモデルは `OSHIREADY_GEMINI_MODEL` で変えられる（既定 `gem
 ## デモ・審査の期間だけの設定
 
 ```bash
+bash scripts/cloud-run-demo-mode.sh lite    # おすすめ：使っていないときは止まる・最大 2 台・同時 20 件・AI 100 回/日
+bash scripts/cloud-run-demo-mode.sh warmup  # デモ直前に起こしておく（最初の数秒の待ちをなくす）
 bash scripts/cloud-run-demo-mode.sh on      # 常に 1 台起動・最大 3 台・同時 20 件・AI 300 回/日（費用が継続して発生）
 bash scripts/cloud-run-demo-mode.sh status  # いまの設定を確認
 bash scripts/cloud-run-demo-mode.sh off     # 終わったら必ず戻す

@@ -2,6 +2,8 @@
 # デモ・審査の期間だけ、OshiReady の Cloud Run を「待たせない・止まらない」設定に切り替える。
 #
 #   export OSHIREADY_PROJECT_ID='your-project-id'
+#   bash scripts/cloud-run-demo-mode.sh lite    # 費用を抑えたデモ用（使っていないときは止まる。おすすめ）
+#   bash scripts/cloud-run-demo-mode.sh warmup  # デモ直前に 1 回呼んで起こしておく（費用はほぼかからない）
 #   bash scripts/cloud-run-demo-mode.sh on      # デモ用に切り替える（常に 1 台起動 → 費用が継続して発生）
 #   bash scripts/cloud-run-demo-mode.sh off     # 試験用（費用を抑える設定）に戻す
 #   bash scripts/cloud-run-demo-mode.sh status  # いまの設定を表示する
@@ -28,10 +30,30 @@ print("  1 台が同時に受ける数 :", spec.get("containerConcurrency", "-")
 print("  AI の 1 日の利用回数 :", env.get("AGENT_DAILY_LIMIT", "500（既定）"))
 print("  AI のモデル          :", env.get("GEMINI_MODEL", "-"))
 '
-  echo "  URL: $(gcloud run services describe "$SERVICE" "${P[@]}" --format='value(status.url)')"
+  echo "  URL: $(URL_OF)"
 }
 
+URL_OF() { gcloud run services describe "$SERVICE" "${P[@]}" --format='value(status.url)'; }
+
 case "${1:-status}" in
+  lite)
+    cat <<MSG
+費用を抑えたデモ用の設定に切り替えます:
+  - 使っていないときは 0 台（止まっていて費用はかからない）
+  - 最大 2 台・1 台あたり同時 20 件（審査員が同時に触っても待たされにくい）
+  - AI の 1 日の利用回数 100 回（1 台あたり。使いすぎによる費用の増加を防ぐ）
+  ※ 止まっている状態から最初に開くと数秒かかります。デモ直前に warmup を実行してください。
+MSG
+    gcloud run services update "$SERVICE" "${P[@]}" \
+      --min-instances=0 --max-instances=2 --concurrency=20 \
+      --update-env-vars="AGENT_DAILY_LIMIT=${OSHIREADY_DEMO_DAILY_LIMIT:-100}"
+    ;;
+  warmup)
+    url="$(URL_OF)"
+    for i in 1 2 3; do curl -fsS -o /dev/null -w "起こしています… %{http_code}（%{time_total} 秒）\n" "$url/api/health" || true; sleep 2; done
+    echo "準備できました。15 分ほど操作がないと再び止まるので、デモの直前に実行してください。"
+    exit 0
+    ;;
   on)
     MAX="${OSHIREADY_DEMO_MAX_INSTANCES:-3}"
     CONC="${OSHIREADY_DEMO_CONCURRENCY:-20}"
@@ -57,6 +79,6 @@ MSG
     echo; echo "試験用の設定（使っていないときは止まる）に戻しました。"
     ;;
   status) ;;
-  *) echo "使い方: bash scripts/cloud-run-demo-mode.sh on|off|status" >&2; exit 2 ;;
+  *) echo "使い方: bash scripts/cloud-run-demo-mode.sh lite|warmup|on|off|status" >&2; exit 2 ;;
 esac
 echo; echo "いまの設定:"; status
