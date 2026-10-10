@@ -64,6 +64,16 @@ gcloud run services update oshiready --region asia-northeast1 --project "$OSHIRE
 
 Gemini のモデルは `OSHIREADY_GEMINI_MODEL` で変えられる（既定 `gemini-3.5-flash`。`gemini-2.5` 系は 2026年10月に提供終了予定）。
 
+## デモ・審査の期間だけの設定
+
+```bash
+bash scripts/cloud-run-demo-mode.sh on      # 常に 1 台起動・最大 3 台・同時 20 件・AI 300 回/日（費用が継続して発生）
+bash scripts/cloud-run-demo-mode.sh status  # いまの設定を確認
+bash scripts/cloud-run-demo-mode.sh off     # 終わったら必ず戻す
+```
+
+予算アラート（コンソールの「お支払い」→「予算とアラート」）も先に設定しておく。アラートは通知だけで、自動では止まらない。
+
 ## 4. 提出前のゲート
 
 - Cloud Run の公開URLで、登録 → 実Gemini生成 → 修正 → 承認 → 予約サイト案内 → 予約メモ → 更新後の復元を確認。
