@@ -1,0 +1,13 @@
+Copyright (c) 2026 keyakizakap-alt. All rights reserved.
+
+本リポジトリのソースコード・ドキュメント・画像の利用・複製・改変・再配布は、
+著作権者の書面による許可なく行うことはできません。
+ただし、第5回 Agentic AI Hackathon with Google Cloud の審査・評価を目的とした
+閲覧および動作確認はこの限りではありません。
+
+次のものは本ライセンスの対象外で、それぞれの権利者・ライセンスに従います
+（README.md の「ライセンス」を参照）。
+- 本リポジトリが利用するオープンソースソフトウェアおよびフォント
+- zenn-dev/hackathon-agent-skills から取り込んだエージェント向けスキル
+  （.rulesync/skills/gc-hackathon-vol5*、.claude/skills/gc-hackathon-vol5*、
+  .agents/skills/gc-hackathon-vol5*、.cursor/skills/gc-hackathon-vol5*）

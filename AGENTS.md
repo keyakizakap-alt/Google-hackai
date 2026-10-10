@@ -40,6 +40,14 @@ CI（`.github/workflows/ci.yml`）で lint・型チェック・テスト・ビ�
 
 Cloud Run へのデプロイ手順は `docs/cloud-run-launch.md`、運用（シークレットの入れ替えなど）は `docs/operations.md` を参照。
 
+### エージェント向けスキル（rulesync）
+
+ハッカソンのルール確認・提出前チェック（`gc-hackathon-vol5`）とアイデア出し（`gc-hackathon-vol5-ideation`）のスキルを [rulesync](https://github.com/dyoshikawa/rulesync) で管理する。元データは `.rulesync/skills/`（取得元: `zenn-dev/hackathon-agent-skills` の `gc-hackathon-vol5`）。`.claude/skills/`・`.agents/skills/`・`.cursor/skills/` は生成物なので直接編集しない。
+
+```bash
+npx rulesync generate   # .rulesync/skills から各ツール向けに再生成（設定は rulesync.jsonc。スキルのみを対象とし、CLAUDE.md / AGENTS.md は変更しない）
+```
+
 ## Gemini の利用
 
 - SDK は **Google Gen AI SDK**（Python: `google-genai`、JavaScript/TypeScript: `@google/genai`）を使う。
