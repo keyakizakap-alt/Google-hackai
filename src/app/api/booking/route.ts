@@ -5,7 +5,7 @@ import { advance, GuardrailError, hasUserApproval } from "@/lib/agent/stateMachi
 import type { BookingResult, TimelineItem } from "@/lib/agent/types";
 import { issueCancelTicket, providerFor } from "@/lib/booking";
 import { claimApproval, releaseApproval } from "@/lib/booking/once";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { EKISPERT_ROUTE_URL, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "@/lib/safeUrl";
 import { logger } from "@/lib/logger";
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req, "book") ?? rateLimit(req, "booking", 10);
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "ユーザーの確認が必要です" }, { status: 400 });
     const env = verifyEnvelope(parsed.data.envelope);
     if (env.status !== "approved" || !hasUserApproval(env.history)) {

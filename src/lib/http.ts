@@ -21,13 +21,58 @@ export function assertSameOrigin(req: Request, requiredAction?: string): NextRes
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const base = appBaseUrl();
   const allowed = new Set([base ? new URL(base).host : null, host].filter(Boolean));
-  if (!origin || !allowed.has(new URL(origin).host)) {
+  if (!origin || !allowed.has(originHost(origin))) {
     return NextResponse.json({ error: "この操作は OshiReady の画面からのみ行えます" }, { status: 403 });
   }
   if (requiredAction && req.headers.get("x-oshiready-action") !== requiredAction) {
     return NextResponse.json({ error: "この操作にはあなたの確認が必要です" }, { status: 403 });
   }
   return null;
+}
+
+/** Origin ヘッダーのホスト部分。「null」など URL として読めない値は、どこにも一致しないものとして扱う */
+function originHost(origin: string): string | null {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
+
+/** 送られてきた本文が大きすぎるときのエラー（413 で返す） */
+export class BodyTooLargeError extends Error {
+  constructor() {
+    super("送られたデータが大きすぎます");
+  }
+}
+
+/**
+ * 本文を上限つきで読み、JSON として返す（巨大な本文でメモリや CPU を使い切られるのを防ぐ）。
+ * Content-Length を先に確かめ、無い・偽っている場合も読みながら上限で打ち切る。
+ * JSON として読めないときは undefined を返す（呼び出し側の zod 検証で 400 にする）。
+ */
+export async function readJson(req: Request, maxBytes = 512 * 1024): Promise<unknown> {
+  const declared = Number(req.headers.get("content-length") ?? NaN);
+  if (Number.isFinite(declared) && declared > maxBytes) throw new BodyTooLargeError();
+  if (!req.body) return undefined;
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new BodyTooLargeError();
+    }
+    chunks.push(value);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -76,6 +121,10 @@ export function rateLimit(req: Request, key: string, limit: number, windowMs = 6
 }
 
 export function errorResponse(e: unknown, meta: { requestId: string; trace?: string; route: string }) {
+  if (e instanceof BodyTooLargeError) {
+    logger.warn("request.too_large", meta);
+    return NextResponse.json({ error: "送られたデータが大きすぎます。画像を小さくするか、内容を減らしてもう一度お試しください。" }, { status: 413 });
+  }
   if (e instanceof AgentUnavailableError) {
     logger.warn("agent.unavailable", meta);
     return NextResponse.json({ error: e.message, code: "AGENT_UNAVAILABLE" }, { status: 503 });

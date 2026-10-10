@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { providerById, readCancelTicket } from "@/lib/booking";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
 const Body = z.object({ ticket: z.string().min(10).max(2000), confirm: z.literal(true) });
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req, "cancel") ?? rateLimit(req, "booking-cancel", 10);
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "キャンセルにはあなたの確認が必要です" }, { status: 400 });
     const ticket = readCancelTicket(parsed.data.ticket);
     if (!ticket) return NextResponse.json({ error: "この予約はアプリからキャンセルできません。予約した窓口に連絡してください" }, { status: 400 });

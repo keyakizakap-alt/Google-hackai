@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyEnvelope } from "@/lib/agent/envelope";
 import { watchPlan, WATCHED_STATUSES } from "@/lib/agent/watchRun";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
 const Body = z.object({ envelope: z.unknown() });
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req) ?? rateLimit(req, "watch", 12);
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください" }, { status: 400 });
     const env = verifyEnvelope(parsed.data.envelope, Date.now(), { allowExpired: true });
     if (!WATCHED_STATUSES.has(env.status)) return NextResponse.json({ signals: [], key: null, calendarChecked: false });

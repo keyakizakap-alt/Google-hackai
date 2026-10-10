@@ -4,7 +4,7 @@ import { verifyEnvelope } from "@/lib/agent/envelope";
 import { reviewInstruction } from "@/lib/agent/watch";
 import { watchPlan, WATCHED_STATUSES } from "@/lib/agent/watchRun";
 import { generatePlan } from "@/lib/agent/workflow";
-import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
 export const maxDuration = 120;
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req) ?? rateLimit(req, "agent", 6);
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください" }, { status: 400 });
     const env = verifyEnvelope(parsed.data.envelope, Date.now(), { allowExpired: true });
     if (!WATCHED_STATUSES.has(env.status)) return NextResponse.json({ proposal: null, signals: [] });
