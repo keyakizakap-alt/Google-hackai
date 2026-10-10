@@ -213,3 +213,51 @@ evals/                 実際の Gemini を使う評価（npm run eval）
 docs/                  アーキテクチャ図・脅威モデル・運用・デプロイ手順
 Dockerfile             Cloud Run 用のマルチステージビルド
 ```
+
+## ライセンス
+
+### 本プロジェクト
+
+<!-- TODO: 本プロジェクト自体のライセンスを決めて記載する（例: MIT。公開しない場合は「All rights reserved」） -->
+未定（決定後に記載）。
+
+### 使用しているオープンソースソフトウェア
+
+各ライセンスの全文は、それぞれのパッケージ（`node_modules/<パッケージ名>/LICENSE` など）に含まれる。バージョンは `package-lock.json` の値（2026-10-10 時点）。
+
+**アプリの実行に使うもの（`dependencies`）**
+
+| パッケージ | バージョン | ライセンス |
+|---|---|---|
+| [Next.js](https://github.com/vercel/next.js)（`next`） | 16.4.0 | MIT |
+| [React](https://github.com/facebook/react)（`react` / `react-dom`） | 19.2.8 | MIT |
+| [Google Gen AI SDK](https://github.com/googleapis/js-genai)（`@google/genai`） | 2.24.0 | Apache-2.0 |
+| [google-auth-library](https://github.com/googleapis/google-auth-library-nodejs) | 11.1.0 | Apache-2.0 |
+| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)（`@modelcontextprotocol/sdk`） | 1.32.1 | MIT |
+| [Zod](https://github.com/colinhacks/zod) | 4.6.5 | MIT |
+| [Lucide](https://github.com/lucide-icons/lucide)（`lucide-react`） | 1.48.0 | ISC |
+| `server-only` | 0.0.1 | MIT |
+
+**開発・ビルドに使うもの（`devDependencies`）**: TypeScript（Apache-2.0）、Tailwind CSS・`@tailwindcss/postcss`・ESLint・`eslint-config-next`・Vitest・`@types/*`（いずれも MIT）。
+
+**間接的に含まれるもののうち、MIT / Apache-2.0 / BSD / ISC 以外のもの**
+
+| パッケージ | ライセンス | 用途 |
+|---|---|---|
+| [sharp](https://github.com/lovell/sharp) が同梱する [libvips](https://github.com/libvips/libvips)（`@img/sharp-libvips-*`） | LGPL-3.0-or-later | Next.js が画像最適化のために依存する。改変はしておらず、共有ライブラリとして動的にリンクされる（`sharp` 本体は Apache-2.0） |
+| [caniuse-lite](https://github.com/browserslist/caniuse-lite) | CC-BY-4.0 | ビルド時のブラウザ対応判定。データは [Can I use](https://caniuse.com/)（Alexis Deveria） |
+
+### フォント
+
+Google Fonts から読み込んで使用している（フォントファイルは同梱していない）。
+
+| フォント | ライセンス | 著作権者 |
+|---|---|---|
+| [Cormorant Garamond](https://fonts.google.com/specimen/Cormorant+Garamond) | SIL Open Font License 1.1 | Copyright 2015 the Cormorant Project Authors |
+| [Zen Kaku Gothic New](https://fonts.google.com/specimen/Zen+Kaku+Gothic+New) | SIL Open Font License 1.1 | Copyright 2022 The Zen Kaku Gothic Project Authors |
+
+### 外部データ・サービス
+
+- **天気予報**: 出典: 気象庁ホームページ（https://www.jma.go.jp/bosai/forecast/）。取得した予報を晴れ・曇り・雨・雪の区分に加工して使用している。
+- **経路**: 駅すぱあと MCP（株式会社ヴァル研究所）。利用条件は同社の規約に従う。
+- Gemini API・Google Calendar API・Cloud Run は、Google の各サービス利用規約に従って利用している。
