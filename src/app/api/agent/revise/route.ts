@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyEnvelope } from "@/lib/agent/envelope";
 import { generatePlan } from "@/lib/agent/workflow";
-import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 
 export const maxDuration = 120;
 
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req) ?? rateLimit(req, "agent", 6) ?? dailyAgentCap();
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "修正内容を入力してください" }, { status: 400 });
     // 期限切れのプランも、内容を参考にした作り直しには使える。ただし古い承認は引き継がず、新しい承認待ちとして作る
     const env = verifyEnvelope(parsed.data.envelope, Date.now(), { allowExpired: true });

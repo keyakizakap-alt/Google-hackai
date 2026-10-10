@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clientIp, redirectBase } from "@/lib/http";
+import { assertSameOrigin, BodyTooLargeError, clientIp, readJson, redirectBase } from "@/lib/http";
 import { safeExternalUrl } from "@/lib/safeUrl";
 import { isAllowedTool } from "@/lib/services/ekispert";
 
@@ -83,5 +83,39 @@ describe("errorResponse（設定不足）", () => {
     expect(body.code).toBe("CONFIG_MISSING");
     expect(body.error).not.toContain("SESSION_SECRET");
     expect(body.error).toContain("準備がまだ整っていない");
+  });
+});
+
+describe("readJson（本文の大きさの上限）", () => {
+  const post = (body: BodyInit, headers: Record<string, string> = {}) => new Request("http://x/api", { method: "POST", body, headers });
+
+  it("上限以内なら JSON として読む", async () => {
+    expect(await readJson(post(JSON.stringify({ a: 1 })), 100)).toEqual({ a: 1 });
+  });
+
+  it("Content-Length が上限を超えていたら、読む前に断る", async () => {
+    await expect(readJson(post("{}", { "content-length": "999999" }), 100)).rejects.toBeInstanceOf(BodyTooLargeError);
+  });
+
+  it("Content-Length を偽っていても、読みながら上限で打ち切る", async () => {
+    const big = JSON.stringify({ a: "x".repeat(500) });
+    await expect(readJson(post(big, { "content-length": "10" }), 100)).rejects.toBeInstanceOf(BodyTooLargeError);
+  });
+
+  it("JSON として読めない本文は undefined（呼び出し側で 400 にする）", async () => {
+    expect(await readJson(post("not json"), 100)).toBeUndefined();
+  });
+});
+
+describe("assertSameOrigin（Origin ヘッダーの検証）", () => {
+  const req = (origin: string) => new Request("http://app.example/api", { method: "POST", headers: { origin, host: "app.example" } });
+
+  it("URL として読めない Origin（null など）でもエラーにならず、403 で断る", () => {
+    expect(assertSameOrigin(req("null"))?.status).toBe(403);
+  });
+
+  it("別のサイトからの操作を断り、同じサイトからは通す", () => {
+    expect(assertSameOrigin(req("https://evil.example"))?.status).toBe(403);
+    expect(assertSameOrigin(req("https://app.example"))).toBeNull();
   });
 });

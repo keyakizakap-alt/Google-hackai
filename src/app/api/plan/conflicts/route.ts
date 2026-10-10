@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertSameOrigin, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { findConflicts } from "@/lib/agent/conflicts";
 import { collectBusy } from "@/lib/sources";
@@ -20,10 +20,15 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req) ?? rateLimit(req, "conflicts", 12);
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req));
     if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください" }, { status: 400 });
     const now = Date.now();
-    const items = parsed.data.items.filter((i) => Date.parse(i.start) > now);
+    // 日時として読めないもの・極端に先のもの（400 日超）は調べない
+    const limit = now + 400 * 86_400_000;
+    const items = parsed.data.items.filter((i) => {
+      const s = Date.parse(i.start), e = Date.parse(i.end);
+      return s > now && Number.isFinite(e) && e >= s && e <= limit;
+    });
     if (items.length === 0) return NextResponse.json({ checked: false, conflicts: [] });
     const to = Math.max(...items.map((i) => Date.parse(i.end))) + 60_000;
     const { source, busy } = await collectBusy({ from: now, to });

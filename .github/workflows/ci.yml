@@ -25,6 +25,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 本番に入る部品に、重大度「高」以上の既知の脆弱性がないかを確かめる
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

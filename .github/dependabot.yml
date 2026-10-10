@@ -1,0 +1,18 @@
+# 部品（npm）と GitHub Actions の更新を週 1 回まとめて提案する。
+# 脆弱性の修正は、この設定とは別に GitHub が見つけしだい提案する（リポジトリ設定で Dependabot security updates を有効にした場合）。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      timezone: Asia/Tokyo

@@ -1,5 +1,7 @@
 import "server-only";
+import { demoCalendarItems } from "../demo/calendar";
 import type { LiveCandidate } from "../eventDetection/detect";
+import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { gateForDetection, sanitizeBusy } from "./gate";
 import { googleSource } from "./google";
@@ -47,7 +49,15 @@ export async function collectLiveCandidates(range: { from: number; to: number })
   let scanned = 0;
   const candidates: LiveCandidate[] = [];
   for (const s of connected) {
-    const gated = gateForDetection(await s.fetchItemsForDetection(range));
+    let gated = gateForDetection(await s.fetchItemsForDetection(range));
+    // 審査・デモの期間中に、デモのカレンダーのライブがすべて過去になっても体験が止まらないよう、
+    // これからのライブが 1 件も無いときは、アプリ内蔵の架空のライブ（今日からの相対日付）で補う
+    if (s.id === "sample" && gated.candidates.length === 0) {
+      logger.warn("sample.no_upcoming_live", { scanned: gated.scanned });
+      const scannedReal = gated.scanned;
+      gated = gateForDetection(demoCalendarItems(range.from), range.from);
+      gated.scanned = scannedReal;
+    }
     scanned += gated.scanned;
     candidates.push(...gated.candidates);
   }

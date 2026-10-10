@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { scanForEvents, ScanUnavailableError } from "@/lib/eventDetection/scan";
-import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta } from "@/lib/http";
+import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 
 export const maxDuration = 60;
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const denied = assertSameOrigin(req) ?? rateLimit(req, "scan", 10) ?? dailyAgentCap();
   if (denied) return denied;
   try {
-    const parsed = Body.safeParse(await req.json());
+    const parsed = Body.safeParse(await readJson(req, 7 * 1024 * 1024));
     if (!parsed.success) return NextResponse.json({ error: "画像か文章を入れてください" }, { status: 400 });
     let image: { mime: string; data: Buffer } | undefined;
     if (parsed.data.image) {
