@@ -1,0 +1,23 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
+  // スキルだけを管理する。CLAUDE.md / AGENTS.md は手で管理するため "rules" は含めない
+  "targets": [
+    "claudecode",
+    "codexcli",
+    "cursor"
+  ],
+  "features": [
+    "skills"
+  ],
+  "outputRoots": [
+    "."
+  ],
+  "delete": true,
+  "verbose": false,
+  "silent": false,
+  "global": false,
+  "simulateCommands": false,
+  "simulateSubagents": false,
+  "simulateSkills": true,
+  "gitignoreTargetsOnly": true
+}
