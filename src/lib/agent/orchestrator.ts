@@ -1,7 +1,8 @@
 import "server-only";
-import { FunctionCallingConfigMode, GoogleGenAI, type Content, type FunctionDeclaration, type Part } from "@google/genai";
+import { FunctionCallingConfigMode, type Content, type FunctionDeclaration, type Part } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
+import { createGenAI, isModelUnavailable, modelCandidates } from "../gemini";
 import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { venueArea } from "../eventDetection/venues";
@@ -40,17 +41,15 @@ export class AgentUnavailableError extends Error {
   }
 }
 
-function genai() {
-  return config.gemini.useVertex
-    ? new GoogleGenAI({ vertexai: true, project: config.gemini.project, location: config.gemini.location, httpOptions: { timeout: 60_000 } })
-    : new GoogleGenAI({ apiKey: config.gemini.apiKey, httpOptions: { timeout: 60_000 } });
-}
+/** 予備のモデルで作り直すのに最低限ほしい残り時間 */
+const MIN_TIME_FOR_FALLBACK_MS = 30_000;
 
 /**
  * 推し活プランニング・エージェント本体（Gemini Function Calling の自律ループ）。
  *
  * ガードレール:
  * - 最大ステップ数・全体タイムアウトで暴走を防止
+ * - 混雑・一時的な障害は自動で再試行し、それでもだめなら予備のモデル（設定時のみ）で最初から作り直す
  * - ツールは許可リスト（ネイティブ + 駅すぱあと MCP）のみ実行
  * - submit_timeline の検証を通過するまで完了扱いにしない（自己修正ループ）
  * - エージェントの出力は常に pending_approval としてユーザーに返す（呼び出し側で状態遷移を強制）
@@ -67,21 +66,33 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   const trace: TraceStep[] = [];
   const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
   let engine: AgentRunOutput["engine"] = "rule-based";
+  let model = config.gemini.model;
   const logBase = { requestId: input.requestId, trace: input.trace };
 
   if (isGeminiConfigured()) {
-    try {
-      engine = "gemini";
-      await runGeminiLoop(input, ctx, trace, usage);
-    } catch (e) {
-      logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status, model: config.gemini.model });
-      throw new AgentUnavailableError();
+    engine = "gemini";
+    const deadline = Date.now() + DEADLINE_MS;
+    const models = modelCandidates();
+    for (let i = 0; i < models.length; i++) {
+      model = models[i];
+      try {
+        await runGeminiLoop(input, ctx, trace, usage, model, deadline);
+        break;
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        const canFallback = i < models.length - 1 && isModelUnavailable(e) && deadline - Date.now() > MIN_TIME_FOR_FALLBACK_MS;
+        logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, model, mode: canFallback ? "fallback" : "give_up" });
+        if (!canFallback) throw new AgentUnavailableError();
+        // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
+        Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });
+        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
+      }
     }
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
       // 通信はできたが、決められた回数内にタイムラインを提出できなかった
-      logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model: config.gemini.model });
+      logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model });
       throw new AgentUnavailableError("AI がプランを仕上げられませんでした。もう一度お試しください");
     }
     await runRuleBasedPlanner(ctx, trace);
@@ -115,7 +126,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     decisions: ctx.submitted.decisions.slice(0, 6),
     items,
     warnings: warnings.slice(0, 10),
-    generatedBy: { engine, model: engine === "gemini" ? config.gemini.model : "rules-v1" },
+    generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
     revision: input.previous ? input.previous.revision + 1 : 0,
     createdAt: new Date().toISOString(),
   };
@@ -132,13 +143,13 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   return { plan, trace, usage, engine };
 }
 
-async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"]) {
-  const ai = genai();
+async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"], model: string, deadline: number) {
+  const ai = createGenAI(60_000);
   const ekispert = await getEkispertDeclarations();
   const declarations: FunctionDeclaration[] = [...(ekispert?.declarations ?? []), ...NATIVE_DECLARATIONS];
   const allowed = new Set([...NATIVE_TOOL_NAMES, ...(ekispert?.declarations.map((d) => d.name!) ?? [])]);
   trace.push({
-    step: 1,
+    step: trace.length + 1,
     type: "model",
     name: "plan",
     ok: true,
@@ -164,14 +175,13 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     },
   ];
 
-  const deadline = Date.now() + DEADLINE_MS;
   for (let step = 0; step < config.gemini.maxSteps; step++) {
     if (Date.now() > deadline) throw new Error("agent deadline exceeded");
     const started = Date.now();
     // 残り 2 回になったら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
     const mustSubmit = step >= config.gemini.maxSteps - 2;
     const res = await ai.models.generateContent({
-      model: config.gemini.model,
+      model,
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -192,7 +202,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
 
     const modelContent = res.candidates?.[0]?.content;
     const calls = res.functionCalls ?? [];
-    logger.info("agent.model.turn", { requestId: input.requestId, step, latencyMs: Date.now() - started, itemCount: calls.length, model: config.gemini.model });
+    logger.info("agent.model.turn", { requestId: input.requestId, step, latencyMs: Date.now() - started, itemCount: calls.length, model });
     if (!modelContent || calls.length === 0) {
       // テキストで終わってしまった場合は提出を促す（思考署名を保つため model の content はそのまま履歴へ）
       if (modelContent) contents.push(modelContent);

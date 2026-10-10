@@ -137,7 +137,7 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setText(e.target.value)}
                 maxLength={3000}
                 rows={4}
-                placeholder={"例）公演名：IVE WORLD TOUR\n日時：2026年10月30日 開演18:00\n会場：京セラドーム大阪"}
+                placeholder={"例）公演名：LUMIRISE WORLD TOUR\n日時：2026年10月30日 開演18:00\n会場：京セラドーム大阪"}
                 className="mt-1.5 w-full rounded-xl border border-line bg-cloud px-3 py-2.5 text-sm font-normal outline-none focus:border-lav-400 focus:bg-white"
               />
             </label>

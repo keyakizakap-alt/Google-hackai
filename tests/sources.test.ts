@@ -18,12 +18,12 @@ describe("共通の安全チェック（gate）", () => {
 
   it("ライブ以外の予定は候補に残らず、元の配列も空にする", () => {
     const items = [
-      { id: "a", summary: "IVE 京セラドーム公演", start: { dateTime: future(20) } },
+      { id: "a", summary: "LUMIRISE 京セラドーム公演", start: { dateTime: future(20) } },
       { id: "b", summary: "歯医者", start: { dateTime: future(2) } },
     ];
     const r = gateForDetection(items);
     expect(r.scanned).toBe(2);
-    expect(r.candidates.map((c) => c.summary)).toEqual(["IVE 京セラドーム公演"]);
+    expect(r.candidates.map((c) => c.summary)).toEqual(["LUMIRISE 京セラドーム公演"]);
     expect(items).toHaveLength(0);
   });
 });
@@ -135,12 +135,12 @@ describe("審査期間中の安全策（デモのカレンダーのライブが�
 
   it("これからのライブがあるときは、デモのカレンダーの内容だけを使う", async () => {
     const start = new Date(Date.now() + 40 * 86_400_000).toISOString();
-    mockSources([{ summary: "IVE ライブ 東京ドーム", location: "東京ドーム", start: { dateTime: start } }]);
+    mockSources([{ summary: "LUMIRISE ライブ 東京ドーム", location: "東京ドーム", start: { dateTime: start } }]);
     const { collectLiveCandidates } = await import("@/lib/sources");
     const now = Date.now();
     const out = await collectLiveCandidates({ from: now, to: now + 180 * 86_400_000 });
     expect(out.candidates).toHaveLength(1);
-    expect(out.candidates[0].summary).toContain("IVE");
+    expect(out.candidates[0].summary).toContain("LUMIRISE");
     cleanup();
   });
 });

@@ -19,7 +19,7 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 | アイデア・対象ユーザー | OshiReady（ライブに行くファン向けの準備スケジュール逆算） |
 | フロントエンド | Next.js 16（App Router）+ React 19 + TypeScript + Tailwind CSS v4 |
 | バックエンド／実行環境 | Next.js Route Handlers（`src/app/api`）。本番は Cloud Run（`Dockerfile`、standalone 出力）、プレビューは Vercel |
-| AI | Gemini（`@google/genai`、Function Calling・構造化出力）。モデルは環境変数 `GEMINI_MODEL` |
+| AI | Gemini（`@google/genai`、Function Calling・構造化出力）。モデルは環境変数 `GEMINI_MODEL`、予備は `GEMINI_FALLBACK_MODEL`（任意）。呼び出しは `src/lib/gemini.ts` の共通部品を使い、429・5xx は自動で再試行する |
 | 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP、気象庁の公開 JSON（API キー不要・`src/lib/signals/weather.ts`）、YouCam（モック）、予約の部品（`BOOKING_PROVIDERS`、既定はデモ予約） |
 | データストア | サーバー側は持たない（署名付きの状態をクライアントが保持）。端末側は IndexedDB / localStorage |
 | リージョン | asia-northeast1（Cloud Run） |

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildIcs, buildReminders, dueReminders, planToCalendar, upcomingReminders } from "@/lib/reminders";
 
 const event = {
-  id: "e1", artist: "IVE", title: "IVE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
+  id: "e1", artist: "LUMIRISE", title: "LUMIRISE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
   startAt: "2030-10-30T18:00:00+09:00", homeStation: "長崎", beautyServices: ["brow" as const], arriveEarlyForGoods: true,
 };
 
@@ -51,7 +51,7 @@ describe("リマインド", () => {
     expect(ics).toContain("TRIGGER:-PT120M");
     expect(ics).toMatch(/DESCRIPTION:予約番号: DEMO-BT-1\\n/);
     // 公演本体も入る（プランに event 項目がなくても）
-    expect(ics).toContain("SUMMARY:IVE｜IVE 京セラドーム公演");
+    expect(ics).toContain("SUMMARY:LUMIRISE｜LUMIRISE 京セラドーム公演");
     for (const line of ics.split("\r\n")) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
   });
 });

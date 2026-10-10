@@ -39,7 +39,7 @@ process.env.SESSION_SECRET = "x".repeat(48);
 
 const day = new Date(Date.now() + 20 * 86_400_000 + 9 * 3600_000).toISOString().slice(0, 10);
 const baseEvent = {
-  id: "e1", artist: "IVE", title: "IVE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
+  id: "e1", artist: "LUMIRISE", title: "LUMIRISE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
   startAt: `${day}T18:00:00+09:00`, homeStation: "大阪", beautyServices: ["hair"] as ("hair")[], arriveEarlyForGoods: false,
 };
 const dayBefore = (n: number, hm: string) => {

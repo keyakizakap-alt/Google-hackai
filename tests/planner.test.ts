@@ -7,7 +7,7 @@ import { demoBusyBlocks } from "@/lib/demo/calendar";
 import { MS_DAY } from "@/lib/time";
 
 const event: OshiEvent = {
-  id: "e1", artist: "IVE", title: "IVE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
+  id: "e1", artist: "LUMIRISE", title: "LUMIRISE 京セラドーム公演", venue: "京セラドーム大阪", venueStation: "ドーム前千代崎",
   startAt: new Date(Date.now() + 20 * MS_DAY).toISOString().slice(0, 10) + "T18:00:00+09:00",
   homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true,
 };

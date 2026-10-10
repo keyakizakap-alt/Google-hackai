@@ -36,13 +36,13 @@ export function demoCalendarItems(now: number) {
     return { dateTime: iso };
   };
   const plus = (s: { dateTime: string }, h: number) => ({ dateTime: toJstIso(Date.parse(s.dateTime) + h * 3_600_000) });
-  const ive = at(34, 18, "2026-10-30T18:00:00+09:00");
-  const lsf = at(52, 17);
-  const svt = at(80, 18);
+  const lumirise = at(34, 18, "2026-10-30T18:00:00+09:00");
+  const solaFlare = at(52, 17);
+  const astronova = at(80, 18);
   return [
-    { id: "demo-1", summary: "IVE 京セラドーム公演", location: "京セラドーム大阪", start: ive, end: plus(ive, 3) },
-    { id: "demo-2", summary: "【参戦】LE SSERAFIM FAN MEETING", location: "横浜アリーナ", start: lsf, end: plus(lsf, 3) },
-    { id: "demo-3", summary: "SEVENTEEN TOUR 東京ドーム", location: "", start: svt, end: plus(svt, 3) },
+    { id: "demo-1", summary: "LUMIRISE 京セラドーム公演", location: "京セラドーム大阪", start: lumirise, end: plus(lumirise, 3) },
+    { id: "demo-2", summary: "【参戦】SOLA FLARE FAN MEETING", location: "横浜アリーナ", start: solaFlare, end: plus(solaFlare, 3) },
+    { id: "demo-3", summary: "ASTRONOVA TOUR 東京ドーム", location: "", start: astronova, end: plus(astronova, 3) },
     { id: "demo-4", summary: "歯医者", location: "", start: at(3, 10), end: at(3, 11) },
     { id: "demo-5", summary: "定例会議", location: "", start: at(5, 14), end: at(5, 15) },
     { id: "demo-6", summary: "友達とランチ", location: "", start: at(9, 12), end: at(9, 14) },

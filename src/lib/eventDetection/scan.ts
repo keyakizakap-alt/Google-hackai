@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { GoogleGenAI } from "@google/genai";
-import { config, isGeminiConfigured } from "../config";
+import { isGeminiConfigured } from "../config";
+import { createGenAI, generateWithFallback } from "../gemini";
 import { fenceText } from "../agent/fence";
 import { logger } from "../logger";
 import { redactText } from "../privacy/mask";
@@ -64,18 +64,16 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
     }
 
     const started = Date.now();
-    const ai = config.gemini.useVertex
-      ? new GoogleGenAI({ vertexai: true, project: config.gemini.project, location: config.gemini.location, httpOptions: { timeout: 45_000 } })
-      : new GoogleGenAI({ apiKey: config.gemini.apiKey, httpOptions: { timeout: 45_000 } });
+    const ai = createGenAI(45_000);
     const parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [{ text: `<today>${toJstIso(now).slice(0, 10)}</today>` }];
     if (input.image) parts.push({ inlineData: { mimeType: input.image.mime, data: input.image.data.toString("base64") } });
     if (text) parts.push({ text: `<pasted_text>${fenceText(text)}</pasted_text>` });
 
-    const res = await ai.models.generateContent({
-      model: config.gemini.model,
-      contents: [{ role: "user", parts }],
-      config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA },
-    });
+    const { res } = await generateWithFallback(
+      ai,
+      { contents: [{ role: "user", parts }], config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA } },
+      { requestId, route: "scan" },
+    );
     const rows = (JSON.parse(res.text ?? "{}") as { events?: Row[] }).events ?? [];
     const events: DetectedLiveEvent[] = [];
     for (const r of rows.slice(0, 10)) {
