@@ -73,6 +73,8 @@ describe("runPlanningAgent (Gemini loop)", () => {
     expect(out.plan.summary).toBe("ok");
     expect(out.plan.decisions).toEqual([{ topic: "出発時刻", chosen: "10:00", alternatives: ["12:00"], reason: "混雑前に着くため" }]);
     expect(out.usage.totalTokens).toBe(360);
+    expect(out.usage.modelCalls).toBe(3); // AI の呼び出し回数を数えている（画面とログに出す）
+    expect(out.usage.modelLatencyMs).toBeGreaterThanOrEqual(0);
     const names = out.trace.map((t) => `${t.name}:${t.ok}`);
     expect(names).toContain("book_salon_now:false"); // 許可リスト外は拒否
     expect(names.filter((n) => n.startsWith("submit_timeline"))).toEqual(["submit_timeline:false", "submit_timeline:true"]);

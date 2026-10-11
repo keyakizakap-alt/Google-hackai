@@ -42,6 +42,8 @@ const ALLOWED_FIELDS = new Set([
   "cached",
   "spotCount",
   "signalCount",
+  "modelCalls",
+  "modelLatencyMs",
   "calendarChecked",
 ]);
 

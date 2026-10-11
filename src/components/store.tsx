@@ -137,7 +137,8 @@ export interface Conflict {
 interface PlanResponse {
   envelope: PlanEnvelope;
   trace: TraceStep[];
-  usage: { promptTokens: number; outputTokens: number; totalTokens: number };
+  /** modelCalls / modelLatencyMs は AI（Gemini）の呼び出し回数と待ち時間の合計（かんたんモードでは 0） */
+  usage: { promptTokens: number; outputTokens: number; totalTokens: number; modelCalls?: number; modelLatencyMs?: number };
   engine: "gemini" | "rule-based";
 }
 

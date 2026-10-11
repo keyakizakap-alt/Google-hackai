@@ -103,7 +103,7 @@ export function clientIp(req: Request): string {
   return xff[Math.max(0, xff.length - hops)];
 }
 
-/** インスタンス内の簡易レート制限（コスト暴走防止）。本番は Vercel WAF / Cloud Armor の制限と併用する */
+/** インスタンス内の簡易レート制限（コスト暴走防止）。台をまたいで共有しないため、全体の上限は「回数 × 最大台数」になる */
 const buckets = new Map<string, { count: number; reset: number }>();
 export function rateLimit(req: Request, key: string, limit: number, windowMs = 60_000): NextResponse | null {
   const ip = clientIp(req);
