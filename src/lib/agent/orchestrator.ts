@@ -28,7 +28,8 @@ export interface AgentRunInput {
 export interface AgentRunOutput {
   plan: Plan;
   trace: TraceStep[];
-  usage: { promptTokens: number; outputTokens: number; totalTokens: number };
+  /** トークン数と、AI（Gemini）の呼び出し回数・待ち時間の合計（画面とログで可観測性に使う） */
+  usage: { promptTokens: number; outputTokens: number; totalTokens: number; modelCalls: number; modelLatencyMs: number };
   engine: "gemini" | "rule-based";
 }
 
@@ -64,7 +65,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     venueArea: venueArea(input.event.venue, input.event.venueStation),
   };
   const trace: TraceStep[] = [];
-  const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0, modelCalls: 0, modelLatencyMs: 0 };
   let engine: AgentRunOutput["engine"] = "rule-based";
   let model = config.gemini.model;
   const logBase = { requestId: input.requestId, trace: input.trace };
@@ -196,6 +197,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
         abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
       },
     });
+    usage.modelCalls += 1;
+    usage.modelLatencyMs += Date.now() - started;
     usage.promptTokens += res.usageMetadata?.promptTokenCount ?? 0;
     usage.outputTokens += res.usageMetadata?.candidatesTokenCount ?? 0;
     usage.totalTokens += res.usageMetadata?.totalTokenCount ?? 0;

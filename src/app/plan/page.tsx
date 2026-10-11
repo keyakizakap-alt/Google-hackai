@@ -195,7 +195,7 @@ function RevisePanel() {
 }
 
 function TracePanel() {
-  const { trace, envelope } = useStore();
+  const { trace, envelope, usage } = useStore();
   if (!trace.length) return null;
   return (
     <section aria-labelledby="trace" className="space-y-2">
@@ -204,7 +204,7 @@ function TracePanel() {
         <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI が調べたこと" : "確認したこと"}</h2>
         <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
-      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
+      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} usage={usage} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
       {envelope && (
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1 text-[11px] text-mute" aria-label="これまでの流れ">
           {envelope.history.map((h, i) => (

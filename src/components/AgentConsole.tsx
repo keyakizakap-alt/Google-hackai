@@ -37,7 +37,23 @@ export function friendlyStep(name: string): string {
  * AI が何を調べたかをターミナル風に表示する（可観測性の可視化）。
  * running 中は実行順の目安を流し、完了後は実際の記録を 1 行ずつ再生する。内部の処理名はユーザー向けの言葉に置き換える。
  */
-export function AgentConsole({ running, trace = [], compact = false, label, agentic = true }: { running: boolean; trace?: TraceStep[]; compact?: boolean; label?: string; agentic?: boolean }) {
+/** AI の利用量（トークン数と、AI を呼んだ回数・待ち時間）。かんたんモードでは渡さないか 0 */
+export interface AgentUsage {
+  promptTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  modelCalls?: number;
+  modelLatencyMs?: number;
+}
+
+/** 所要時間の表示（1 秒未満はミリ秒、それ以上は秒） */
+export function formatDuration(ms: number): string {
+  if (ms < 1) return "<1ms";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}秒`;
+}
+
+export function AgentConsole({ running, trace = [], compact = false, label, agentic = true, usage }: { running: boolean; trace?: TraceStep[]; compact?: boolean; label?: string; agentic?: boolean; usage?: AgentUsage | null }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -54,7 +70,9 @@ export function AgentConsole({ running, trace = [], compact = false, label, agen
         state: i === arr.length - 1 ? ("run" as const) : ("ok" as const),
         ms: undefined as number | undefined,
       }))
-    : trace.map((t) => ({ key: `${t.step}`, name: friendlyStep(t.name), text: t.summary, state: t.ok ? ("ok" as const) : ("ng" as const), ms: undefined as number | undefined }));
+    : // 道具（ツール）の実行には、かかった時間を添える（AI の考える時間は下の合計に出す）
+      trace.map((t) => ({ key: `${t.step}`, name: friendlyStep(t.name), text: t.summary, state: t.ok ? ("ok" as const) : ("ng" as const), ms: t.type === "tool" ? t.latencyMs : undefined }));
+  const showUsage = !running && usage && ((usage.modelCalls ?? 0) > 0 || usage.totalTokens > 0);
 
   return (
     <div className="overflow-hidden rounded-2xl bg-night text-[12px] text-white/80 shadow-float" role="log" aria-live="polite" aria-label="AIが調べたこと">
@@ -77,10 +95,22 @@ export function AgentConsole({ running, trace = [], compact = false, label, agen
             )}
             <span className="w-20 shrink-0 font-bold text-rose-300">{l.name}</span>
             <span className={`min-w-0 text-white/65 ${l.state === "run" ? "caret" : ""}`}>{l.text}</span>
-            {l.ms !== undefined && <span className="ml-auto shrink-0 text-white/35">{l.ms}ms</span>}
+            {l.ms !== undefined && <span className="ml-auto shrink-0 tabular-nums text-white/35">{formatDuration(l.ms)}</span>}
           </li>
         ))}
       </ol>
+      {showUsage && (
+        <p className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-white/10 px-4 py-2 text-[11px] tabular-nums text-white/45" aria-label="AI の利用量">
+          {(usage.modelCalls ?? 0) > 0 && (
+            <span>
+              AI の呼び出し {usage.modelCalls} 回・{formatDuration(usage.modelLatencyMs ?? 0)}
+            </span>
+          )}
+          <span>
+            トークン {usage.totalTokens.toLocaleString()}（入力 {usage.promptTokens.toLocaleString()} / 出力 {usage.outputTokens.toLocaleString()}）
+          </span>
+        </p>
+      )}
     </div>
   );
 }
