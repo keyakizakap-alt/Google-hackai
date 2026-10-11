@@ -69,6 +69,8 @@ EVAL_REPEATS=1 npm run eval
 
 ## 5. 提出物
 
+提出物の一覧と、説明文・動作確認の方法・デモ動画の台本・Zenn 記事の下書きは [submission/](submission/README.md) にある。
+
 - [ ] GitHub リポジトリの URL
 - [ ] デプロイ URL は **Cloud Run の URL**（`https://oshiready-…run.app`）。Vercel のプレビュー URL は使わない
 - [ ] 動作確認の方法: 「デモのカレンダーで試す」から始める手順（Google ログイン・メール受信は不要）と、デモ予約であること
