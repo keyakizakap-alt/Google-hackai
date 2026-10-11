@@ -30,6 +30,13 @@ export class ConfigError extends Error {
   }
 }
 
+const THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"] as const;
+function thinkingLevel(v: string | undefined): (typeof THINKING_LEVELS)[number] | undefined {
+  if (v === undefined) return "LOW";
+  const upper = v.toUpperCase();
+  return (THINKING_LEVELS as readonly string[]).includes(upper) ? (upper as (typeof THINKING_LEVELS)[number]) : undefined;
+}
+
 export const config = {
   isProd: process.env.NODE_ENV === "production",
 
@@ -59,6 +66,12 @@ export const config = {
      * 例: Flash-Lite。未設定なら切り替えない。モデル名は公式ドキュメントで確認したものを入れる
      */
     fallbackModel: env("GEMINI_FALLBACK_MODEL"),
+    /**
+     * プラン作成で AI が「考える」深さ（MINIMAL / LOW / MEDIUM / HIGH）。既定は LOW。
+     * 道具を何度も呼ぶ作りのため、深く考えさせると 1 回ごとの応答が遅くなり、全体の制限時間を超えやすい。
+     * 出来は submit_timeline の検証と差し戻しで担保する。空文字（"default"）にするとモデルの既定値を使う
+     */
+    thinkingLevel: thinkingLevel(env("GEMINI_THINKING_LEVEL")),
     /**
      * 1 回のプラン作成で AI が道具（ツール）を使える回数。手順が 7 段階あるため最低 8 回は確保する。
      * 残り 2 回になると提出（submit_timeline）だけを許可する。

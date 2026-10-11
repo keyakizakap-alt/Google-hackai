@@ -1,5 +1,5 @@
 import "server-only";
-import { FunctionCallingConfigMode, type Content, type FunctionDeclaration, type Part } from "@google/genai";
+import { FunctionCallingConfigMode, type Content, type ThinkingLevel, type FunctionDeclaration, type Part } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
 import { createGenAI, geminiErrorInfo, isModelUnavailable, modelCandidates } from "../gemini";
@@ -42,6 +42,22 @@ export class AgentUnavailableError extends Error {
   }
 }
 
+/** 制限時間内にプランを仕上げられなかった（AI の応答が遅い）。接続の失敗とは分けて扱う */
+class AgentDeadlineError extends Error {
+  constructor() {
+    super("agent deadline exceeded");
+    this.name = "AgentDeadlineError";
+  }
+}
+
+/** 時間切れ（全体の制限時間・1 回の呼び出しの待ち時間）による失敗か */
+function isTimeout(e: unknown): boolean {
+  const name = (e as { name?: unknown } | null)?.name;
+  return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError";
+}
+
+const SLOW_MESSAGE = "AI の応答に時間がかかり、制限時間内にプランを仕上げられませんでした。もう一度お試しください";
+
 /** 予備のモデルで作り直すのに最低限ほしい残り時間 */
 const MIN_TIME_FOR_FALLBACK_MS = 30_000;
 
@@ -82,8 +98,9 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       } catch (e) {
         const status = (e as { status?: number }).status;
         const canFallback = i < models.length - 1 && isModelUnavailable(e) && deadline - Date.now() > MIN_TIME_FOR_FALLBACK_MS;
-        logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, ...geminiErrorInfo(e), model, mode: canFallback ? "fallback" : "give_up" });
-        if (!canFallback) throw new AgentUnavailableError();
+        const timeout = isTimeout(e);
+        logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, ...geminiErrorInfo(e), model, mode: canFallback ? "fallback" : timeout ? "timeout" : "give_up", steps: usage.modelCalls, latencyMs: usage.modelLatencyMs });
+        if (!canFallback) throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });
         trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
@@ -177,7 +194,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   ];
 
   for (let step = 0; step < config.gemini.maxSteps; step++) {
-    if (Date.now() > deadline) throw new Error("agent deadline exceeded");
+    if (Date.now() > deadline) throw new AgentDeadlineError();
     const started = Date.now();
     // 残り 2 回になったら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
     const mustSubmit = step >= config.gemini.maxSteps - 2;
@@ -195,6 +212,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
           },
         },
         abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
+        ...(config.gemini.thinkingLevel ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
       },
     });
     usage.modelCalls += 1;
