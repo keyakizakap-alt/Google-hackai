@@ -46,8 +46,9 @@ jsonPayload.message="agent.gemini.failed"
 | `BILLING_DISABLED` | 課金が紐づいていない | 「お支払い」で請求先アカウントを紐づける |
 | `IAM_PERMISSION_DENIED` / `PERMISSION_DENIED` | 実行用サービスアカウントに権限がない | 「セキュリティ」タブに表示されるサービスアカウントに `roles/aiplatform.user` を付ける |
 | `CONSUMER_INVALID` / `USER_PROJECT_DENIED` | プロジェクト ID の誤り（存在しない・番号や表示名を入れている） | `GOOGLE_CLOUD_PROJECT` を英小文字のプロジェクト ID にする |
+| `INVALID_ARGUMENT`（`httpStatus` 400） | 送ったリクエストの形がモデルに受け付けられなかった（コードかモデル設定の問題） | `apiField`・`apiMessage` に不正な項目が出る。考える深さが原因なら `GEMINI_THINKING_LEVEL=default` で外して確かめる。それ以外は開発者に連絡する |
 | `NOT_FOUND`（`httpStatus` 404） | モデル名・場所の誤り | `GEMINI_MODEL` と `GOOGLE_CLOUD_LOCATION`（`global`）を確認する |
 | `RESOURCE_EXHAUSTED`（429） | 利用枠の不足・混雑 | 少し待つ。`GEMINI_FALLBACK_MODEL` を設定する |
 | `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 110 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
-ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。
+ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。

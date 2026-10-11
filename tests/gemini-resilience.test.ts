@@ -120,6 +120,28 @@ describe("失敗の理由をログに残す", () => {
     expect(JSON.stringify(info)).not.toContain("my-secret-project");
   });
 
+  it("入力の誤り（400）では、不正な項目と短い説明を残す（URL は取り除く）", async () => {
+    const { geminiErrorInfo } = await import("@/lib/gemini");
+    const body = {
+      error: {
+        code: 400,
+        status: "INVALID_ARGUMENT",
+        message: "Request contains an invalid argument. Thinking level is not supported for this model. See https://example.com/docs",
+        details: [{ "@type": "type.googleapis.com/google.rpc.BadRequest", fieldViolations: [{ field: "generation_config.thinking_config.thinking_level", description: "x" }] }],
+      },
+    };
+    const info = geminiErrorInfo(Object.assign(new Error(JSON.stringify(body)), { status: 400 }));
+    expect(info.apiStatus).toBe("INVALID_ARGUMENT");
+    expect(info.apiField).toBe("generation_config.thinking_config.thinking_level");
+    expect(info.apiMessage).toBe("Thinking level is not supported for this model. See");
+  });
+
+  it("権限などの失敗では説明文を残さない", async () => {
+    const { geminiErrorInfo } = await import("@/lib/gemini");
+    const body = { error: { code: 403, status: "PERMISSION_DENIED", message: "Permission denied on project my-secret-project" } };
+    expect(geminiErrorInfo(Object.assign(new Error(JSON.stringify(body)), { status: 403 }))).toEqual({ apiStatus: "PERMISSION_DENIED", apiReason: undefined });
+  });
+
   it("名前の形をしていない値や、JSON でない本文は何も返さない", async () => {
     const { geminiErrorInfo } = await import("@/lib/gemini");
     expect(geminiErrorInfo(new Error("fetch failed"))).toEqual({});

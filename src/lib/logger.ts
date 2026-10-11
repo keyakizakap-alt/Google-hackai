@@ -35,6 +35,8 @@ const ALLOWED_FIELDS = new Set([
   "httpStatus",
   "apiStatus",
   "apiReason",
+  "apiField",
+  "apiMessage",
   "planId",
   "revision",
   "validationErrors",
