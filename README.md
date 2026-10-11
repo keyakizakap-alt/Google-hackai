@@ -188,6 +188,8 @@ EVAL_REPEATS=3 npm run eval
 
 提出までの手順は [提出チェックリスト](docs/submission-checklist.md) にまとめている。初回のプロジェクト作成、Billing、最小権限の実行アカウント、Secret Manager、Dockerfile を使う Cloud Run ソースデプロイは [初回公開手順](docs/cloud-run-launch.md) を参照。`scripts/cloud-run-bootstrap.sh` は Google Cloud Shell で実行する。スクリプトはまだ実プロジェクトで未検証。Google カレンダー OAuth はデプロイ後に設定する。
 
+**継続的デプロイ（Cloud Build）**: main への push で、`cloudbuild.yaml` の手順（脆弱性・lint・型・テストの検査 → コミット ID 付きのイメージ → 「候補」として起動確認 → 利用者のアクセスを切り替え）を実行する。ビルドは専用のサービスアカウントで、必要最小限の権限だけで動かす。設定手順は [Cloud Build の設定](docs/cloud-build.md)。
+
 ## 審査基準との対応
 
 | 審査基準 | 対応 |
@@ -226,6 +228,7 @@ tests/                 vitest
 evals/                 実際の Gemini を使う評価（npm run eval）
 docs/                  アーキテクチャ図・脅威モデル・運用・デプロイ手順
 Dockerfile             Cloud Run 用のマルチステージビルド
+cloudbuild.yaml        Cloud Build の手順（検査 → ビルド → 候補で起動確認 → 切り替え）
 ```
 
 ## ライセンス

@@ -1,0 +1,108 @@
+# OshiReady を Cloud Build でビルドし、Cloud Run にデプロイする手順（main への push で起動するトリガー用）。
+# 設定のしかた（トリガー・ビルド専用のサービスアカウント・古いイメージの整理）は docs/cloud-build.md。
+#
+# 流れ: 依存のインストール → 脆弱性・lint・型・テストの検査 → イメージのビルドと push（コミット ID のタグ）
+#      → 「候補」としてデプロイ（利用者のアクセスはまだ流さない）→ 候補で起動確認 → 利用者のアクセスを切り替え
+# どこかで失敗すると以降は実行されず、今動いている版がそのまま使われ続ける。
+#
+# 守っていること:
+# - 環境変数・シークレット・実行用アカウントの設定は変更しない（デプロイで --set-env-vars 等を使わない）
+# - 秘密の値はビルドで扱わない（アプリの秘密は実行時に Secret Manager から渡される）
+# - ログは Cloud Logging にだけ保存する（ビルド専用のサービスアカウントを使う場合に必要）
+
+substitutions:
+  _REGION: asia-northeast1
+  _SERVICE: oshiready
+  # Cloud Run のソースデプロイ・継続的デプロイが作る Artifact Registry のリポジトリ（違う名前ならトリガーで上書きする）
+  _AR_REPO: cloud-run-source-deploy
+  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+
+timeout: 1800s
+
+steps:
+  # 1. 依存のインストール（package-lock.json どおり）
+  - id: install
+    name: node:22-alpine
+    entrypoint: npm
+    args: [ci]
+
+  # 2. 本番に入る部品に、重大度「高」以上の既知の脆弱性がないか
+  - id: audit
+    name: node:22-alpine
+    entrypoint: npm
+    args: [audit, --omit=dev, --audit-level=high]
+
+  # 3. 静的検査とテスト（どれかが失敗したらデプロイしない）
+  - id: lint
+    name: node:22-alpine
+    entrypoint: npm
+    args: [run, lint]
+  - id: typecheck
+    name: node:22-alpine
+    entrypoint: npm
+    args: [run, typecheck]
+  - id: test
+    name: node:22-alpine
+    entrypoint: npm
+    args: [test]
+
+  # 4. イメージのビルド。タグはコミット ID（どの版が動いているかを特定でき、正確に戻せる）
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, "${_IMAGE}:${COMMIT_SHA}", .]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_IMAGE}:${COMMIT_SHA}"]
+
+  # 5. 「候補」としてデプロイ。利用者のアクセスはまだ今の版に流したまま
+  - id: deploy-candidate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_IMAGE}:${COMMIT_SHA}
+      - --region=${_REGION}
+      - --no-traffic
+      - --tag=candidate
+      - --quiet
+
+  # 6. 候補の URL で起動確認。署名用の秘密（SESSION_SECRET）が渡っていることも確かめる
+  - id: smoke-test
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        url="$$(gcloud run services describe ${_SERVICE} --region=${_REGION} --format=json \
+          | python3 -c 'import json,sys; t=[x for x in json.load(sys.stdin)["status"].get("traffic",[]) if x.get("tag")=="candidate"]; print(t[0]["url"] if t else "")')"
+        [ -n "$$url" ] || { echo "候補の URL が見つかりません"; exit 1; }
+        python3 - "$$url/api/health" <<'PY'
+        import json, sys, time, urllib.request
+        url = sys.argv[1]
+        for attempt in range(1, 7):
+            try:
+                with urllib.request.urlopen(url, timeout=15) as res:
+                    body = json.load(res)
+                if body.get("ok") is True and body.get("config", {}).get("sessionSecret") is True:
+                    print(f"起動確認 OK（{attempt} 回目）")
+                    sys.exit(0)
+                print(f"応答はあるが設定が足りない: {body}")
+                sys.exit(1)
+            except Exception as e:  # 起動中は失敗することがあるので少し待って再試行
+                print(f"{attempt} 回目: {e}")
+                time.sleep(10)
+        sys.exit(1)
+        PY
+
+  # 7. 起動確認に通った版へ、利用者のアクセスを切り替える
+  - id: promote
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args: [run, services, update-traffic, "${_SERVICE}", "--region=${_REGION}", --to-latest, --quiet]

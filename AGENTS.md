@@ -38,7 +38,7 @@ npm run eval       # 実際の Gemini でエージェントを評価（費用が
 
 CI（`.github/workflows/ci.yml`）で lint・型チェック・テスト・ビルドを実行する。`npm run eval` は CI に含めない。
 
-Cloud Run へのデプロイ手順は `docs/cloud-run-launch.md`、運用（シークレットの入れ替えなど）は `docs/operations.md` を参照。
+Cloud Run へのデプロイ手順は `docs/cloud-run-launch.md`、継続的デプロイ（`cloudbuild.yaml`）の設定は `docs/cloud-build.md`、運用（シークレットの入れ替えなど）は `docs/operations.md` を参照。`cloudbuild.yaml` の約束（検査の後にビルド・環境変数を上書きしない・候補で確認してから切り替え）は `tests/cloudbuild.test.ts` で確かめている。
 
 ### エージェント向けスキル（rulesync）
 

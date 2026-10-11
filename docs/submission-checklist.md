@@ -60,6 +60,13 @@ EVAL_REPEATS=1 npm run eval
 - [ ] 料金を換算する場合は、公式の価格表で確認した単価を `EVAL_PRICE_INPUT_PER_MTOK` / `EVAL_PRICE_OUTPUT_PER_MTOK` に渡した
 - [ ] `docs/eval/latest.md` をコミットし、主要な数字を提出の説明文に書いた
 
+## 4.5 継続的デプロイ（任意・推奨）
+
+[Cloud Build の設定](cloud-build.md) の手順で、トリガーを `cloudbuild.yaml` に切り替え、ビルド専用のサービスアカウント（必要最小限の権限）を使う。
+
+- [ ] 「Cloud Build」→「履歴」で 10 のステップがすべて緑
+- [ ] 提出後にトリガーの「承認」をオンにする
+
 ## 5. 提出物
 
 - [ ] GitHub リポジトリの URL

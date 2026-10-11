@@ -50,6 +50,7 @@ gcloud run services describe oshiready --region=asia-northeast1 --format='value(
 ```
 
 - 期間中は main にマージしない（Dependabot の提案 PR も、期間が終わるまで置いておく）。
+- Cloud Build のトリガーで「承認」をオンにする（またはトリガーを無効にする）。誤って main に入っても、承認しない限りデプロイされない（[Cloud Build の設定](cloud-build.md)）。
 - 万一、変更して壊れたときは、控えたリビジョンに戻す：
 
 ```bash
