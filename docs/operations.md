@@ -22,6 +22,7 @@
 |---|---|
 | 連携するカレンダー | `CALENDAR_SOURCES` |
 | AI のモデル | `GEMINI_MODEL` |
+| AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
 | AI 呼び出しの 1 日の上限 | `AGENT_DAILY_LIMIT` |
 | 駅すぱあとで使うツール | `EKISPERT_ALLOWED_TOOLS` |
 | アプリの公開 URL | `APP_BASE_URL`（Vercel では未設定でも本番ドメインを自動で使用） |
@@ -47,5 +48,6 @@ jsonPayload.message="agent.gemini.failed"
 | `CONSUMER_INVALID` / `USER_PROJECT_DENIED` | プロジェクト ID の誤り（存在しない・番号や表示名を入れている） | `GOOGLE_CLOUD_PROJECT` を英小文字のプロジェクト ID にする |
 | `NOT_FOUND`（`httpStatus` 404） | モデル名・場所の誤り | `GEMINI_MODEL` と `GOOGLE_CLOUD_LOCATION`（`global`）を確認する |
 | `RESOURCE_EXHAUSTED`（429） | 利用枠の不足・混雑 | 少し待つ。`GEMINI_FALLBACK_MODEL` を設定する |
+| `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 110 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。

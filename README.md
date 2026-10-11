@@ -91,7 +91,7 @@ Cloud Run (Next.js standalone, Node 22, 非 root)
 
 - **Next.js 16 (App Router) + Route Handlers**: UI と API を 1 つのコンテナにまとめて Cloud Run に載せられる。`output: "standalone"` でイメージを小さくできる
 - **@google/genai 2.x**: Gemini API と Gemini Enterprise Agent Platform（旧 Vertex AI）の両方を同じコードで扱える。`GOOGLE_GENAI_USE_VERTEXAI=true` で切り替え。呼び出しは `src/lib/gemini.ts` にまとめ、混雑・一時的な障害は自動で再試行する
-- **モデル設定**: `GEMINI_MODEL`（予備は `GEMINI_FALLBACK_MODEL`）。利用できるモデル名・権限はデプロイ先で確認する
+- **モデル設定**: `GEMINI_MODEL`（予備は `GEMINI_FALLBACK_MODEL`、考える深さは `GEMINI_THINKING_LEVEL`・既定 `LOW`）。利用できるモデル名・権限はデプロイ先で確認する
 - **@modelcontextprotocol/sdk**: 駅すぱあと API MCP サーバー（Streamable HTTP）に接続する。`tools/list` の結果をそのまま Gemini の `FunctionDeclaration` に変換するので、MCP 側でツールが増減してもコードを変更する必要がない
 - **DB を持たない設計**: プランは HMAC 署名した「封筒」としてクライアントに返し、サーバーは署名でステータスの改ざんを検出する。サーバーに個人データを永続化せず、ブラウザの IndexedDB に公演・予約メモ・プランを保存する（承認・予約したプランは、2 時間の期限が切れても表示と見張りのために保持する。予約には進めない）。別端末とは同期しない
 
@@ -190,6 +190,7 @@ EVAL_REPEATS=3 npm run eval
 | `GOOGLE_CLIENT_ID/SECRET` | 既存予定は取得できず、公演は手動登録 |
 | `GEMINI_API_KEY` または Vertex 設定 | ルールベースのプランナー（同じツール・同じ検証を通る） |
 | `GEMINI_FALLBACK_MODEL` | 予備のモデルに切り替えない（メインが使えなければエラー） |
+| `GEMINI_THINKING_LEVEL` | `LOW`（AI が考える深さ。道具を何度も呼ぶため、応答の速さを優先） |
 | `EKISPERT_API_KEY` | 実経路は表示せず、検索サイトでの確認を案内 |
 | `YOUCAM_API_KEY` | 実 API 未接続。肌解析は画面に出さない |
 
