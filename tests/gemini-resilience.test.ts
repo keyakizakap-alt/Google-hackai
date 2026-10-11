@@ -103,3 +103,27 @@ describe("予備のモデルへの切り替え（1 回で終わる呼び出し�
     expect(model).toBe("backup-model");
   });
 });
+
+describe("失敗の理由をログに残す", () => {
+  it("Google の API が返す理由の名前だけを取り出し、説明文（プロジェクト名など）は捨てる", async () => {
+    const { geminiErrorInfo } = await import("@/lib/gemini");
+    const body = {
+      error: {
+        code: 403,
+        message: "Vertex AI API has not been used in project my-secret-project before or it is disabled.",
+        status: "PERMISSION_DENIED",
+        details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "SERVICE_DISABLED", metadata: { consumer: "projects/123" } }],
+      },
+    };
+    const info = geminiErrorInfo(Object.assign(new Error(JSON.stringify(body)), { status: 403 }));
+    expect(info).toEqual({ apiStatus: "PERMISSION_DENIED", apiReason: "SERVICE_DISABLED" });
+    expect(JSON.stringify(info)).not.toContain("my-secret-project");
+  });
+
+  it("名前の形をしていない値や、JSON でない本文は何も返さない", async () => {
+    const { geminiErrorInfo } = await import("@/lib/gemini");
+    expect(geminiErrorInfo(new Error("fetch failed"))).toEqual({});
+    expect(geminiErrorInfo(new Error(JSON.stringify({ error: { status: "denied for user@example.com" } })))).toEqual({ apiStatus: undefined, apiReason: undefined });
+    expect(geminiErrorInfo("not an error")).toEqual({});
+  });
+});

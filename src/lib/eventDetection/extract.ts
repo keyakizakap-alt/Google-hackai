@@ -1,6 +1,6 @@
 import "server-only";
 import { isGeminiConfigured } from "../config";
-import { createGenAI, generateWithFallback } from "../gemini";
+import { createGenAI, geminiErrorInfo, generateWithFallback } from "../gemini";
 import { fenceJson } from "../agent/fence";
 import { logger } from "../logger";
 import { extractByRules, type DetectedLiveEvent, type LiveCandidate } from "./detect";
@@ -86,7 +86,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
     logger.info("detect.gemini", { requestId, latencyMs: Date.now() - started, itemCount: out.length, model });
     return out;
   } catch (e) {
-    logger.warn("detect.gemini.failed", { requestId, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status });
+    logger.warn("detect.gemini.failed", { requestId, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status, ...geminiErrorInfo(e) });
     return candidates.map(extractByRules);
   }
 }

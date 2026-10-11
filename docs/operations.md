@@ -28,3 +28,24 @@
 | IP の取り出し位置（Cloud Run 等） | `TRUSTED_PROXY_HOPS` |
 
 予約リンクとして表示してよいサイトは、安全のためコード（`src/lib/safeUrl.ts`）で管理しています。追加するときはレビューを通してください。
+
+## AI に接続できないとき（プランが作れない）
+
+ログ エクスプローラで次を検索し、行の `httpStatus`・`apiStatus`・`apiReason` を見る（サービス名は自分の環境に合わせる）。
+
+```
+resource.type="cloud_run_revision"
+resource.labels.service_name="oshiready"
+jsonPayload.message="agent.gemini.failed"
+```
+
+| `apiReason` / `apiStatus` | 原因 | 直し方 |
+|---|---|---|
+| `SERVICE_DISABLED` | `GOOGLE_CLOUD_PROJECT` のプロジェクトで Vertex AI API が無効 | そのプロジェクトで Vertex AI API を有効にする。`GOOGLE_CLOUD_PROJECT` が意図したプロジェクト ID か確認する |
+| `BILLING_DISABLED` | 課金が紐づいていない | 「お支払い」で請求先アカウントを紐づける |
+| `IAM_PERMISSION_DENIED` / `PERMISSION_DENIED` | 実行用サービスアカウントに権限がない | 「セキュリティ」タブに表示されるサービスアカウントに `roles/aiplatform.user` を付ける |
+| `CONSUMER_INVALID` / `USER_PROJECT_DENIED` | プロジェクト ID の誤り（存在しない・番号や表示名を入れている） | `GOOGLE_CLOUD_PROJECT` を英小文字のプロジェクト ID にする |
+| `NOT_FOUND`（`httpStatus` 404） | モデル名・場所の誤り | `GEMINI_MODEL` と `GOOGLE_CLOUD_LOCATION`（`global`）を確認する |
+| `RESOURCE_EXHAUSTED`（429） | 利用枠の不足・混雑 | 少し待つ。`GEMINI_FALLBACK_MODEL` を設定する |
+
+ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。
