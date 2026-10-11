@@ -33,6 +33,8 @@ const ALLOWED_FIELDS = new Set([
   "busyCount",
   "errorCode",
   "httpStatus",
+  "apiStatus",
+  "apiReason",
   "planId",
   "revision",
   "validationErrors",

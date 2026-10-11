@@ -2,7 +2,7 @@ import "server-only";
 import { FunctionCallingConfigMode, type Content, type FunctionDeclaration, type Part } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
-import { createGenAI, isModelUnavailable, modelCandidates } from "../gemini";
+import { createGenAI, geminiErrorInfo, isModelUnavailable, modelCandidates } from "../gemini";
 import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { venueArea } from "../eventDetection/venues";
@@ -82,7 +82,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       } catch (e) {
         const status = (e as { status?: number }).status;
         const canFallback = i < models.length - 1 && isModelUnavailable(e) && deadline - Date.now() > MIN_TIME_FOR_FALLBACK_MS;
-        logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, model, mode: canFallback ? "fallback" : "give_up" });
+        logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, ...geminiErrorInfo(e), model, mode: canFallback ? "fallback" : "give_up" });
         if (!canFallback) throw new AgentUnavailableError();
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });

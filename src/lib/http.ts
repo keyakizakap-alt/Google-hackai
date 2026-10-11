@@ -151,7 +151,7 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
 
 /**
  * AI 呼び出しの 1 日あたり上限（インスタンス単位の最終防衛線）。
- * 本番の主な制限は Vercel WAF / Cloud Armor で行い、これは設定漏れ時のコスト暴走を抑える保険。
+ * 設定漏れや想定外のアクセスで費用が膨らむのを抑える保険（インスタンスごとに数える）。
  * AGENT_DAILY_LIMIT で変更可（既定 500 回／日）。
  */
 let daily = { day: "", count: 0 };

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { isGeminiConfigured } from "../config";
-import { createGenAI, generateWithFallback } from "../gemini";
+import { createGenAI, geminiErrorInfo, generateWithFallback } from "../gemini";
 import { fenceText } from "../agent/fence";
 import { logger } from "../logger";
 import { redactText } from "../privacy/mask";
@@ -99,7 +99,7 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
     return { events, engine: "gemini" };
   } catch (e) {
     if (e instanceof ScanUnavailableError) throw e;
-    logger.warn("scan.failed", { requestId, errorCode: (e as Error).name });
+    logger.warn("scan.failed", { requestId, errorCode: (e as Error).name, httpStatus: (e as { status?: number }).status, ...geminiErrorInfo(e) });
     if (text) return { events: parseEventsFromText(text, now), engine: "rules" };
     throw new ScanUnavailableError("画像をうまく読み取れませんでした。文章を貼り付けるか、別の画像でお試しください。");
   } finally {

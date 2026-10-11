@@ -39,6 +39,23 @@ export function isModelUnavailable(e: unknown): boolean {
   return typeof status === "number" && (status === 404 || status === 408 || status === 429 || status >= 500);
 }
 
+/**
+ * Gemini の API エラーから、原因の種類だけを取り出す（ログで原因を特定するため）。
+ * Google の API は失敗理由を決まった英大文字の名前で返す（例: PERMISSION_DENIED / SERVICE_DISABLED / BILLING_DISABLED）。
+ * 本文の説明文には URL やプロジェクト名が入るため、名前の形をしたものだけを返し、それ以外は捨てる。
+ */
+export function geminiErrorInfo(e: unknown): { apiStatus?: string; apiReason?: string } {
+  const message = e instanceof Error ? e.message : "";
+  const enumLike = (v: unknown) => (typeof v === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(v) ? v : undefined);
+  try {
+    const body = JSON.parse(message) as { error?: { status?: unknown; details?: { reason?: unknown }[] } };
+    const reason = (body.error?.details ?? []).map((d) => enumLike(d?.reason)).find(Boolean);
+    return { apiStatus: enumLike(body.error?.status), apiReason: reason };
+  } catch {
+    return {};
+  }
+}
+
 /** 試すモデルの順番。予備が未設定、またはメインと同じなら 1 つだけ */
 export function modelCandidates(): string[] {
   const { model, fallbackModel } = config.gemini;
@@ -57,7 +74,7 @@ export async function generateWithFallback(
       return { res: await ai.models.generateContent({ ...request, model: models[i] }), model: models[i] };
     } catch (e) {
       if (i >= models.length - 1 || !isModelUnavailable(e)) throw e;
-      logger.warn("gemini.model_fallback", { ...meta, httpStatus: (e as { status?: number }).status, model: models[i + 1] });
+      logger.warn("gemini.model_fallback", { ...meta, httpStatus: (e as { status?: number }).status, ...geminiErrorInfo(e), model: models[i + 1] });
     }
   }
 }
