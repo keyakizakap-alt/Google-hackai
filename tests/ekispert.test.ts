@@ -141,10 +141,14 @@ describe("プラン作成と乗り換え案内", () => {
     const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "ekispert-compat" });
     expect(out.plan.summary).toBe("ok");
     expect(names(seen[0])).toContain("ekispert_api_search_course");
+    // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない
+    expect(names(seen[0])).not.toContain("search_transit_route_mock");
     const level1 = seen[1].config?.tools?.[0].functionDeclarations?.find((d) => d.name === "ekispert_api_search_course");
     expect(level1).toMatchObject({ parameters: { type: "OBJECT", required: ["from"] } });
     expect(level1).not.toHaveProperty("parametersJsonSchema");
     expect(names(seen[2])).not.toContain("ekispert_api_search_course");
+    // 駅すぱあとを外したら、予備の道具を渡す
+    expect(names(seen[2])).toContain("search_transit_route_mock");
   });
 
   it("経路を調べられなかった項目に、出発駅と到着駅を入れた検索リンクを付ける（帰りは逆向き）", async () => {

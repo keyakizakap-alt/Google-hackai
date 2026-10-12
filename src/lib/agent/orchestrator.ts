@@ -13,7 +13,9 @@ import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
 import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
-import { executeTool, NATIVE_DECLARATIONS, NATIVE_TOOL_NAMES, type AgentContext } from "./tools";
+import { executeTool, NATIVE_DECLARATIONS, type AgentContext } from "./tools";
+
+const TRANSIT_FALLBACK_TOOL = "search_transit_route_mock";
 import type { OshiEvent, Plan, SkinAnalysis, TimelineItem, TraceStep } from "./types";
 
 export interface AgentRunInput {
@@ -240,9 +242,11 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   // 2 では駅すぱあと MCP の道具を外し、アプリの道具の引数定義も従来の形式にする（乗り換えは最後まで残す）
   const ekispert = compat >= 2 ? null : await getEkispertDeclarations();
   const ekispertDeclarations = ekispert ? (compat >= 1 ? toLegacyDeclarations(ekispert.declarations) : ekispert.declarations) : [];
-  const native = compat >= 2 ? toLegacyDeclarations(NATIVE_DECLARATIONS) : NATIVE_DECLARATIONS;
+  // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない（AI が楽な方を選んで乗り換えを調べないのを防ぐ）
+  const nativeBase = ekispertDeclarations.length > 0 ? NATIVE_DECLARATIONS.filter((d) => d.name !== TRANSIT_FALLBACK_TOOL) : NATIVE_DECLARATIONS;
+  const native = compat >= 2 ? toLegacyDeclarations(nativeBase) : nativeBase;
   const declarations: FunctionDeclaration[] = [...ekispertDeclarations, ...native];
-  const allowed = new Set([...NATIVE_TOOL_NAMES, ...ekispertDeclarations.map((d) => d.name!)]);
+  const allowed = new Set([...native.map((d) => d.name!), ...ekispertDeclarations.map((d) => d.name!)]);
   trace.push({
     step: trace.length + 1,
     type: "model",

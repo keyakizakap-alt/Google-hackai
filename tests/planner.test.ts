@@ -69,7 +69,7 @@ describe("planning tools + validation", () => {
     const now = Date.now();
     const ctx: AgentContext = { event, busy: [], now, rejectedSubmissions: 0 };
     const route = await executeTool("search_transit_route_mock", { from_station: "福岡", to_station: "東京" }, ctx);
-    expect(route.ok).toBe(false);
+    expect(route.response).toMatchObject({ unavailable: true });
     expect(route.response).not.toHaveProperty("legs");
 
     const day = event.startAt.slice(0, 10);
