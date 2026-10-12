@@ -55,6 +55,14 @@ describe("互換モード", () => {
     rejectFirst = 10;
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
     await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "give-up" })).rejects.toThrow();
+    // 作り直しは 3 回まで。その後、部品ごとの切り分け（7 回）を 1 度だけ行う
+    expect(seen).toHaveLength(3 + 7);
+    expect(seen[3].config?.tools).toBeUndefined(); // 切り分けの 1 つ目は文だけ
+    expect(seen[9].config?.tools?.[0].functionDeclarations?.length).toBeGreaterThan(0); // 最後は全部入り
+
+    // 10 分以内の 2 回目は切り分けをしない（費用と負荷を抑える）
+    seen.length = 0;
+    await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "give-up-2" })).rejects.toThrow();
     expect(seen).toHaveLength(3);
   });
 });

@@ -11,6 +11,7 @@ import { hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl"
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
+import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, NATIVE_TOOL_NAMES, type AgentContext } from "./tools";
 import type { OshiEvent, Plan, SkinAnalysis, TraceStep } from "./types";
@@ -111,7 +112,13 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
         const canFallback = i < models.length - 1 && isModelUnavailable(e) && deadline - Date.now() > MIN_TIME_FOR_FALLBACK_MS;
         const timeout = isTimeout(e);
         logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, ...geminiErrorInfo(e), model, mode: canFallback ? "fallback" : timeout ? "timeout" : "give_up", steps: usage.modelCalls, latencyMs: usage.modelLatencyMs });
-        if (!canFallback) throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+        if (!canFallback) {
+          // 互換モードでも最初の呼び出しが 400 のときは、どの部品が拒否されるかを切り分けて記録する
+          if (status === 400 && usage.modelCalls === 0) {
+            await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS }).catch(() => undefined);
+          }
+          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+        }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });
         trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
@@ -172,6 +179,18 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   return { plan, trace, usage, engine };
 }
 
+/** 最初に AI へ送る依頼文 */
+function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
+  return buildUserPrompt({
+    event: input.event,
+    now: toJstIso(ctx.now),
+    calendarSource: input.calendarSource,
+    hasSkinAnalysis: Boolean(input.skin),
+    previous: input.previous,
+    instruction: input.instruction,
+  });
+}
+
 async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"], model: string, deadline: number, compat = 0) {
   const ai = createGenAI(60_000);
   // 互換モード 1 以上では、駅すぱあと MCP の道具と考える深さの指定を外す（2 では引数定義も従来の形式にする）
@@ -192,16 +211,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     {
       role: "user",
       parts: [
-        {
-          text: buildUserPrompt({
-            event: input.event,
-            now: toJstIso(ctx.now),
-            calendarSource: input.calendarSource,
-            hasSkinAnalysis: Boolean(input.skin),
-            previous: input.previous,
-            instruction: input.instruction,
-          }),
-        },
+        { text: firstUserPrompt(input, ctx) },
       ],
     },
   ];

@@ -52,3 +52,17 @@ jsonPayload.message="agent.gemini.failed"
 | `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 110 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。
+
+### 互換モードでも 400 のとき（部品ごとの切り分け）
+
+互換モードの 3 段階すべてで拒否されると、アプリはリクエストを部品ごとに分けて順に送り、結果を `agent.gemini.probe` に残す（インスタンスごとに 10 分に 1 回まで）。`mode` が部品の名前、`toolOk` が成否。
+
+| `mode` | 送る内容 | ここで初めて失敗したら |
+|---|---|---|
+| `text_only` | 短い文だけ | モデル・プロジェクト・場所の問題（コンソールでの試験と比べる） |
+| `system` | ＋アプリの指示（システム指示） | システム指示の内容 |
+| `user_prompt` | 利用者の依頼文だけ | 依頼文の内容 |
+| `tools_legacy` | ＋道具の定義（従来の形式） | 道具の定義（名前・説明・引数） |
+| `tools_json` | ＋道具の定義（JSON Schema 形式） | JSON Schema 形式の書き方 |
+| `tools_any` | ＋「必ず道具を使う」指定 | Function Calling の `mode: ANY` |
+| `full` | 全部入り | 部品の組み合わせ |
