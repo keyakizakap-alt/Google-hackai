@@ -123,7 +123,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
           throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
-        Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });
+        Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
         trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
       }
     }

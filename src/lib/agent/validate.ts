@@ -1,7 +1,7 @@
 import { overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
-import { jstDayDiff, MS_MIN } from "../time";
+import { formatJst, jstDayDiff, MS_MIN } from "../time";
 import { BEAUTY_SERVICES, type BeautyService, type OshiEvent, type TimelineItem } from "./types";
 
 export interface ValidationResult {
@@ -21,6 +21,11 @@ export function validateSummary(summary: string): string[] {
   return CLAIMS_EXECUTED.test(summary)
     ? ["summary に予約・決済を実行したような書き方があります。あなたは予約・決済をしていません。「提案」として書き直してください"]
     : [];
+}
+
+/** 差し戻しの文で使う「ID（タイトル・時刻）」。ID だけだと AI がどれを直すか取り違えるため */
+function label(it: TimelineItem): string {
+  return `${it.id}（${it.title}・${formatJst(it.start)}〜${formatJst(it.end, { time: true })}）`;
 }
 
 /**
@@ -83,12 +88,13 @@ export function validateTimeline(
     }
   }
 
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const cur = sorted[i];
-    if (prev.kind === "event" || cur.kind === "event" || prev.kind === "stay" || cur.kind === "stay") continue;
+  // 時間を使う予定どうしの重なり。準備（prep）は確認・持ち物などの覚え書きで、時間を占有しないため対象外
+  const blocking = sorted.filter((it) => it.kind !== "event" && it.kind !== "stay" && it.kind !== "prep");
+  for (let i = 1; i < blocking.length; i++) {
+    const prev = blocking[i - 1];
+    const cur = blocking[i];
     if (Date.parse(cur.start) < Date.parse(prev.end)) {
-      errors.push(`${prev.id} と ${cur.id} の時間が重なっています`);
+      errors.push(`${label(prev)} と ${label(cur)} の時間が重なっています。どちらかを重ならない時間に移すか、外してください`);
     }
   }
 

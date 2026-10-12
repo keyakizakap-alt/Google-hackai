@@ -8,7 +8,7 @@ import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
 import { searchSpots, SPOT_CATEGORIES, SPOT_CATEGORY_LABEL, type SpotCategory } from "../services/spots";
 import { estimateCrowd } from "../services/transit";
 import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
-import { jstAt, MS_DAY } from "../time";
+import { jstAt, MS_DAY, MS_MIN, toJstIso } from "../time";
 import { validateSummary, validateTimeline } from "./validate";
 import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
 
@@ -25,6 +25,8 @@ export interface AgentContext {
   forecast?: Forecast;
   /** 会場のエリア（都道府県）。天気・立ち寄り先の検索キー */
   venueArea?: string;
+  /** 直前の差し戻しの内容。同じ指摘が続いたら AI に任せず仕上げる */
+  lastRejection?: string;
 }
 
 const ISO = { type: "string", description: "ISO 8601 日時（例: 2026-10-27T11:00:00+09:00）" } as const;
@@ -328,22 +330,42 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
+        // 形式の誤りを挟んだら「同じ指摘が続いた」とは数えない
+        ctx.lastRejection = undefined;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
         return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
-      const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
-      errors.push(...validateSummary(parsed.data.summary));
-      if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
-        errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
-      }
+      const { errors, warnings } = checkSubmission(parsed.data.items, parsed.data.summary, ctx);
       if (errors.length > 0) {
+        const key = [...errors].sort().join("\n");
+        const repeated = ctx.lastRejection === key;
+        ctx.lastRejection = key;
+        // 同じ指摘で 2 回続けて差し戻されたら、AI には直せないと判断し、問題の項目を外して仕上げる
+        const repaired = repeated && !errors.some((e) => e.startsWith("summary")) ? repairTimeline(parsed.data.items, errors, ctx) : undefined;
+        if (repaired) {
+          const mentionsRemoved = (text: string) => repaired.removed.some((r) => r.keywords.some((k) => text.includes(k)));
+          const removedTitles = repaired.removed.map((r) => `「${r.title}」`).join("・");
+          ctx.submitted = {
+            summary: removedTitles ? `${parsed.data.summary}（時間が合わなかった${removedTitles}は外しました）`.slice(0, 400) : parsed.data.summary,
+            items: repaired.items,
+            warnings: [...parsed.data.warnings, ...repaired.warnings, ...repaired.notes],
+            decisions: parsed.data.decisions.filter((d) => !mentionsRemoved(`${d.topic} ${d.chosen}`)),
+          };
+          return {
+            ok: true,
+            done: true,
+            response: { accepted: true, status: "pending_approval" },
+            summary: `同じ点を AI が直せなかったため、${repaired.notes.length} 件を調整して仕上げました（内容はプランの注意書きを確認してください）`,
+          };
+        }
         ctx.rejectedSubmissions++;
         return {
           ok: false,
-          response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください" },
-          summary: `予定の重なりなどが見つかったので作り直します（${errors.length}件）`,
+          response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください。同じ内容で出し直さず、指摘された項目の時刻を変えるか、外してください" },
+          summary: `見直す点が見つかったので作り直します（${errors.length}件）：${displayError(errors[0])}`,
         };
       }
+      ctx.lastRejection = undefined;
       ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings], decisions: parsed.data.decisions };
       return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `スケジュール ${parsed.data.items.length} 件が完成しました` };
     }
@@ -355,6 +377,80 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       }
       return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
   }
+}
+
+/** 提出されたプランの検査（タイムライン・要約の書き方・駅すぱあとの経路の出どころ） */
+function checkSubmission(items: TimelineItem[], summary: string, ctx: AgentContext): { errors: string[]; warnings: string[] } {
+  const { errors, warnings } = validateTimeline(items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
+  errors.push(...validateSummary(summary));
+  if (items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
+    errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
+  }
+  return { errors, warnings };
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 差し戻しの理由を、画面に出せる短い文にする（内部の ID は省く） */
+function displayError(error: string): string {
+  const text = error.replace(/[\w-]+（/g, "（").replace(/^[\w-]+: /, "");
+  return text.length > 70 ? `${text.slice(0, 70)}…` : text;
+}
+
+/**
+ * AI が同じ指摘を直せなかったときの仕上げ。
+ * - 指摘された項目のうち、公演と移動以外（美容・立ち寄り・準備）を外す
+ * - 移動の確認や雨対策が足りないという指摘には、確認の項目を足す
+ * 直した結果をもう一度検査し、問題がなくなったときだけ使う（直せなければ undefined）
+ */
+export function repairTimeline(
+  items: TimelineItem[],
+  errors: string[],
+  ctx: AgentContext,
+): { items: TimelineItem[]; warnings: string[]; notes: string[]; removed: { title: string; keywords: string[] }[] } | undefined {
+  const notes: string[] = [];
+  const removed: { title: string; keywords: string[] }[] = [];
+  // 「id: …」か、文頭・空白の直後の「id（…）」だけを一致とみなす（1 が spot-1 に一致しないように）
+  const isNamed = (id: string) => {
+    const labeled = new RegExp(`(^|\\s)${escapeRegExp(id)}（`);
+    return errors.some((e) => e.startsWith(`${id}:`) || labeled.test(e));
+  };
+  let next = items.filter((it) => {
+    if (!isNamed(it.id) || it.kind === "event" || it.kind === "transit") return true;
+    notes.push(`「${it.title}」は時間が合わなかったため外しました。必要なら「AIに相談して直す」から追加してください`);
+    const label = it.kind === "beauty" && it.category && it.category in BEAUTY_GUIDELINES ? BEAUTY_GUIDELINES[it.category as keyof typeof BEAUTY_GUIDELINES].label : undefined;
+    removed.push({ title: it.title, keywords: [it.title, ...(label ? [label] : [])] });
+    return false;
+  });
+  const eventStart = Date.parse(ctx.event.startAt);
+  const at = (msBeforeEvent: number) => Math.max(ctx.now + 10 * MS_MIN, eventStart - msBeforeEvent);
+  if (errors.some((e) => e.startsWith("移動経路"))) {
+    const s = at(24 * 60 * MS_MIN);
+    next = [...next, {
+      id: "transit-check-auto", kind: "prep", category: "transit-check",
+      title: `${ctx.event.homeStation}から${ctx.event.venueStation}への移動を確認`,
+      start: toJstIso(s), end: toJstIso(s + 15 * MS_MIN),
+      rationale: "乗り換えの情報はまだ調べられていません。開演に余裕をもって着く電車・かかる時間・運賃を確かめてください。",
+      requiresBooking: false,
+    }];
+    notes.push("移動の確認の項目を追加しました");
+  }
+  if (errors.some((e) => e.startsWith("公演日は雨・雪"))) {
+    const s = at(6 * 60 * MS_MIN);
+    next = [...next, {
+      id: "rain-gear-auto", kind: "prep", category: "selfcare",
+      title: "雨・雪の対策（傘・濡れ対策）を準備",
+      start: toJstIso(s), end: toJstIso(s + 15 * MS_MIN),
+      rationale: "公演日は雨・雪の予報です。傘と、ヘアセットが濡れないための対策を持って出かけてください。",
+      requiresBooking: false,
+    }];
+    notes.push("雨・雪の対策の項目を追加しました");
+  }
+  if (next.length === items.length && notes.length === 0) return undefined;
+  // 直したあとも、提出時と同じ検査（駅すぱあとの経路の出どころを含む）を通ったときだけ使う
+  const check = checkSubmission(next, "", ctx);
+  if (check.errors.length > 0) return undefined;
+  return { items: next, warnings: check.warnings, notes, removed };
 }
 
 /** ルールベース用: イベント日から days 日前の JST 日付の hour 時 */
