@@ -6,6 +6,7 @@ import { relativeDayLabel, formatJst } from "@/lib/time";
 import { AgentConsole } from "./AgentConsole";
 import { useNow } from "./motion";
 import { ItemIcon } from "./icons";
+import { RegenerateButton } from "./RegenerateButton";
 import { useStore } from "./store";
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -92,6 +93,8 @@ export function PlanSummaryCard() {
         {!event ? "イベントを登録する" : envelope || busy === "planning" ? "プランを見る" : "プランを作る"}
         <ChevronRight className="h-4 w-4" />
       </Link>
+      {/* プランがあるときは、ここからも最初から作り直せる */}
+      {event && envelope && busy !== "planning" && <RegenerateButton className="mt-2 w-full" />}
     </section>
   );
 }

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
-  RotateCcw,
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
@@ -13,6 +12,7 @@ import { CalendarChangeBanner, ConflictBanner, DecisionsCard, WatchCard } from "
 import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
+import { RegenerateButton } from "@/components/RegenerateButton";
 import { STATUS_LABEL } from "@/components/PlanSummary";
 import { useNow } from "@/components/motion";
 import { useStore } from "@/components/store";
@@ -330,7 +330,12 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
           {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約なしで承認しました。予約したいものがあれば「AIに相談して直す」で見直すと、もう一度選べます。</p>}
         </div>
       )}
-      {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。「AIに相談して直す」から作り直せます。</p>}
+      {status === "rejected" && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs text-ink-soft">このプランは見送りました。最初から作り直すか、「AIに相談して直す」で直し方を伝えてください。</p>
+          <RegenerateButton className="w-full" />
+        </div>
+      )}
       {status === "booked" && (
         <div className="mt-4 grid gap-2">
           <button onClick={() => router.push("/bookings")} className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white">
@@ -394,31 +399,6 @@ function EmptyPlan() {
   );
 }
 
-/**
- * 最初から作り直す。承認待ちのプランはそのまま置き換え、承認・予約済みのプランは確認してから置き換える
- * （新しいプランも承認待ちで止まる。予約は取り消さず、承認済みのプランは見張りの対象として残る）。
- */
-function RegenerateButton() {
-  const { envelope, event, busy, generatePlan, aiReady } = useStore();
-  if (!envelope || !event || envelope.plan.event.id !== event.id) return null;
-  const decided = envelope.status === "approved" || envelope.status === "booked";
-  const onClick = () => {
-    if (decided && !window.confirm("承認済みのプランを、新しく作るプラン（承認待ち）に置き換えます。予約はそのまま残ります。よろしいですか？")) return;
-    void generatePlan(event);
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy !== null}
-      className="flex min-h-[40px] w-fit items-center gap-1.5 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink hover:bg-lav-50 disabled:opacity-50"
-    >
-      {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-      {busy === "planning" ? "作り直しています…" : aiReady ? "AI に最初から作り直してもらう" : "最初から作り直す"}
-    </button>
-  );
-}
-
 export default function PlanPage() {
   const { envelope, busy } = useStore();
   const bookableKey = envelope ? `${envelope.plan.id}:${envelope.plan.revision}` : "";
@@ -462,8 +442,8 @@ export default function PlanPage() {
       {isPending && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
           <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-rose-400" />
-          <p>
-            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。
+          <p className="flex-1">
+            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。合わなければ最初から作り直せます。
           </p>
         </div>
       )}
