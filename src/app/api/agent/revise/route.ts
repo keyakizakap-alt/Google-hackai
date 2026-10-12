@@ -4,7 +4,7 @@ import { verifyEnvelope } from "@/lib/agent/envelope";
 import { generatePlan } from "@/lib/agent/workflow";
 import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const Body = z.object({ envelope: z.unknown(), instruction: z.string().min(1).max(500) });
 
