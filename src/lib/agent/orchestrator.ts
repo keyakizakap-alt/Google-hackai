@@ -35,7 +35,8 @@ export interface AgentRunOutput {
   engine: "gemini" | "rule-based";
 }
 
-const DEADLINE_MS = 110_000;
+/** プラン作成全体の制限時間。Cloud Run のリクエストのタイムアウト（既定 300 秒）より十分短くする */
+const DEADLINE_MS = 150_000;
 
 export class AgentUnavailableError extends Error {
   constructor(message = "AI に接続できませんでした。時間をおいて再試行してください") {

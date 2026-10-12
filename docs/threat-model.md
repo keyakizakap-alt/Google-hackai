@@ -33,7 +33,7 @@ OshiReady は、AI エージェントに「調べて提案する」ことだけ�
 | T6 | 同じ承認を 2 回送って二重に予約する | 使った承認を期限まで記録して 2 回目を拒否する。予約の部品には「同じ承認・同じ項目」で同じ冪等キーを渡す | `tests/booking.test.ts` |
 | T7 | 予定のタイトル・場所・参加者が AI やログに漏れる | 空き時間の計算では Calendar API の取得項目を時間帯だけに限る。受信後も `maskEvents()` で時間帯以外を捨てる。ライブの検出だけはタイトルと場所を受け取るが、候補以外はその場で捨てる。ロガーは許可リストのキーしか出さない | `tests/mask.test.ts`、`tests/detect.test.ts`、`tests/sources.test.ts` |
 | T8 | 修正指示に書いた連絡先やカード番号が AI に渡る | `redactText()` でマスクしてから渡す | `tests/mask.test.ts` |
-| T9 | エージェントが止まらない・費用が膨らむ | 最大ステップ数（既定 12）、全体 110 秒、終盤は提出だけを許可。IP ごとの回数制限と 1 日の上限（`AGENT_DAILY_LIMIT`）。見張りの確認は AI を使わず、見直し案は同じ変化につき 1 回 | `tests/orchestrator.test.ts`、`tests/watch.test.ts` |
+| T9 | エージェントが止まらない・費用が膨らむ | 最大ステップ数（既定 12）、全体 150 秒、終盤は提出だけを許可。IP ごとの回数制限と 1 日の上限（`AGENT_DAILY_LIMIT`）。見張りの確認は AI を使わず、見直し案は同じ変化につき 1 回 | `tests/orchestrator.test.ts`、`tests/watch.test.ts` |
 | T10 | 期限切れの古いプランで予約を進める | 期限切れの封筒は、見張りの「参照」だけに使える。承認・予約の検証には通らない。見直し案は古い承認を引き継がず、新しい承認待ちとして作る | `tests/watch.test.ts` |
 | T11 | 他サイトから API を呼ばせる（CSRF） | 同一オリジンの確認。承認・予約・キャンセルは専用ヘッダーも必須 | `tests/booking.test.ts` |
 | T12 | 画面にスクリプトを差し込む（XSS） | リクエストごとの nonce 付き Content-Security-Policy。通信先は自サイトのみ | — （`src/proxy.ts`） |

@@ -50,7 +50,7 @@ jsonPayload.message="agent.gemini.failed"
 | `INVALID_ARGUMENT`（`httpStatus` 400） | 送ったリクエストの形がモデルに受け付けられなかった（コードかモデル設定の問題） | アプリが自動で互換モードに切り替えて作り直す（1: 駅すぱあと・考える深さを外す、2: 引数定義を従来の形式にする）。`agent.gemini.compat_ok` の `mode`（`compat-1` / `compat-2`）で、どの段階で通ったか分かる。`apiField`・`apiMessage` に不正な項目が出ることもある |
 | `NOT_FOUND`（`httpStatus` 404） | モデル名・場所の誤り | `GEMINI_MODEL` と `GOOGLE_CLOUD_LOCATION`（`global`）を確認する |
 | `RESOURCE_EXHAUSTED`（429） | 利用枠の不足・混雑 | 少し待つ。`GEMINI_FALLBACK_MODEL` を設定する |
-| `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 110 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
+| `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 150 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。
 

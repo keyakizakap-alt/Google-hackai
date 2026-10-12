@@ -13,7 +13,12 @@ import { logger } from "../logger";
  * ツール名は Gemini の制約（英数字・_・-、64 文字以内）に合わせて `ekispert_` を前置して正規化する。
  */
 export const EKISPERT_PREFIX = "ekispert_";
-const TIMEOUT_MS = 20_000;
+/** 道具の一覧の取得は短めに待つ（プラン作成全体の制限時間を使い切らないため） */
+const LIST_TIMEOUT_MS = 8_000;
+const CALL_TIMEOUT_MS = 12_000;
+/** 取得に失敗したら、この間は再試行せずアプリ側の道具だけで進める（毎回待たせない） */
+const FAILURE_TTL_MS = 10 * 60_000;
+let failedAt = 0;
 const MAX_RESULT_CHARS = 12_000;
 
 interface CachedTools {
@@ -23,12 +28,12 @@ interface CachedTools {
 }
 let cache: CachedTools | null = null;
 
-async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
+async function withClient<T>(fn: (c: Client) => Promise<T>, timeout: number): Promise<T> {
   const transport = new StreamableHTTPClientTransport(new URL(config.ekispert.mcpUrl), {
     requestInit: { headers: { "ekispert-api-access-key": config.ekispert.accessKey ?? "" } },
   });
   const client = new Client({ name: "oshiready", version: "0.1.0" });
-  await client.connect(transport);
+  await client.connect(transport, { timeout });
   try {
     return await fn(client);
   } finally {
@@ -84,9 +89,10 @@ export function geminiParameters(schema: unknown): { parametersJsonSchema?: unkn
 export async function getEkispertDeclarations(): Promise<{ declarations: FunctionDeclaration[]; nameMap: Map<string, string> } | null> {
   if (!isEkispertConfigured()) return null;
   if (cache && Date.now() - cache.at < 10 * 60_000) return cache;
+  if (Date.now() - failedAt < FAILURE_TTL_MS) return null;
   const started = Date.now();
   try {
-    const tools = await withClient((c) => c.listTools(undefined, { timeout: TIMEOUT_MS }));
+    const tools = await withClient((c) => c.listTools(undefined, { timeout: LIST_TIMEOUT_MS }), LIST_TIMEOUT_MS);
     const nameMap = new Map<string, string>();
     const exposed = tools.tools.filter((t) => isAllowedTool(t.name, t.description));
     const declarations: FunctionDeclaration[] = exposed.map((t) => {
@@ -102,7 +108,9 @@ export async function getEkispertDeclarations(): Promise<{ declarations: Functio
     logger.info("ekispert.listTools", { latencyMs: Date.now() - started, itemCount: declarations.length, candidates: tools.tools.length });
     return cache;
   } catch (e) {
-    logger.warn("ekispert.listTools.failed", { latencyMs: Date.now() - started, errorCode: (e as Error).name });
+    failedAt = Date.now();
+    const code = (e as { code?: unknown }).code;
+    logger.warn("ekispert.listTools.failed", { latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined });
     return null;
   }
 }
@@ -113,8 +121,8 @@ export async function callEkispertTool(geminiName: string, args: Record<string, 
   const started = Date.now();
   try {
     const res = await withClient((c) =>
-      c.callTool({ name: original, arguments: args }, undefined, { timeout: TIMEOUT_MS }),
-    );
+      c.callTool({ name: original, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }),
+    CALL_TIMEOUT_MS);
     const text = (Array.isArray(res.content) ? res.content : [])
       .map((p: { type?: string; text?: string }) => (p.type === "text" ? p.text : ""))
       .join("\n")
