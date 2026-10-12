@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
+  RotateCcw,
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
@@ -393,6 +394,31 @@ function EmptyPlan() {
   );
 }
 
+/**
+ * 最初から作り直す。承認待ちのプランはそのまま置き換え、承認・予約済みのプランは確認してから置き換える
+ * （新しいプランも承認待ちで止まる。予約は取り消さず、承認済みのプランは見張りの対象として残る）。
+ */
+function RegenerateButton() {
+  const { envelope, event, busy, generatePlan, aiReady } = useStore();
+  if (!envelope || !event || envelope.plan.event.id !== event.id) return null;
+  const decided = envelope.status === "approved" || envelope.status === "booked";
+  const onClick = () => {
+    if (decided && !window.confirm("承認済みのプランを、新しく作るプラン（承認待ち）に置き換えます。予約はそのまま残ります。よろしいですか？")) return;
+    void generatePlan(event);
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy !== null}
+      className="flex min-h-[40px] w-fit items-center gap-1.5 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink hover:bg-lav-50 disabled:opacity-50"
+    >
+      {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+      {busy === "planning" ? "作り直しています…" : aiReady ? "AI に最初から作り直してもらう" : "最初から作り直す"}
+    </button>
+  );
+}
+
 export default function PlanPage() {
   const { envelope, busy } = useStore();
   const bookableKey = envelope ? `${envelope.plan.id}:${envelope.plan.revision}` : "";
@@ -423,7 +449,10 @@ export default function PlanPage() {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
-        <StatusStepper status={status} />
+        <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+          <StatusStepper status={status} />
+          <RegenerateButton />
+        </div>
       </div>
 
       <CalendarChangeBanner />
