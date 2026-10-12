@@ -211,6 +211,7 @@ EVAL_REPEATS=3 npm run eval
 | 1 プランあたりのトークン数・費用の目安 | `agent.completed`（`promptTokens`・`outputTokens`） | 同上（単価は公式の料金ページで確認） |
 | AI の待ち時間（中央値・95 パーセンタイル）と往復回数 | `agent.completed`（`modelLatencyMs`・`modelCalls`）、`agent.model.turn` | 同上 |
 | AI がよく使う道具と、その成功率 | `agent.tool` | 同上 |
+| 利用者の画面で起きたエラー（種類・画面） | `client.error` | ログ エクスプローラ、または同上 |
 | 実際の Gemini での完成率・自己修正率・攻撃耐性 | `npm run eval` | `docs/eval/latest.md` に出力 |
 
 ## 審査基準との対応
