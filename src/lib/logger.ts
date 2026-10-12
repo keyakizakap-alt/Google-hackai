@@ -19,6 +19,8 @@ const ALLOWED_FIELDS = new Set([
   "fromStatus",
   "toStatus",
   "tool",
+  "tools", // 駅すぱあと MCP が公開している道具の名前（公開情報）
+  "hiddenTools",
   "toolOk",
   "step",
   "steps",

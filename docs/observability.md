@@ -15,7 +15,9 @@ OshiReady は、利用者の画面には「AI が調べたこと」（使った�
 | `agent.tool` | 道具を 1 つ実行するたび | `tool`、`toolOk`、`latencyMs` |
 | `agent.gemini.failed` | AI の呼び出しに失敗したとき | `httpStatus`、`apiStatus`・`apiReason`、`mode`（give_up / timeout / fallback）、`steps`、`latencyMs` |
 | `agent.gemini.compat` / `compat_ok` | 互換モードで作り直したとき | `mode`（compat-1 / compat-2） |
+| `ekispert.listTools` | 駅すぱあとから道具の一覧を取れたとき | `itemCount`（AI に渡した数）、`candidates`（駅すぱあとが公開している数）、`tools`（AI に渡した道具の名前）、`hiddenTools`（安全のため渡さなかった道具の名前） |
 | `ekispert.listTools.failed` | 駅すぱあとにつながらなかったとき | `errorCode`、`httpStatus` |
+| `ekispert.callTool` / `callTool.failed` | 駅すぱあとの道具を 1 つ実行するたび | `tool`、`toolOk`、`latencyMs`、`errorCode` |
 | `client.error` | 利用者の画面でエラー画面が出たとき | `mode`（global＝アプリ全体 / page＝画面）、`errorCode`（エラーの種類）、`clientMessage`（短い説明。URL は除く）、`page`（画面のパス）、`digest` |
 
 ## 2. すぐに見る（ログ エクスプローラ）

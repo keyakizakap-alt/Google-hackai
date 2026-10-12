@@ -6,15 +6,15 @@ import { createGenAI, geminiErrorInfo, isModelUnavailable, modelCandidates } fro
 import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { venueArea } from "../eventDetection/venues";
-import { getEkispertDeclarations } from "../services/ekispert";
-import { hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
+import { getEkispertDeclarations, getEkispertStatus, type EkispertStatus } from "../services/ekispert";
+import { ekispertRouteSearchUrl, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
 import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, NATIVE_TOOL_NAMES, type AgentContext } from "./tools";
-import type { OshiEvent, Plan, SkinAnalysis, TraceStep } from "./types";
+import type { OshiEvent, Plan, SkinAnalysis, TimelineItem, TraceStep } from "./types";
 
 export interface AgentRunInput {
   event: OshiEvent;
@@ -141,12 +141,12 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   const items = [...ctx.submitted.items]
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
     .map((it) => {
-      if (!it.provider?.bookingUrl) return it;
+      if (!it.provider?.bookingUrl) return withTransitSearchLink(it, input.event);
       const safe = safeExternalUrl(it.provider.bookingUrl);
       if (safe) return { ...it, provider: { ...it.provider, bookingUrl: safe } };
       replacedLinks++;
       const fallback = it.kind === "stay" ? jalanSearchUrl(it.location ?? it.title) : it.kind === "beauty" ? hotpepperSearchUrl(`${input.event.homeStation} ${it.title}`) : undefined;
-      return { ...it, provider: { ...it.provider, bookingUrl: fallback } };
+      return withTransitSearchLink({ ...it, provider: { ...it.provider, bookingUrl: fallback } }, input.event);
     });
   if (replacedLinks > 0) {
     trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か確かめられないリンク ${replacedLinks} 件を、公式の検索ページに置き換えました` });
@@ -204,20 +204,52 @@ function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
   });
 }
 
+/**
+ * 移動の項目（実経路・確認項目とも）に、出発駅と到着駅を入れた乗り換え案内の検索リンクを付ける。
+ * 経路を取得できなかったときも、利用者が 1 回押すだけで正しい経路を確かめられるようにする
+ */
+function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineItem {
+  const isTransit = item.kind === "transit" || (item.kind === "prep" && item.category === "transit-check");
+  if (!isTransit || item.provider?.bookingUrl) return item;
+  // 帰り（開演より後の移動）は会場の駅から自宅の最寄り駅へ
+  const isReturn = Date.parse(item.start) >= Date.parse(event.startAt);
+  const from = item.route?.from ?? (isReturn ? event.venueStation : event.homeStation);
+  const to = item.route?.to ?? (isReturn ? event.homeStation : event.venueStation);
+  return { ...item, provider: { name: item.provider?.name ?? "駅すぱあとで経路を検索", bookingUrl: ekispertRouteSearchUrl(from, to) } };
+}
+
+/** 乗り換えをどう調べるかを、利用者に分かる言葉で書く（「AI が調べたこと」に出す） */
+function transitNote(status: EkispertStatus | "compat"): string {
+  switch (status) {
+    case "ready":
+      return "乗り換えは駅すぱあとで調べます";
+    case "unconfigured":
+      return "乗り換え案内のキーが未設定のため、乗り換えは検索リンクでご案内します";
+    case "no_tools":
+      return "乗り換え案内につながりましたが、使える検索の機能が見つからなかったため、乗り換えは検索リンクでご案内します";
+    case "compat":
+      return "AI がリクエストを受け付けなかったため乗り換え案内を外しました。乗り換えは検索リンクでご案内します";
+    default:
+      return "乗り換え案内につながらなかったため、乗り換えは検索リンクでご案内します（2 分後に再接続します）";
+  }
+}
+
 async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"], model: string, deadline: number, compat = 0) {
   const ai = createGenAI(60_000);
-  // 互換モード 1 以上では、駅すぱあと MCP の道具と考える深さの指定を外す（2 では引数定義も従来の形式にする）
-  const ekispert = compat >= 1 ? null : await getEkispertDeclarations();
+  // 互換モード 1 では考える深さの指定を外し、駅すぱあと MCP の道具は引数定義を従来の形式にして残す。
+  // 2 では駅すぱあと MCP の道具を外し、アプリの道具の引数定義も従来の形式にする（乗り換えは最後まで残す）
+  const ekispert = compat >= 2 ? null : await getEkispertDeclarations();
+  const ekispertDeclarations = ekispert ? (compat >= 1 ? toLegacyDeclarations(ekispert.declarations) : ekispert.declarations) : [];
   const native = compat >= 2 ? toLegacyDeclarations(NATIVE_DECLARATIONS) : NATIVE_DECLARATIONS;
-  const declarations: FunctionDeclaration[] = [...(ekispert?.declarations ?? []), ...native];
-  const allowed = new Set([...NATIVE_TOOL_NAMES, ...(ekispert?.declarations.map((d) => d.name!) ?? [])]);
+  const declarations: FunctionDeclaration[] = [...ekispertDeclarations, ...native];
+  const allowed = new Set([...NATIVE_TOOL_NAMES, ...ekispertDeclarations.map((d) => d.name!)]);
   trace.push({
     step: trace.length + 1,
     type: "model",
     name: "plan",
     ok: true,
     latencyMs: 0,
-    summary: `AI が調べものを始めました（乗り換えは${ekispert ? "乗り換え案内で調べます" : "目安で計算します"}）`,
+    summary: `AI が調べものを始めました（${transitNote(ekispert ? "ready" : compat >= 2 && getEkispertStatus() === "ready" ? "compat" : getEkispertStatus())}）`,
   });
 
   const contents: Content[] = [

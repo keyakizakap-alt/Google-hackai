@@ -1,6 +1,6 @@
 import "server-only";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
-import { EKISPERT_ROUTE_URL } from "../safeUrl";
+import { ekispertRouteSearchUrl } from "../safeUrl";
 import { formatJst, MS_MIN, toJstIso } from "../time";
 import { daysBefore, executeTool, type AgentContext } from "./tools";
 import type { Decision, TimelineItem, TraceStep } from "./types";
@@ -82,7 +82,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     title: `${event.homeStation}から${event.venueStation}への移動を確認`,
     start: toJstIso(checkAt),
     end: toJstIso(checkAt + MS_MIN),
-    provider: { name: "駅すぱあとで経路を検索", bookingUrl: EKISPERT_ROUTE_URL },
+    provider: { name: "駅すぱあとで経路を検索", bookingUrl: ekispertRouteSearchUrl(event.homeStation, event.venueStation) },
     rationale: `乗り換えの情報はまだ調べられていません。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くことを目安に、乗る電車・かかる時間・運賃を確かめてください。`,
     requiresBooking: true,
   });

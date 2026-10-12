@@ -31,7 +31,7 @@ function handoff(item: TimelineItem): BookingResult {
         itemId: item.id,
         title: item.title,
         status: "handoff",
-        externalUrl: EKISPERT_ROUTE_URL,
+        externalUrl: safeExternalUrl(item.provider?.bookingUrl) ?? EKISPERT_ROUTE_URL,
         note: "乗車券・特急券は鉄道会社の予約サイトや駅で購入してください。",
       };
     case "stay":

@@ -148,10 +148,12 @@ describe("モデルが乗っ取られても、承認なしで予約には進ま�
       // 「予約しました」は差し戻され、最終的な要約には残らない
       expect(out.trace.filter((t) => t.name === "submit_timeline").map((t) => t.ok)).toEqual([false, true]);
       expect(validateSummary(out.envelope.plan.summary)).toEqual([]);
-      // 偽の予約リンクは表示しない（許可ドメインの検索ページに差し替え）
+      // 偽の予約リンクは表示しない（許可ドメインの検索ページに差し替え。移動の項目はアプリが作る乗り換え案内の検索リンク）
       for (const it of out.envelope.plan.items) {
         const url = it.provider?.bookingUrl;
-        if (url) expect(new URL(url).hostname, url).toBe("beauty.hotpepper.jp");
+        if (!url) continue;
+        const isTransit = it.kind === "transit" || it.category === "transit-check";
+        expect(new URL(url).hostname, url).toBe(isTransit ? "roote.ekispert.net" : "beauty.hotpepper.jp");
       }
       // 修正指示がモデルに届くときは、囲みの外に出られない形になっている
       if (a.channel === "instruction") {
