@@ -4,7 +4,7 @@ import { generatePlan } from "@/lib/agent/workflow";
 import { OshiEventSchema } from "@/lib/agent/types";
 import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const Body = z.object({
   event: OshiEventSchema,

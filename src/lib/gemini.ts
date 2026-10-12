@@ -40,17 +40,35 @@ export function isModelUnavailable(e: unknown): boolean {
 }
 
 /**
- * Gemini の API エラーから、原因の種類だけを取り出す（ログで原因を特定するため）。
- * Google の API は失敗理由を決まった英大文字の名前で返す（例: PERMISSION_DENIED / SERVICE_DISABLED / BILLING_DISABLED）。
- * 本文の説明文には URL やプロジェクト名が入るため、名前の形をしたものだけを返し、それ以外は捨てる。
+ * Gemini の API エラーから、原因を特定するための情報だけを取り出す（ログ用）。
+ * - apiStatus / apiReason: Google の API が返す決まった英大文字の名前（例: PERMISSION_DENIED / SERVICE_DISABLED）
+ * - apiField: 入力の誤り（400）のとき、どの項目が不正か（例: tools[0].function_declarations[2].parameters）
+ * - apiMessage: 入力の誤り（400）のときだけ、説明文を短くして残す。リクエストの形の誤りを説明するもので、
+ *   予定などの利用者のデータは含まれない。URL は取り除き、メールアドレス等はロガー側でも伏せる
+ * 権限・課金などそれ以外の失敗では、説明文（プロジェクト名などを含む）は残さない。
  */
-export function geminiErrorInfo(e: unknown): { apiStatus?: string; apiReason?: string } {
+export function geminiErrorInfo(e: unknown): { apiStatus?: string; apiReason?: string; apiField?: string; apiMessage?: string } {
   const message = e instanceof Error ? e.message : "";
   const enumLike = (v: unknown) => (typeof v === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(v) ? v : undefined);
+  const fieldLike = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_.[\]]{1,120}$/.test(v) ? v : undefined);
   try {
-    const body = JSON.parse(message) as { error?: { status?: unknown; details?: { reason?: unknown }[] } };
-    const reason = (body.error?.details ?? []).map((d) => enumLike(d?.reason)).find(Boolean);
-    return { apiStatus: enumLike(body.error?.status), apiReason: reason };
+    const body = JSON.parse(message) as {
+      error?: { code?: unknown; status?: unknown; message?: unknown; details?: { reason?: unknown; fieldViolations?: { field?: unknown }[] }[] };
+    };
+    const details = body.error?.details ?? [];
+    const reason = details.map((d) => enumLike(d?.reason)).find(Boolean);
+    const isBadRequest = body.error?.code === 400 || (e as { status?: unknown }).status === 400;
+    if (!isBadRequest) return { apiStatus: enumLike(body.error?.status), apiReason: reason };
+    const field = details.flatMap((d) => d?.fieldViolations ?? []).map((v) => fieldLike(v?.field)).find(Boolean);
+    const text = typeof body.error?.message === "string" ? body.error.message : "";
+    const apiMessage = text
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/^(Request contains an invalid argument\.|Unable to submit request because)\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    // 決まり文句だけの説明（項目名なし）でも、そのことが分かるように残す
+    return { apiStatus: enumLike(body.error?.status), apiReason: reason, apiField: field, apiMessage: apiMessage || text.trim().slice(0, 120) || undefined };
   } catch {
     return {};
   }

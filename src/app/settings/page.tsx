@@ -1,19 +1,28 @@
 "use client";
 
-import { Bot, CalendarCheck, CalendarHeart, ImageIcon, Radar, ShieldCheck, TrainFront } from "lucide-react";
+import Link from "next/link";
+import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ImagePlus, Radar, ShieldCheck, TrainFront } from "lucide-react";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
 import { useStore } from "@/components/store";
 
-function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; title: string; status: string; desc: string; action?: React.ReactNode }) {
+/** 状態の札の色。つながっている＝緑、別の手段で代わりに動いている＝紫、未設定・準備中＝灰 */
+type Tone = "ok" | "alt" | "off";
+const TONE: Record<Tone, string> = {
+  ok: "bg-emerald-50 text-emerald-700",
+  alt: "bg-lav-100 text-lav-700",
+  off: "bg-cloud text-mute",
+};
+
+function Row({ icon, title, status, desc, action, tone = "alt" }: { icon: React.ReactNode; title: string; status: string; desc: string; action?: React.ReactNode; tone?: Tone }) {
   return (
     <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-2 font-bold text-ink">
           {title}
-          <span className="rounded-full bg-lav-100 px-2 py-0.5 text-[10px] font-semibold text-lav-700">{status}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TONE[tone]}`}>{status}</span>
         </p>
         <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{desc}</p>
       </div>
@@ -23,9 +32,13 @@ function Row({ icon, title, status, desc, action }: { icon: React.ReactNode; tit
 }
 
 export default function SettingsPage() {
-  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan, autoReview, setAutoReview } = useStore();
+  const { session, disconnect, stopDemoCalendar, persistImages, setPersistImages, clearSavedImages, clearLocalData, oshiImages, autoPlan, setAutoPlan, autoReview, setAutoReview, event, eventImage, setEventImage } = useStore();
   const saved = Object.keys(oshiImages).length;
   const { googleConnected, demoAvailable, demoConnected } = useCalendarLinks();
+  // Google の連携は「つながっている」「デモで代わりに連携中」「未連携」「まだ使えない（管理者の設定待ち）」を分けて見せる
+  const googleReady = Boolean(session?.googleOAuthConfigured);
+  const googleStatus = googleConnected ? "連携中" : demoConnected ? "デモのカレンダーで連携中" : googleReady ? "未連携" : "準備中";
+  const googleTone: Tone = googleConnected ? "ok" : demoConnected ? "alt" : "off";
   return (
     <div className="space-y-5 px-1">
       <div>
@@ -38,14 +51,17 @@ export default function SettingsPage() {
           <Row
             icon={<GoogleG className="h-5 w-5" />}
             title="Google カレンダー"
-            status={googleConnected ? "連携中" : "未連携"}
-            desc="予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。"
+            status={googleStatus}
+            tone={googleTone}
+            desc={`予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。${
+              !googleConnected && demoConnected ? "いまはデモのカレンダーとつながっているので、ライブの取り込みや空き時間はデモの予定で動いています。ご自分の予定で使うときは「Google で連携」を押してください。" : ""
+            }${!googleReady ? "ご自分の Google カレンダーとの連携は、管理者の設定が終わると使えるようになります。" : ""}`}
             action={
               googleConnected ? (
                 <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
                   連携を解除
                 </button>
-              ) : session ? (
+              ) : session && googleReady ? (
                 <GoogleConnectButton className="btn-primary min-h-[44px] shrink-0 rounded-xl px-4 text-xs font-bold text-white" />
               ) : null
             }
@@ -54,7 +70,8 @@ export default function SettingsPage() {
             <Row
               icon={<CalendarHeart className="h-5 w-5" />}
               title="デモのカレンダー"
-              status={demoConnected ? "表示中" : "未使用"}
+              status={demoConnected ? "連携中" : "未使用"}
+              tone={demoConnected ? "ok" : "off"}
               desc="ログインなしで、架空の予定が入ったデモ用カレンダーとの連携を体験できます。ライブの自動取り込みや空き時間の表示を、実際の連携と同じ流れで試せます。"
               action={
                 demoConnected ? (
@@ -71,6 +88,7 @@ export default function SettingsPage() {
             icon={<Bot className="h-5 w-5" />}
             title="AI プランナー"
             status={session?.gemini.configured ? "利用中" : "かんたん提案"}
+            tone={session?.gemini.configured ? "ok" : "alt"}
             desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えないときは、美容や移動の一般的な目安にそって提案します。"
           />
           <Row
@@ -86,7 +104,8 @@ export default function SettingsPage() {
           <Row
             icon={<TrainFront className="h-5 w-5" />}
             title="乗換案内（駅すぱあと）"
-            status={session?.ekispert.mode === "mcp" ? "利用中" : "未連携"}
+            status={session?.ekispert.mode === "mcp" ? "利用中" : "目安で計算"}
+            tone={session?.ekispert.mode === "mcp" ? "ok" : "alt"}
             desc="乗り換えの情報を調べられたときだけ、時刻・乗り換え・運賃を表示します。調べられないときは乗り換え案内のサイトをご案内します。"
           />
         </ul>
@@ -184,24 +203,76 @@ export default function SettingsPage() {
             <ImageIcon className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id="img-save" className="font-bold text-ink">推し画像をこの端末に保存する</h2>
+            <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              オンにすると、推し画像をこの端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
+              推しの画像を選ぶと、ホームのチケットの背景に表示します。右のスイッチをオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
               共用のパソコンではオフにするか、使い終わったら削除してください。
             </p>
           </div>
+          <span className="flex shrink-0 items-center gap-2 text-xs font-bold text-ink-soft">
+            この端末に保存
           <button
             type="button"
             role="switch"
             aria-checked={persistImages}
-            aria-labelledby="img-save"
+            aria-label="推し画像をこの端末に保存する"
             onClick={() => setPersistImages(!persistImages)}
             className={`relative h-8 w-14 shrink-0 rounded-full transition ${persistImages ? "bg-rose-400" : "bg-lav-200"}`}
           >
             <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${persistImages ? "left-7" : "left-1"}`} />
           </button>
+          </span>
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
+        {/* 推し画像を選ぶ（ホームのチケットにも表示される。推し＝アーティストごとに 1 枚） */}
+        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-line px-4 py-3">
+          <span className="relative grid h-16 w-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-night text-white/60">
+            {eventImage ? (
+              // eslint-disable-next-line @next/next/no-img-element -- blob URL（端末の中だけ）
+              <img src={eventImage} alt={event ? `${event.artist} の推し画像` : "推し画像"} className="h-full w-full object-cover" />
+            ) : (
+              <ImageIcon className="h-5 w-5" />
+            )}
+          </span>
+          <div className="min-w-0 flex-1 text-xs text-ink-soft">
+            {event ? (
+              <>
+                <p className="font-bold text-ink">{event.artist} の推し画像</p>
+                <p className="mt-0.5">ホームのチケットの背景に表示します。{persistImages ? "この端末に保存されます。" : "保存がオフのときは、画面を閉じると消えます。"}</p>
+              </>
+            ) : (
+              <p>
+                ライブを登録すると、推しごとに画像を設定できます。
+                <Link href="/events" className="ml-1 font-bold text-lav-700 underline-offset-2 hover:underline">
+                  ライブを登録
+                </Link>
+              </p>
+            )}
+          </div>
+          {event && (
+            <div className="flex shrink-0 gap-2">
+              <label className="btn-primary flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white">
+                <ImagePlus className="h-4 w-4" />
+                {eventImage ? "画像を変更" : "画像を選ぶ"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) setEventImage(f);
+                  }}
+                />
+              </label>
+              {eventImage && (
+                <button type="button" onClick={() => setEventImage(null)} className="min-h-[40px] rounded-lg border border-line bg-white px-3 text-xs text-ink-soft hover:bg-lav-50">
+                  外す
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
           <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです（画面を閉じると消えます）"}</span>
           <button
             type="button"

@@ -1,5 +1,5 @@
 import "server-only";
-import { FunctionCallingConfigMode, type Content, type ThinkingLevel, type FunctionDeclaration, type Part } from "@google/genai";
+import type { Content, FunctionCallingConfigMode, FunctionDeclaration, Part, ThinkingLevel } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
 import { createGenAI, geminiErrorInfo, isModelUnavailable, modelCandidates } from "../gemini";
@@ -10,6 +10,8 @@ import { getEkispertDeclarations } from "../services/ekispert";
 import { hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
+import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
+import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, NATIVE_TOOL_NAMES, type AgentContext } from "./tools";
 import type { OshiEvent, Plan, SkinAnalysis, TraceStep } from "./types";
@@ -33,7 +35,8 @@ export interface AgentRunOutput {
   engine: "gemini" | "rule-based";
 }
 
-const DEADLINE_MS = 110_000;
+/** プラン作成全体の制限時間。Cloud Run のリクエストのタイムアウト（既定 300 秒）より十分短くする */
+const DEADLINE_MS = 150_000;
 
 export class AgentUnavailableError extends Error {
   constructor(message = "AI に接続できませんでした。時間をおいて再試行してください") {
@@ -90,17 +93,33 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     engine = "gemini";
     const deadline = Date.now() + DEADLINE_MS;
     const models = modelCandidates();
+    let compat = 0;
     for (let i = 0; i < models.length; i++) {
       model = models[i];
       try {
-        await runGeminiLoop(input, ctx, trace, usage, model, deadline);
+        await runGeminiLoop(input, ctx, trace, usage, model, deadline, compat);
+        if (compat > 0) logger.warn("agent.gemini.compat_ok", { ...logBase, model, mode: `compat-${compat}` });
         break;
       } catch (e) {
         const status = (e as { status?: number }).status;
+        if (shouldRetryInCompat(e, usage.modelCalls, compat)) {
+          // 最初の呼び出しで形を拒否された。外せる機能を外して、同じモデルで作り直す
+          compat += 1;
+          logger.warn("agent.gemini.compat", { ...logBase, httpStatus: status, ...geminiErrorInfo(e), model, mode: `compat-${compat}` });
+          trace.push({ step: trace.length + 1, type: "guardrail", name: "compat_mode", ok: true, latencyMs: 0, summary: COMPAT_SUMMARY[compat] });
+          i -= 1;
+          continue;
+        }
         const canFallback = i < models.length - 1 && isModelUnavailable(e) && deadline - Date.now() > MIN_TIME_FOR_FALLBACK_MS;
         const timeout = isTimeout(e);
         logger.error("agent.gemini.failed", { ...logBase, errorCode: (e as Error).name, httpStatus: status, ...geminiErrorInfo(e), model, mode: canFallback ? "fallback" : timeout ? "timeout" : "give_up", steps: usage.modelCalls, latencyMs: usage.modelLatencyMs });
-        if (!canFallback) throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+        if (!canFallback) {
+          // 互換モードでも最初の呼び出しが 400 のときは、どの部品が拒否されるかを切り分けて記録する
+          if (status === 400 && usage.modelCalls === 0) {
+            await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
+          }
+          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+        }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined });
         trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
@@ -161,10 +180,36 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   return { plan, trace, usage, engine };
 }
 
-async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"], model: string, deadline: number) {
+/** 道具の使わせ方の指定。既定の AUTO では何も送らない（ANY は一部の環境で拒否されるため。config.ts 参照） */
+function toolConfigFor(mustSubmit: boolean) {
+  const mode = config.gemini.toolMode;
+  if (mode === "AUTO") return undefined;
+  return {
+    functionCallingConfig: {
+      mode: mode as FunctionCallingConfigMode,
+      ...(mustSubmit && mode === "ANY" ? { allowedFunctionNames: ["submit_timeline"] } : {}),
+    },
+  };
+}
+
+/** 最初に AI へ送る依頼文 */
+function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
+  return buildUserPrompt({
+    event: input.event,
+    now: toJstIso(ctx.now),
+    calendarSource: input.calendarSource,
+    hasSkinAnalysis: Boolean(input.skin),
+    previous: input.previous,
+    instruction: input.instruction,
+  });
+}
+
+async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: TraceStep[], usage: AgentRunOutput["usage"], model: string, deadline: number, compat = 0) {
   const ai = createGenAI(60_000);
-  const ekispert = await getEkispertDeclarations();
-  const declarations: FunctionDeclaration[] = [...(ekispert?.declarations ?? []), ...NATIVE_DECLARATIONS];
+  // 互換モード 1 以上では、駅すぱあと MCP の道具と考える深さの指定を外す（2 では引数定義も従来の形式にする）
+  const ekispert = compat >= 1 ? null : await getEkispertDeclarations();
+  const native = compat >= 2 ? toLegacyDeclarations(NATIVE_DECLARATIONS) : NATIVE_DECLARATIONS;
+  const declarations: FunctionDeclaration[] = [...(ekispert?.declarations ?? []), ...native];
   const allowed = new Set([...NATIVE_TOOL_NAMES, ...(ekispert?.declarations.map((d) => d.name!) ?? [])]);
   trace.push({
     step: trace.length + 1,
@@ -179,16 +224,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     {
       role: "user",
       parts: [
-        {
-          text: buildUserPrompt({
-            event: input.event,
-            now: toJstIso(ctx.now),
-            calendarSource: input.calendarSource,
-            hasSkinAnalysis: Boolean(input.skin),
-            previous: input.previous,
-            instruction: input.instruction,
-          }),
-        },
+        { text: firstUserPrompt(input, ctx) },
       ],
     },
   ];
@@ -203,16 +239,12 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        tools: [{ functionDeclarations: declarations }],
-        // ANY: 必ず何らかのツールを呼ぶ＝最終出力は submit_timeline 経由の構造化データに限定
-        toolConfig: {
-          functionCallingConfig: {
-            mode: FunctionCallingConfigMode.ANY,
-            ...(mustSubmit ? { allowedFunctionNames: ["submit_timeline"] } : {}),
-          },
-        },
+        // 残り 2 回は提出用の道具だけを渡す（どの使わせ方でも、調べものの途中で打ち切られずに提出できる）
+        tools: [{ functionDeclarations: mustSubmit ? declarations.filter((d) => d.name === "submit_timeline") : declarations }],
+        // AUTO のときは指定を送らない（ANY は一部の環境で拒否されるため既定にしない。config.ts 参照）
+        ...(toolConfigFor(mustSubmit) ? { toolConfig: toolConfigFor(mustSubmit) } : {}),
         abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
-        ...(config.gemini.thinkingLevel ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
+        ...(config.gemini.thinkingLevel && compat === 0 ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
       },
     });
     usage.modelCalls += 1;

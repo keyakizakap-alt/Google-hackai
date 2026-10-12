@@ -154,7 +154,7 @@
       <div class="gem" id="gem">
         <span class="tag" style="background:#e3ebff;color:#2c56b8">GEMINI</span>
         <div class="ttl">Function Calling</div>
-        <div class="sub" style="font-size:12.5px">Vertex AI の Gemini と往復。<br>mode = ANY・ツールは許可リスト制。<br>どのツールをいつ呼ぶかはモデルが判断。終盤は submit_timeline だけに絞る。<br>429・5xx は自動で再試行し、続けば予備のモデルへ</div>
+        <div class="sub" style="font-size:12.5px">Vertex AI の Gemini と往復。<br>ツールは許可リスト制。<br>どのツールをいつ呼ぶかはモデルが判断。終盤は submit_timeline だけに絞る。<br>429・5xx は自動で再試行し、続けば予備のモデルへ</div>
       </div>
       <div class="tools">
         <div class="tool">get_free_time_slots<small>マスク済みの空き時間</small></div>
@@ -169,7 +169,7 @@
       </div>
     </div>
     <div class="correct">↺ <span><b>差し戻し → 自己修正</b>：検証エラーをそのままモデルに返し、エージェントが自分で直して再提出する</span></div>
-    <div class="limits">最大ステップ数（既定 12）・全体 110 秒・予約／決済／カレンダー書き込みのツールは渡さない</div>
+    <div class="limits">最大ステップ数（既定 12）・全体 150 秒・予約／決済／カレンダー書き込みのツールは渡さない</div>
   </div>
 
   <div class="gate" id="gate">
@@ -230,7 +230,7 @@
   <div class="g"><b>プライバシー</b><span>予定のタイトル・場所・参加者は受信しない（fields 指定）＋ maskEvents()。サーバーに DB なし</span></div>
   <div class="g"><b>プロンプトインジェクション</b><span>入力・予定名はタグ抜けを防いで埋め込む。攻撃文 12 種 × 乗っ取られたモデルでも予約に届かないことをテスト</span></div>
   <div class="g"><b>外部リンク</b><span>AI が出したリンクは https・許可ドメインだけ表示（safeExternalUrl）</span></div>
-  <div class="g"><b>可観測性</b><span>思考ログ・所要時間・トークン数を画面に表示。npm run eval で自己修正率・攻撃耐性・費用を実測</span></div>
+  <div class="g"><b>可観測性</b><span>画面に「AI が調べたこと」。トークン数・待ち時間・失敗理由は Cloud Logging に記録し Log Analytics で集計。npm run eval で実測</span></div>
   <div class="g"><b>コスト</b><span>IP 単位のレート制限 ＋ AGENT_DAILY_LIMIT。通常は min-instances=0 でアイドル時は課金なし</span></div>
 </div>
 

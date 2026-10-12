@@ -8,10 +8,11 @@ import {
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { AddToCalendarButton } from "@/components/Reminders";
-import { ConflictBanner, DecisionsCard, WatchCard } from "@/components/AgentInsights";
+import { CalendarChangeBanner, ConflictBanner, DecisionsCard, WatchCard } from "@/components/AgentInsights";
 import { isInAppBookable } from "@/lib/booking/eligible";
 import { ItemIcon } from "@/components/icons";
 import { StageScene } from "@/components/StageScene";
+import { RegenerateButton } from "@/components/RegenerateButton";
 import { STATUS_LABEL } from "@/components/PlanSummary";
 import { useNow } from "@/components/motion";
 import { useStore } from "@/components/store";
@@ -195,7 +196,7 @@ function RevisePanel() {
 }
 
 function TracePanel() {
-  const { trace, envelope, usage } = useStore();
+  const { trace, envelope } = useStore();
   if (!trace.length) return null;
   return (
     <section aria-labelledby="trace" className="space-y-2">
@@ -204,7 +205,7 @@ function TracePanel() {
         <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI が調べたこと" : "確認したこと"}</h2>
         <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
       </div>
-      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} usage={usage} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
+      <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
       {envelope && (
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1 text-[11px] text-mute" aria-label="これまでの流れ">
           {envelope.history.map((h, i) => (
@@ -329,7 +330,12 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
           {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約なしで承認しました。予約したいものがあれば「AIに相談して直す」で見直すと、もう一度選べます。</p>}
         </div>
       )}
-      {status === "rejected" && <p className="mt-4 text-xs text-ink-soft">このプランは見送りました。「AIに相談して直す」から作り直せます。</p>}
+      {status === "rejected" && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs text-ink-soft">このプランは見送りました。最初から作り直すか、「AIに相談して直す」で直し方を伝えてください。</p>
+          <RegenerateButton className="w-full" />
+        </div>
+      )}
       {status === "booked" && (
         <div className="mt-4 grid gap-2">
           <button onClick={() => router.push("/bookings")} className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white">
@@ -423,17 +429,21 @@ export default function PlanPage() {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
-        <StatusStepper status={status} />
+        <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+          <StatusStepper status={status} />
+          <RegenerateButton />
+        </div>
       </div>
 
+      <CalendarChangeBanner />
       <ConflictBanner />
       <WatchCard />
 
       {isPending && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
           <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-rose-400" />
-          <p>
-            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。
+          <p className="flex-1">
+            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。合わなければ最初から作り直せます。
           </p>
         </div>
       )}

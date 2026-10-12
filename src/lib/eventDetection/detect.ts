@@ -61,7 +61,8 @@ export function pickLiveCandidates(items: readonly CalendarItemForDetection[], n
     const start = startRaw ? Date.parse(startRaw) : NaN;
     if (!Number.isFinite(start) || start < now) continue;
     out.push({
-      key: createHash("sha256").update(`oshiready:${it.id ?? it.summary}:${startRaw}`).digest("base64url").slice(0, 12),
+      // 予定 ID だけから作る（カレンダー側で日時が変わっても同じライブとして更新できるように）。ID が無いときだけ名前と日時を使う
+      key: createHash("sha256").update(`oshiready:${it.id ?? `${it.summary}:${startRaw}`}`).digest("base64url").slice(0, 12),
       summary: redactText(it.summary ?? "", 120),
       location: redactText(it.location ?? "", 120),
       startAt: toJstIso(start),

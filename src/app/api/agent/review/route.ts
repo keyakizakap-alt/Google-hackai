@@ -7,7 +7,7 @@ import { generatePlan } from "@/lib/agent/workflow";
 import { assertSameOrigin, dailyAgentCap, errorResponse, rateLimit, requestMeta, readJson } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const Body = z.object({ envelope: z.unknown() });
 
