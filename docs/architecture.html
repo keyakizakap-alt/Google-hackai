@@ -230,7 +230,7 @@
   <div class="g"><b>プライバシー</b><span>予定のタイトル・場所・参加者は受信しない（fields 指定）＋ maskEvents()。サーバーに DB なし</span></div>
   <div class="g"><b>プロンプトインジェクション</b><span>入力・予定名はタグ抜けを防いで埋め込む。攻撃文 12 種 × 乗っ取られたモデルでも予約に届かないことをテスト</span></div>
   <div class="g"><b>外部リンク</b><span>AI が出したリンクは https・許可ドメインだけ表示（safeExternalUrl）</span></div>
-  <div class="g"><b>可観測性</b><span>思考ログ・所要時間・トークン数を画面に表示。npm run eval で自己修正率・攻撃耐性・費用を実測</span></div>
+  <div class="g"><b>可観測性</b><span>画面に「AI が調べたこと」。トークン数・待ち時間・失敗理由は Cloud Logging に記録し Log Analytics で集計。npm run eval で実測</span></div>
   <div class="g"><b>コスト</b><span>IP 単位のレート制限 ＋ AGENT_DAILY_LIMIT。通常は min-instances=0 でアイドル時は課金なし</span></div>
 </div>
 
