@@ -172,7 +172,8 @@ export function geminiParameters(schema: unknown): { parametersJsonSchema?: unkn
 
 /**
  * 駅すぱあとが断った理由（応答の本文の先頭）をログ用に取り出す。
- * 400 のように「形が正しくない」と断られたとき、何が足りないのかを調べるため。キーの値は伏せる
+ * 400 のように「形が正しくない」と断られたとき、何が足りないのかを調べるため。キーの値は伏せる。
+ * 利用者のデータを送らない道具の一覧の取得（listTools）の失敗にだけ使う
  */
 export function failureReason(e: unknown): string | undefined {
   const message = (e as Error)?.message;
@@ -246,7 +247,8 @@ export async function callEkispertTool(geminiName: string, args: Record<string, 
     return { result: text, isError: Boolean(res.isError) };
   } catch (e) {
     const code = (e as { code?: unknown }).code;
-    logger.warn("ekispert.callTool.failed", { tool: original, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined, apiMessage: failureReason(e) });
+    // 道具の呼び出しには利用者の出発駅などが入るため、断られた理由の本文は残さない（一覧の取得の失敗だけ残す）
+    logger.warn("ekispert.callTool.failed", { tool: original, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined });
     return { error: "駅すぱあと MCP の呼び出しに失敗しました。もう一度呼ぶか、時刻を作らずに kind=prep, category=transit-check の確認項目を入れてください。" };
   }
 }
