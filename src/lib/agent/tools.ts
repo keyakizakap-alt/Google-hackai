@@ -111,7 +111,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "search_transit_route_mock",
     description:
-      "経路データが取得できないことを返す。具体的な列車・所要時間・運賃は生成しない。",
+      "駅すぱあとが使えないときだけ使う。経路データが取得できないことを返す。具体的な列車・所要時間・運賃は生成しない。",
     parametersJsonSchema: {
       type: "object",
       properties: { from_station: { type: "string" }, to_station: { type: "string" }, arrive_by: ISO },
@@ -317,7 +317,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       };
     }
     case "search_transit_route_mock": {
-      return { ok: false, response: { unavailable: true, note: "経路・所要時間・運賃は未取得。駅すぱあとで確認してください" }, summary: "乗り換えの情報を調べられなかったため、時刻は決めずに調べ方をご案内します" };
+      // 経路は作らず「調べられない」ことだけを返す。失敗ではなく想定どおりの結果なので、画面では ✗ にしない
+      return {
+        ok: true,
+        response: { unavailable: true, note: "経路・所要時間・運賃は未取得。kind=prep, category=transit-check の確認項目を入れる（検索リンクはアプリが付ける）" },
+        summary: "乗り換えは、出発駅と会場の駅を入れた検索リンクでご案内します（時刻は決めていません）",
+      };
     }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
