@@ -38,6 +38,8 @@ const ALLOWED_FIELDS = new Set([
   "apiField",
   "apiMessage",
   "clientMessage",
+  "clientFrame",
+  "deployment",
   "page",
   "digest",
   "planId",
