@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { isStaleVersionError, reloadOnceForNewVersion, reportClientError } from "@/lib/client/staleVersion";
+import { isStaleVersionError, reloadIfNewVersion, reloadOnceForNewVersion, reportClientError } from "@/lib/client/staleVersion";
 
 /**
  * ルートのレイアウトごと表示できなかったときの最後の受け皿。
@@ -11,8 +11,13 @@ import { isStaleVersionError, reloadOnceForNewVersion, reportClientError } from 
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const stale = isStaleVersionError(error);
   useEffect(() => {
-    if (stale) reloadOnceForNewVersion();
-    else reportClientError("global", error);
+    if (stale) {
+      reloadOnceForNewVersion();
+      return;
+    }
+    reportClientError("global", error);
+    // デプロイ前から開いていた画面なら、種類によらず新しい版で読み込み直す
+    void reloadIfNewVersion();
   }, [stale, error]);
   return (
     <html lang="ja">

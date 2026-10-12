@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { RefreshCw } from "lucide-react";
-import { isStaleVersionError, reloadOnceForNewVersion, reportClientError } from "@/lib/client/staleVersion";
+import { isStaleVersionError, reloadIfNewVersion, reloadOnceForNewVersion, reportClientError } from "@/lib/client/staleVersion";
 
 /**
  * 画面の表示中に起きた想定外のエラー。サイドバー・下のメニューと、処理中の AI のプラン作成はそのまま残る。
@@ -12,8 +12,13 @@ import { isStaleVersionError, reloadOnceForNewVersion, reportClientError } from 
 export default function ErrorPage({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const stale = isStaleVersionError(error);
   useEffect(() => {
-    if (stale) reloadOnceForNewVersion();
-    else reportClientError("page", error);
+    if (stale) {
+      reloadOnceForNewVersion();
+      return;
+    }
+    reportClientError("page", error);
+    // デプロイ前から開いていた画面なら、種類によらず新しい版で読み込み直す
+    void reloadIfNewVersion();
   }, [stale, error]);
 
   return (

@@ -13,6 +13,8 @@ const Body = z.object({
   message: z.string().max(500).optional(),
   digest: z.string().max(80).optional(),
   path: z.string().max(200).optional(),
+  frame: z.string().max(120).optional(),
+  version: z.string().max(40).optional(),
 });
 
 export async function POST(req: Request) {
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   const parsed = Body.safeParse(await readJson(req, 4 * 1024).catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
-  const { kind, name, message, digest, path } = parsed.data;
+  const { kind, name, message, digest, path, frame, version } = parsed.data;
   const page = (path ?? "").split(/[?#]/)[0];
   logger.warn("client.error", {
     ...meta,
@@ -30,6 +32,8 @@ export async function POST(req: Request) {
     clientMessage: (message ?? "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim(),
     page: /^\/[\w\-/]{0,60}$/.test(page) ? page : "other",
     digest: /^[\w-]{1,40}$/.test(digest ?? "") ? digest : undefined,
+    clientFrame: /^[\w.-]{1,80}\.js:\d+:\d+$/.test(frame ?? "") ? frame : undefined,
+    deployment: /^[\w-]{1,40}$/.test(version ?? "") ? version : undefined,
   });
   return NextResponse.json({ ok: true });
 }
