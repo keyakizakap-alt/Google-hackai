@@ -15,7 +15,6 @@ export async function GET() {
     sources,
     gemini: { configured: isGeminiConfigured() },
     ekispert: { mode: isEkispertConfigured() ? "mcp" : "mock" },
-    youcam: { mode: "mock" },
     booking: { inApp: enabledProviders().length > 0, demo: enabledProviders().some((p) => p.demo) },
   });
 }

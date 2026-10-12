@@ -292,7 +292,7 @@ export default function SettingsPage() {
           <ShieldCheck className="h-5 w-5 text-lav-600" /> あなたの情報の扱い
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末に保存します。Google カレンダーの予定や顔写真は保存しません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末に保存します。Google カレンダーの予定は保存しません。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約・キャンセル・支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中だけで作ります。予定を端末の外に送ったり保存したりしません。</li>
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>

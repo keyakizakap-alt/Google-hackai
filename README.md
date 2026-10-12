@@ -28,7 +28,6 @@ OshiReady は、Google カレンダーの空き時間を読み取り、推し活
 | 14 | 推し画像・会場辞書 | イベントごとに推し画像を設定できる（端末内のみで使い、送信しない）。会場→最寄り駅の辞書は 57 会場（ドーム・スタジアム・アリーナ・ホール・Zepp）に対応 |
 | 15 | はじめての方への案内 | ホームに「ライブ登録 → AI にプランを作ってもらう → 確認して承認」の 3 ステップを表示し、進み具合に合わせて次にやることのボタンだけを出す（閉じられる）。審査員がログインなしで試すときの道しるべにもなる |
 | 16 | エージェントの評価 | `npm run eval` で、実際の Gemini を使ってシナリオ 6 種 × 複数回と攻撃文 12 種を実行し、完成率・自己修正率・再検証・美容の推奨タイミング・雨対策・ステップ数・トークン（費用）とインジェクション耐性を `docs/eval/latest.md` に書き出す |
-| — | 肌解析 | 実 API 未接続のため利用者画面から除外。画像を送られても API は拒否する |
 
 ## 開発した範囲とモックの箇所
 
@@ -38,7 +37,7 @@ OshiReady は、Google カレンダーの空き時間を読み取り、推し活
 |---|---|---|
 | **実装（実際に動く）** | Gemini の Function Calling による自律ループ、提出の検証と差し戻し（自己修正）、承認待ちを必ず通す状態遷移、署名付きのプラン、見張り（承認後の変化の検出と見直し案）、Google カレンダー連携（OAuth・サービスアカウント）とマスキング、ライブの自動取り込み・スクショ読み取り（Gemini の構造化出力）、気象庁の天気、駅すぱあと MCP の動的な取り込み、リマインド（通知・.ics）、評価ハーネス | `src/lib/agent/`、`src/lib/sources/`、`src/lib/eventDetection/`、`src/lib/signals/weather.ts`、`src/lib/services/ekispert.ts`、`src/lib/eval/` |
 | **データとして持っている** | 美容の推奨タイミング、会場と最寄り駅の辞書（57 会場）、遠征先の立ち寄り先（12 エリア）、混雑の目安 | `src/lib/services/beauty.ts`、`src/lib/eventDetection/venues.ts`、`src/lib/services/spots.ts` |
-| **モック（実サービス未接続）** | サロンの空き枠・価格（候補日時だけを出す）、予約（デモ予約：実在の店舗に届かない。予約の部品を差し替えると本物になる）、肌解析（画面から除外） | `src/lib/services/beauty.ts`、`src/lib/booking/demo.ts`、`src/lib/services/youcam.ts` |
+| **モック（実サービス未接続）** | サロンの空き枠・価格（候補日時だけを出す）、予約（デモ予約：実在の店舗に届かない。予約の部品を差し替えると本物になる） | `src/lib/services/beauty.ts`、`src/lib/booking/demo.ts` |
 
 デモ用のデータに出てくるアーティスト名（LUMIRISE・ASTRONOVA・SOLA FLARE・MIRAGE NOTE）はすべて架空。会場名は実在の施設名を、所在地と最寄り駅の案内のためにだけ使っている。
 
@@ -73,7 +72,6 @@ Cloud Run (Next.js standalone, Node 22, 非 root)
   │                                ├ get_free_time_slots      （マスク済み Busy から計算）
   │                                ├ get_beauty_guideline     （美容の推奨タイミング）
   │                                ├ search_beauty_salons     （施術候補日時。実際の空席・価格は未取得）
-  │                                ├ get_skin_analysis        （画面では未提供）
   │                                ├ estimate_crowd           （会場周辺の混雑予測）
   │                                ├ get_weather_forecast     （気象庁・キー不要。取得できなければ断定しない）
   │                                ├ search_nearby_spots      （遠征先の立ち寄り先。営業時間は未取得）
@@ -102,7 +100,6 @@ Cloud Run (Next.js standalone, Node 22, 非 root)
 - Calendar API には `fields=items(start,end,status,transparency,eventType)` を指定する。**予定のタイトル・説明・場所・参加者は受信すらしない**
 - 念のため、受信したデータは `maskEvents()` で時間帯だけの `BusyBlock` に変換し、元データへの参照を捨てる（多層防御）
 - **ライブの自動取り込み**（`/api/calendar/detect-events`）だけは、`fields=items(id,summary,location,start,end,status)` でタイトル・場所・日時を受け取る。サーバー上のキーワードフィルタ（`pickLiveCandidates`）でライブ候補に絞り、**候補以外の予定はその場で破棄**する。候補も連絡先・URL をマスクしてから Gemini に渡す。参加者・説明文は受信しない。ログに残すのは件数だけ
-- 肌解析は未接続のため画面から除外。顔画像を含むプラン生成要求は拒否する
 - ロガー（`src/lib/logger.ts`）は**許可リストにあるキーしか出力しない**。メールアドレスや電話番号のような値もマスクする。コード中の `console.*` はゼロ
 - 修正指示の文章は `redactText()` で連絡先やカード番号をマスクしてから Gemini に渡す
 - OAuth トークンは AES-256-GCM で暗号化した httpOnly Cookie にだけ保持する（24 時間で失効）
@@ -193,7 +190,6 @@ EVAL_REPEATS=3 npm run eval
 | `GEMINI_THINKING_LEVEL` | `LOW`（AI が考える深さ。道具を何度も呼ぶため、応答の速さを優先） |
 | `GEMINI_TOOL_MODE` | `AUTO`（道具の使わせ方の指定を送らない。`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | `EKISPERT_API_KEY` | 実経路は表示せず、検索サイトでの確認を案内 |
-| `YOUCAM_API_KEY` | 実 API 未接続。肌解析は画面に出さない |
 
 ## Cloud Run へのデプロイ
 
@@ -227,7 +223,7 @@ EVAL_REPEATS=3 npm run eval
 
 - **駅すぱあと MCP**: 接続 URL（`https://api-mcp.ekispert.jp/mcp`）と認証ヘッダー（`ekispert-api-access-key`）は公式ドキュメントのリポジトリで確認済み（2026-09-26 取得・公式）。ただし**ツール名と引数スキーマは実際のキーで接続して確認していない**。実行時に `tools/list` から取得し、引数定義は Gemini が受け付ける形（参照の展開・null を許す型の整理など）に整えてから渡す。取得できないときは、移動の項目に駅すぱあとの検索リンク（`roote.ekispert.net/result?dep=…&arr=…`。日時は利用者が指定）を付ける。このリンクの形も実際の画面では未確認
 - **Gemini の実呼び出し**: モック SDK を使ったテストでループの動作は検証済みだが、**実キーを使った E2E はまだ実施していない**
-- **YouCam API とサロン予約**: どちらもモック。予約は「仮予約番号の発行」または「外部予約サイトへの受け渡し」までで、決済は行わない
+- **サロン予約**: モック。予約は「仮予約番号の発行」または「外部予約サイトへの受け渡し」までで、決済は行わない
 - 公演情報・写真は例示。実在アーティストの画像は使わず、抽象的なステージのイラストで表現している
 - **気象庁の JSON**: 公式 API としての提供ではなく、仕様変更の可能性がある。開発環境から到達できなかったため、パーサは公開仕様どおりに組んだレスポンスでのみ検証している。取得に失敗した場合は 10 分間は再試行せず、天気なしでプランを作る
 - **インスタンスごとのメモリ**: 回数制限・1 日の上限・二重予約の記録はインスタンスごとのメモリにある。初回公開のスクリプトは最大 1 台だが、デモ用の設定（`scripts/cloud-run-demo-mode.sh`）は最大 2〜3 台にするため、そのぶん上限が実質的に増え、二重予約の記録も台をまたいで共有されない（予約はデモ予約なので実害はない。実サービスにつなぐ前に共有の保存先が必要）→ [docs/threat-model.md](docs/threat-model.md)
@@ -249,7 +245,7 @@ src/
     eventDetection/    ライブの検出・抽出・スクショ読み取り・会場辞書
     google/            OAuth・Calendar 取得・サービスアカウント
     privacy/           マスキング・テキストの秘匿化
-    services/          美容（モック）・YouCam アダプタ・駅すぱあと MCP ブリッジ・経路モック・立ち寄り先
+    services/          美容（モック）・駅すぱあと MCP ブリッジ・経路モック・立ち寄り先
     signals/           公演日の天気（気象庁）
     sources/           カレンダー連携の部品と共通の安全チェック
     gemini.ts          Gemini 呼び出しの共通部品（再試行・予備のモデル）

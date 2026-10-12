@@ -142,12 +142,6 @@ export interface TraceStep {
   summary: string;
 }
 
-export interface SkinAnalysis {
-  source: "youcam" | "mock";
-  scores: { key: string; label: string; score: number }[];
-  advice: string[];
-}
-
 /**
  * 承認後の予約結果。
  * - reserved: アプリ内で予約した（予約の部品が対応している項目。デモ予約なら demo: true）

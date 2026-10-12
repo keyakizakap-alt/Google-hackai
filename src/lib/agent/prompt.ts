@@ -17,7 +17,7 @@ export const SYSTEM_INSTRUCTION = `あなたは「OshiReady」の推し活プラ
       駅名で見つからない・条件が必要と返ったら、駅の検索や探索条件のツールで正式な駅名・条件を確かめてから再検索する。
       取得できた経路は kind=transit, route.source=ekispert として、結果に書かれた列車・発着時刻・運賃だけを使う。
       それでも取得できない場合は kind=prep, category=transit-check の確認項目を入れる。列車・時刻・運賃を創作しない
-   f. 帰宅経路を取得できない場合は、宿泊が必要と断定しない。get_skin_analysis の結果があれば前日のセルフケア（kind=prep）も入れる
+   f. 帰宅経路を取得できない場合は、宿泊が必要と断定しない
    f-2. 必要だと判断したときだけ get_weather_forecast で公演日の天気を確認する。雨・雪なら
         ヘアセットを当日朝に寄せる、持ち物に雨具を入れる、屋外の待機を短くする等を反映する。
         available=false のときは天気を断定せず、確認を促す一文にとどめる
@@ -45,17 +45,15 @@ export function buildUserPrompt(params: {
   event: OshiEvent;
   now: string;
   calendarSource: "calendar" | "demo";
-  hasSkinAnalysis: boolean;
   previous?: Plan;
   instruction?: string;
 }): string {
-  const { event, now, calendarSource, hasSkinAnalysis, previous, instruction } = params;
+  const { event, now, calendarSource, previous, instruction } = params;
   const lines = [
     previous ? "# タスク: 既存プランをユーザーの修正指示に沿って組み直してください" : "# タスク: 推し活プランを新規作成してください",
     `<now>${now}</now>`,
     `<calendar_source>${calendarSource === "demo" ? "カレンダー未連携。既存予定は不明。空き時間と断定しない" : "連携カレンダー（時間帯のみ・マスク済み）"}</calendar_source>`,
     `<event>${fenceJson(event)}</event>`,
-    `<skin_analysis_available>${hasSkinAnalysis}</skin_analysis_available>`,
   ];
   if (previous) {
     const compact = previous.items.map(({ id, kind, category, title, start, end, provider }) => ({
