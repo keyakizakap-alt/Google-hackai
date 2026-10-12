@@ -20,6 +20,7 @@ export interface ProbeInput {
   systemInstruction: string;
   userPrompt: string;
   declarations: FunctionDeclaration[];
+  toolConfig?: GenerateContentConfig["toolConfig"];
 }
 
 interface Probe {
@@ -41,10 +42,12 @@ export async function probeGeminiRequest(input: ProbeInput, now = Date.now()): P
     { name: "tools_legacy", text: hello, config: { tools: [{ functionDeclarations: toLegacyDeclarations(input.declarations) }] } },
     { name: "tools_json", text: hello, config: { tools: [{ functionDeclarations: input.declarations }] } },
     { name: "tools_any", text: hello, config: { tools: [{ functionDeclarations: input.declarations }], toolConfig: any } },
+    { name: "tools_validated", text: hello, config: { tools: [{ functionDeclarations: input.declarations }], toolConfig: { functionCallingConfig: { mode: "VALIDATED" as FunctionCallingConfigMode } } } },
     {
       name: "full",
       text: input.userPrompt,
-      config: { systemInstruction: input.systemInstruction, tools: [{ functionDeclarations: input.declarations }], toolConfig: any },
+      // 本番と同じ組み立て（使わせ方の指定は config の値どおり。既定の AUTO では送らない）
+      config: { systemInstruction: input.systemInstruction, tools: [{ functionDeclarations: input.declarations }], ...(input.toolConfig ? { toolConfig: input.toolConfig } : {}) },
     },
   ];
   for (const [i, p] of probes.entries()) {
