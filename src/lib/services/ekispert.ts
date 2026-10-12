@@ -170,6 +170,18 @@ export function geminiParameters(schema: unknown): { parametersJsonSchema?: unkn
   return emptyObject ? {} : { parametersJsonSchema: s };
 }
 
+/**
+ * 駅すぱあとが断った理由（応答の本文の先頭）をログ用に取り出す。
+ * 400 のように「形が正しくない」と断られたとき、何が足りないのかを調べるため。キーの値は伏せる
+ */
+export function failureReason(e: unknown): string | undefined {
+  const message = (e as Error)?.message;
+  if (typeof message !== "string" || !message) return undefined;
+  const key = config.ekispert.accessKey;
+  const body = message.replace(/^Streamable HTTP error:\s*/, "").replace(/^Error POSTing to endpoint:\s*/, "");
+  return (key ? body.split(key).join("[key]") : body).replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
 export async function getEkispertDeclarations(): Promise<{ declarations: FunctionDeclaration[]; nameMap: Map<string, string> } | null> {
   if (!isEkispertConfigured()) return null;
   if (cache && Date.now() - cache.at < 10 * 60_000) {
@@ -213,7 +225,7 @@ export async function getEkispertDeclarations(): Promise<{ declarations: Functio
     failedAt = Date.now();
     lastStatus = "failed";
     const code = (e as { code?: unknown }).code;
-    logger.warn("ekispert.listTools.failed", { latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined });
+    logger.warn("ekispert.listTools.failed", { latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined, apiMessage: failureReason(e) });
     return null;
   }
 }
@@ -233,7 +245,8 @@ export async function callEkispertTool(geminiName: string, args: Record<string, 
     logger.info("ekispert.callTool", { tool: original, latencyMs: Date.now() - started, toolOk: !res.isError });
     return { result: text, isError: Boolean(res.isError) };
   } catch (e) {
-    logger.warn("ekispert.callTool.failed", { tool: original, latencyMs: Date.now() - started, errorCode: (e as Error).name });
+    const code = (e as { code?: unknown }).code;
+    logger.warn("ekispert.callTool.failed", { tool: original, latencyMs: Date.now() - started, errorCode: (e as Error).name, httpStatus: typeof code === "number" ? code : undefined, apiMessage: failureReason(e) });
     return { error: "駅すぱあと MCP の呼び出しに失敗しました。もう一度呼ぶか、時刻を作らずに kind=prep, category=transit-check の確認項目を入れてください。" };
   }
 }

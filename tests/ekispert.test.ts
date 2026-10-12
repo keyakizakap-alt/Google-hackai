@@ -160,3 +160,14 @@ describe("プラン作成と乗り換え案内", () => {
     expect(out.trace[0].summary).toContain("駅すぱあとで調べます");
   });
 });
+
+describe("駅すぱあとが断った理由のログ", () => {
+  it("SDK の前置きを外し、キーの値を伏せる", async () => {
+    vi.stubEnv("EKISPERT_API_KEY", "secret-key-123");
+    vi.resetModules();
+    const { failureReason } = await vi.importActual<typeof import("@/lib/services/ekispert")>("@/lib/services/ekispert");
+    const e = Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {"error":"Unsupported protocol version","key":"secret-key-123"}'), { code: 400 });
+    expect(failureReason(e)).toBe('{"error":"Unsupported protocol version","key":"[key]"}');
+    vi.unstubAllEnvs();
+  });
+});
