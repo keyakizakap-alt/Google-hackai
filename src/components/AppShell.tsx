@@ -202,7 +202,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <br />
               <span className="pl-5">Good Live ♡</span>
             </p>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">カレンダーの予定や顔写真は保存しません。公演と予約メモはこの端末にだけ保存します。</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">カレンダーの予定は保存しません。公演と予約メモはこの端末にだけ保存します。</p>
           </div>
         </div>
       </aside>

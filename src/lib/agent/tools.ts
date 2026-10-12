@@ -10,13 +10,12 @@ import { estimateCrowd } from "../services/transit";
 import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
 import { jstAt, MS_DAY, MS_MIN, toJstIso } from "../time";
 import { validateSummary, validateTimeline } from "./validate";
-import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type SkinAnalysis, type TimelineItem } from "./types";
+import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type TimelineItem } from "./types";
 
 /** 1 リクエスト分のエージェント実行コンテキスト（メモリ上のみ・リクエスト終了で破棄） */
 export interface AgentContext {
   event: OshiEvent;
   busy: readonly BusyBlock[];
-  skin?: SkinAnalysis;
   now: number;
   submitted?: { summary: string; items: TimelineItem[]; warnings: string[]; decisions: Decision[] };
   rejectedSubmissions: number;
@@ -76,11 +75,6 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
       },
       required: ["service", "station", "window_start", "window_end"],
     },
-  },
-  {
-    name: "get_skin_analysis",
-    description: "YouCam AI 肌解析の結果（スコアとアドバイス）を返す。ユーザーが画像を提供していない場合は provided=false。",
-    // 引数なし。空の object（properties: {}）を書くと Vertex AI が 400 INVALID_ARGUMENT で拒否するため、定義ごと省く
   },
   {
     name: "estimate_crowd",
@@ -265,10 +259,6 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の候補日時を ${Math.min(slots.length, 6)} 件見つけました（店舗の空席は未確認）`,
       };
     }
-    case "get_skin_analysis":
-      return ctx.skin
-        ? { ok: true, response: { provided: true, ...ctx.skin }, summary: "肌診断の結果を参考にしました" }
-        : { ok: true, response: { provided: false }, summary: "肌診断はなし" };
     case "estimate_crowd": {
       const r = estimateCrowd({ eventStart: ctx.event.startAt, at: str(args.at, 40) });
       return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };

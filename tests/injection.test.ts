@@ -92,7 +92,6 @@ describe("タグ抜け対策（信頼できない文字列の埋め込み）", (
         event: eventFor(a),
         now: new Date().toISOString(),
         calendarSource: "demo",
-        hasSkinAnalysis: false,
         instruction: a.channel === "instruction" ? a.text : "土曜の午前がいい",
       });
       for (const tag of ["event", "user_instruction"]) {

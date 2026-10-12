@@ -103,10 +103,6 @@ export const config = {
     mcpUrl: env("EKISPERT_MCP_URL") ?? "https://api-mcp.ekispert.jp/mcp",
     accessKey: env("EKISPERT_API_KEY"),
   },
-
-  youcam: {
-    apiKey: env("YOUCAM_API_KEY"),
-  },
 } as const;
 
 export const isGoogleOAuthConfigured = () =>

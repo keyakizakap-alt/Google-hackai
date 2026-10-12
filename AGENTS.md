@@ -9,7 +9,7 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 - 予約・キャンセルは、ユーザーが承認し「予約する」「キャンセルを確定する」を押したときだけ、予約の部品（`src/lib/booking`）で実行する。AI エージェントには予約・キャンセルのツールを渡さない。決済はしない。いまの部品はデモ予約（実在の店舗には届かない）で、画面に必ず明記する。
 - 見張り（`/api/plan/watch`・`/api/agent/review`）は、承認後の変化を調べて見直し案を作るだけ。見直し案も必ず `pending_approval` で止め、今のプランや予約は変えない。
 - リマインドは端末の中だけで組み立てる（アプリ内通知と、アラーム付き .ics）。予定をサーバーに保存しない。
-- カレンダーの予定や顔画像はメモリ上で Gemini に渡すだけにし、DB・ログ（`console.log` を含む）へ出力・保存しない。
+- カレンダーの予定や、ライブを読み取るためのスクリーンショットはメモリ上で Gemini に渡すだけにし、DB・ログ（`console.log` を含む）へ出力・保存しない。
 - 仕様を変えるときは、まずこのファイルの「技術スタック」と「開発コマンド」を更新する。決まっていないことは推測で決めず、推奨案と理由（前提・制約・リスク）を添えて人間に確認する。
 
 ## 技術スタック
@@ -20,7 +20,7 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 | フロントエンド | Next.js 16（App Router）+ React 19 + TypeScript + Tailwind CSS v4 |
 | バックエンド／実行環境 | Next.js Route Handlers（`src/app/api`）。本番は Cloud Run（`Dockerfile`、standalone 出力）、プレビューは Vercel |
 | AI | Gemini（`@google/genai`、Function Calling・構造化出力）。モデルは環境変数 `GEMINI_MODEL`、予備は `GEMINI_FALLBACK_MODEL`（任意）、考える深さは `GEMINI_THINKING_LEVEL`（既定 `LOW`）、道具の使わせ方は `GEMINI_TOOL_MODE`（既定 `AUTO`。`ANY` は Vertex AI で拒否されたため既定にしない）。呼び出しは `src/lib/gemini.ts` の共通部品を使い、429・5xx は自動で再試行する |
-| 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP、気象庁の公開 JSON（API キー不要・`src/lib/signals/weather.ts`）、YouCam（モック）、予約の部品（`BOOKING_PROVIDERS`、既定はデモ予約） |
+| 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP、気象庁の公開 JSON（API キー不要・`src/lib/signals/weather.ts`）、予約の部品（`BOOKING_PROVIDERS`、既定はデモ予約） |
 | データストア | サーバー側は持たない（署名付きの状態をクライアントが保持）。端末側は IndexedDB / localStorage |
 | リージョン | asia-northeast1（Cloud Run） |
 

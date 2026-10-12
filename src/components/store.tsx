@@ -8,7 +8,7 @@ import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } 
 import type { WatchSignal } from "@/lib/agent/watch";
 import { formatJst } from "@/lib/time";
 
-/** 公演と予約メモはこのブラウザの IndexedDB に保存する。顔画像と OAuth トークンは保存しない。 */
+/** 公演と予約メモはこのブラウザの IndexedDB に保存する。OAuth トークンは保存しない。 */
 
 export interface SessionInfo {
   googleOAuthConfigured: boolean;
@@ -16,7 +16,6 @@ export interface SessionInfo {
   sources?: { id: string; label: string; connectPath: string | null; connected: boolean }[];
   gemini: { configured: boolean };
   ekispert: { mode: "mcp" | "mock" };
-  youcam: { mode: "api" | "mock" };
   /** アプリ内予約。inApp=false なら予約サイトへの案内のみ。demo=true なら実在の店舗には届かない */
   booking?: { inApp: boolean; demo: boolean };
 }
@@ -204,8 +203,6 @@ interface Store {
   persistImages: boolean;
   setPersistImages: (on: boolean) => void;
   clearSavedImages: () => Promise<void>;
-  selfie: string | null;
-  setSelfie: (dataUrl: string | null) => void;
   availability: Availability | null;
   envelope: PlanEnvelope | null;
   trace: TraceStep[];
@@ -293,7 +290,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // restorePlan は後で定義するため、取り込み処理からは参照で呼ぶ
   const restorePlanRef = useRef<(id: string | null) => void>(() => undefined);
   const [oshiImages, setOshiImages] = useState<Record<string, string>>({});
-  const [selfie, setSelfie] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [envelope, setEnvelope] = useState<PlanEnvelope | null>(null);
   const [trace, setTrace] = useState<TraceStep[]>([]);
@@ -567,7 +563,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!opts?.auto) setError(null);
       let r: PlanResponse | undefined;
       try {
-        r = await api<PlanResponse>("/api/agent/plan", { event: target, selfie: selfie ?? undefined });
+        r = await api<PlanResponse>("/api/agent/plan", { event: target });
       } catch (e) {
         const message = (e as Error).message;
         setPlanError(message);
@@ -579,12 +575,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (r) {
         applyPlan(r);
         setChat([{ role: "agent", text: r.envelope.plan.summary }]);
-        // 顔画像は一度解析に使ったらクライアントのメモリからも破棄
-        setSelfie(null);
       }
       return Boolean(r);
     },
-    [event, selfie, applyPlan],
+    [event, applyPlan],
   );
 
   // 自動プラン作成: イベントが決まっていてプランがなければ、AI が自動で提案を作る（承認するまで予約は進まない）
@@ -876,8 +870,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return {};
         });
       },
-      selfie,
-      setSelfie,
       availability,
       envelope,
       trace,
@@ -1039,7 +1031,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, calendarChanges, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, calendarChanges, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

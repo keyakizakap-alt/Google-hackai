@@ -16,13 +16,12 @@ import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, type AgentContext } from "./tools";
 
 const TRANSIT_FALLBACK_TOOL = "search_transit_route_mock";
-import type { OshiEvent, Plan, SkinAnalysis, TimelineItem, TraceStep } from "./types";
+import type { OshiEvent, Plan, TimelineItem, TraceStep } from "./types";
 
 export interface AgentRunInput {
   event: OshiEvent;
   busy: readonly BusyBlock[];
   calendarSource: "calendar" | "demo";
-  skin?: SkinAnalysis;
   previous?: Plan;
   instruction?: string;
   requestId: string;
@@ -80,7 +79,6 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   const ctx: AgentContext = {
     event: input.event,
     busy: input.busy,
-    skin: input.skin,
     now: Date.now(),
     rejectedSubmissions: 0,
     venueArea: venueArea(input.event.venue, input.event.venueStation),
@@ -200,7 +198,6 @@ function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
     event: input.event,
     now: toJstIso(ctx.now),
     calendarSource: input.calendarSource,
-    hasSkinAnalysis: Boolean(input.skin),
     previous: input.previous,
     instruction: input.instruction,
   });

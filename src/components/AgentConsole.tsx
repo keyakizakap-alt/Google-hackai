@@ -20,7 +20,6 @@ export function friendlyStep(name: string): string {
     get_free_time_slots: "空き時間",
     get_beauty_guideline: "美容の目安",
     search_beauty_salons: "サロン",
-    get_skin_analysis: "肌診断",
     estimate_crowd: "混雑",
     get_weather_forecast: "天気",
     search_nearby_spots: "立ち寄り先",

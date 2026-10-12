@@ -87,20 +87,6 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     requiresBooking: true,
   });
 
-  if (ctx.skin) {
-    const t = daysBefore(event.startAt, 1, 22);
-    items.push({
-      id: "prep-skincare",
-      kind: "prep",
-      category: "selfcare",
-      title: "保湿パック＆早めの就寝",
-      start: toJstIso(t),
-      end: toJstIso(t + 30 * MS_MIN),
-      rationale: ctx.skin.advice[0] ?? "前日のセルフケアで当日の肌を整えます。",
-      requiresBooking: false,
-    });
-  }
-
   items.push({
     id: "event-main",
     kind: "event",
