@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const scripted: unknown[] = [];
 const seenContents: unknown[][] = [];
-type Req = { contents: unknown[]; config?: { toolConfig?: { functionCallingConfig?: { allowedFunctionNames?: string[] } } } };
+type Req = { contents: unknown[]; config?: { toolConfig?: unknown; tools?: { functionDeclarations?: { name?: string }[] }[] } };
+/** 渡された道具が提出用だけなら ["submit_timeline"]、そうでなければ undefined */
+const onlySubmit = (req: Req) => {
+  const names = req.config?.tools?.[0]?.functionDeclarations?.map((d) => d.name ?? "") ?? [];
+  return names.length === 1 && names[0] === "submit_timeline" ? names : undefined;
+};
 /** 指定すると scripted の代わりにリクエスト内容に応じて応答する */
 let responder: ((req: Req) => { calls: { name: string; args: Record<string, unknown> }[] }) | null = null;
 const seenAllowed: (string[] | undefined)[] = [];
@@ -17,7 +22,7 @@ vi.mock("@google/genai", () => ({
     models = {
       generateContent: vi.fn(async (req: Req) => {
         seenContents.push(structuredClone(req.contents));
-        seenAllowed.push(req.config?.toolConfig?.functionCallingConfig?.allowedFunctionNames);
+        seenAllowed.push(onlySubmit(req));
         const next = responder ? responder(req) : (scripted.shift() as { calls: { name: string; args: Record<string, unknown> }[] });
         return {
           functionCalls: next.calls.map((c, i) => ({ id: `c${i}`, ...c })),
@@ -49,7 +54,7 @@ describe("runPlanningAgent (Gemini loop)", () => {
   it("forces submit_timeline on the final turns so long research still ends in a plan", async () => {
     // 提出を許されるまで調べものを続ける AI を模擬する
     responder = (req) =>
-      req.config?.toolConfig?.functionCallingConfig?.allowedFunctionNames?.includes("submit_timeline")
+      onlySubmit(req)
         ? { calls: [{ name: "submit_timeline", args: { summary: "forced", items: [transit("15:00")] } }] }
         : { calls: [{ name: "get_free_time_slots", args: { from_date: day, to_date: day } }] };
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");

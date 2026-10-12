@@ -69,7 +69,7 @@ Cloud Run (Next.js standalone, Node 22, 非 root)
   ├─ /api/calendar/availability   Calendar API（時間帯だけ）→ maskEvents() → extractFreeSlots()
   ├─ /api/calendar/detect-events  ライブ候補だけ抽出（キーワードで絞る → Gemini の構造化出力・ツールなし）
   ├─ /api/events/scan             スクショ・文章からライブを読み取る（Gemini の構造化出力・画像は保存しない）
-  ├─ /api/agent/plan | revise     ── Orchestrator（Gemini Function Calling, mode=ANY。429・5xx は自動で再試行、必要なら予備のモデル）
+  ├─ /api/agent/plan | revise     ── Orchestrator（Gemini Function Calling。終盤は提出用の道具だけを渡す。429・5xx は自動で再試行、必要なら予備のモデル）
   │                                ├ get_free_time_slots      （マスク済み Busy から計算）
   │                                ├ get_beauty_guideline     （美容の推奨タイミング）
   │                                ├ search_beauty_salons     （施術候補日時。実際の空席・価格は未取得）
@@ -191,6 +191,7 @@ EVAL_REPEATS=3 npm run eval
 | `GEMINI_API_KEY` または Vertex 設定 | ルールベースのプランナー（同じツール・同じ検証を通る） |
 | `GEMINI_FALLBACK_MODEL` | 予備のモデルに切り替えない（メインが使えなければエラー） |
 | `GEMINI_THINKING_LEVEL` | `LOW`（AI が考える深さ。道具を何度も呼ぶため、応答の速さを優先） |
+| `GEMINI_TOOL_MODE` | `AUTO`（道具の使わせ方の指定を送らない。`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | `EKISPERT_API_KEY` | 実経路は表示せず、検索サイトでの確認を案内 |
 | `YOUCAM_API_KEY` | 実 API 未接続。肌解析は画面に出さない |
 

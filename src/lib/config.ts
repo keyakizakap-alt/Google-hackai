@@ -30,6 +30,12 @@ export class ConfigError extends Error {
   }
 }
 
+const TOOL_MODES = ["AUTO", "VALIDATED", "ANY"] as const;
+function toolMode(v: string | undefined): (typeof TOOL_MODES)[number] {
+  const upper = (v ?? "").toUpperCase();
+  return (TOOL_MODES as readonly string[]).includes(upper) ? (upper as (typeof TOOL_MODES)[number]) : "AUTO";
+}
+
 const THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"] as const;
 function thinkingLevel(v: string | undefined): (typeof THINKING_LEVELS)[number] | undefined {
   if (v === undefined) return "LOW";
@@ -72,6 +78,12 @@ export const config = {
      * 出来は submit_timeline の検証と差し戻しで担保する。空文字（"default"）にするとモデルの既定値を使う
      */
     thinkingLevel: thinkingLevel(env("GEMINI_THINKING_LEVEL")),
+    /**
+     * 道具（ツール）の使わせ方（AUTO / VALIDATED / ANY）。既定は AUTO（指定を送らない）。
+     * 「必ず道具を使う」ANY は、Vertex AI の gemini-3.5-flash で 400 INVALID_ARGUMENT になることを本番で確認したため既定にしない。
+     * AUTO でも、最後は提出用の道具だけを渡して提出させ、文章で答えたときは提出を促す
+     */
+    toolMode: toolMode(env("GEMINI_TOOL_MODE")),
     /**
      * 1 回のプラン作成で AI が道具（ツール）を使える回数。手順が 7 段階あるため最低 8 回は確保する。
      * 残り 2 回になると提出（submit_timeline）だけを許可する。

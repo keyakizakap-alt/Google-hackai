@@ -22,6 +22,7 @@
 |---|---|
 | 連携するカレンダー | `CALENDAR_SOURCES` |
 | AI のモデル | `GEMINI_MODEL` |
+| 道具の使わせ方 | `GEMINI_TOOL_MODE`（既定 `AUTO`。`VALIDATED`・`ANY` も選べるが、`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
 | AI 呼び出しの 1 日の上限 | `AGENT_DAILY_LIMIT` |
 | 駅すぱあとで使うツール | `EKISPERT_ALLOWED_TOOLS` |
@@ -64,5 +65,6 @@ jsonPayload.message="agent.gemini.failed"
 | `user_prompt` | 利用者の依頼文だけ | 依頼文の内容 |
 | `tools_legacy` | ＋道具の定義（従来の形式） | 道具の定義（名前・説明・引数） |
 | `tools_json` | ＋道具の定義（JSON Schema 形式） | JSON Schema 形式の書き方 |
-| `tools_any` | ＋「必ず道具を使う」指定 | Function Calling の `mode: ANY` |
-| `full` | 全部入り | 部品の組み合わせ |
+| `tools_any` | ＋「必ず道具を使う」指定 | Function Calling の `mode: ANY`（2026-10 に本番で確認。既定では送らない） |
+| `tools_validated` | ＋`mode: VALIDATED` | `VALIDATED` の指定 |
+| `full` | 全部入り（使わせ方の指定は `GEMINI_TOOL_MODE` どおり） | 部品の組み合わせ |

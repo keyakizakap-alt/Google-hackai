@@ -1,5 +1,5 @@
 import "server-only";
-import { FunctionCallingConfigMode, type Content, type ThinkingLevel, type FunctionDeclaration, type Part } from "@google/genai";
+import type { Content, FunctionCallingConfigMode, FunctionDeclaration, Part, ThinkingLevel } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { randomId } from "../crypto";
 import { createGenAI, geminiErrorInfo, isModelUnavailable, modelCandidates } from "../gemini";
@@ -115,7 +115,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
         if (!canFallback) {
           // 互換モードでも最初の呼び出しが 400 のときは、どの部品が拒否されるかを切り分けて記録する
           if (status === 400 && usage.modelCalls === 0) {
-            await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS }).catch(() => undefined);
+            await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
           }
           throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
         }
@@ -179,6 +179,18 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   return { plan, trace, usage, engine };
 }
 
+/** 道具の使わせ方の指定。既定の AUTO では何も送らない（ANY は一部の環境で拒否されるため。config.ts 参照） */
+function toolConfigFor(mustSubmit: boolean) {
+  const mode = config.gemini.toolMode;
+  if (mode === "AUTO") return undefined;
+  return {
+    functionCallingConfig: {
+      mode: mode as FunctionCallingConfigMode,
+      ...(mustSubmit && mode === "ANY" ? { allowedFunctionNames: ["submit_timeline"] } : {}),
+    },
+  };
+}
+
 /** 最初に AI へ送る依頼文 */
 function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
   return buildUserPrompt({
@@ -226,14 +238,10 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
       contents,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        tools: [{ functionDeclarations: declarations }],
-        // ANY: 必ず何らかのツールを呼ぶ＝最終出力は submit_timeline 経由の構造化データに限定
-        toolConfig: {
-          functionCallingConfig: {
-            mode: FunctionCallingConfigMode.ANY,
-            ...(mustSubmit ? { allowedFunctionNames: ["submit_timeline"] } : {}),
-          },
-        },
+        // 残り 2 回は提出用の道具だけを渡す（どの使わせ方でも、調べものの途中で打ち切られずに提出できる）
+        tools: [{ functionDeclarations: mustSubmit ? declarations.filter((d) => d.name === "submit_timeline") : declarations }],
+        // AUTO のときは指定を送らない（ANY は一部の環境で拒否されるため既定にしない。config.ts 参照）
+        ...(toolConfigFor(mustSubmit) ? { toolConfig: toolConfigFor(mustSubmit) } : {}),
         abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
         ...(config.gemini.thinkingLevel && compat === 0 ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
       },
