@@ -78,7 +78,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "get_skin_analysis",
     description: "YouCam AI 肌解析の結果（スコアとアドバイス）を返す。ユーザーが画像を提供していない場合は provided=false。",
-    parametersJsonSchema: { type: "object", properties: {} },
+    // 引数なし。空の object（properties: {}）を書くと Vertex AI が 400 INVALID_ARGUMENT で拒否するため、定義ごと省く
   },
   {
     name: "estimate_crowd",
@@ -92,7 +92,6 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
     parametersJsonSchema: {
       type: "object",
       properties: { date: DATE },
-      required: [],
     },
   },
   {

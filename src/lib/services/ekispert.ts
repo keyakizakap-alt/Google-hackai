@@ -68,6 +68,19 @@ function cleanSchema(schema: unknown): unknown {
   return schema;
 }
 
+/**
+ * Gemini（Vertex AI）が受け付けない引数定義を避ける。
+ * 引数が無い道具の「空の object」（properties: {}）や空の required は 400 INVALID_ARGUMENT になるため省く
+ */
+export function geminiParameters(schema: unknown): { parametersJsonSchema?: unknown } {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return {};
+  const s = { ...(schema as Record<string, unknown>) };
+  if (Array.isArray(s.required) && s.required.length === 0) delete s.required;
+  const props = s.properties;
+  const emptyObject = s.type === "object" && (!props || (typeof props === "object" && Object.keys(props as object).length === 0));
+  return emptyObject ? {} : { parametersJsonSchema: s };
+}
+
 export async function getEkispertDeclarations(): Promise<{ declarations: FunctionDeclaration[]; nameMap: Map<string, string> } | null> {
   if (!isEkispertConfigured()) return null;
   if (cache && Date.now() - cache.at < 10 * 60_000) return cache;
@@ -82,7 +95,7 @@ export async function getEkispertDeclarations(): Promise<{ declarations: Functio
       return {
         name,
         description: `[駅すぱあと API MCP] ${t.description ?? t.name}`.slice(0, 1000),
-        parametersJsonSchema: cleanSchema(t.inputSchema),
+        ...geminiParameters(cleanSchema(t.inputSchema)),
       };
     });
     cache = { at: Date.now(), declarations, nameMap };
