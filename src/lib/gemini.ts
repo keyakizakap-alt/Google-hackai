@@ -67,7 +67,8 @@ export function geminiErrorInfo(e: unknown): { apiStatus?: string; apiReason?: s
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 120);
-    return { apiStatus: enumLike(body.error?.status), apiReason: reason, apiField: field, apiMessage: apiMessage || undefined };
+    // 決まり文句だけの説明（項目名なし）でも、そのことが分かるように残す
+    return { apiStatus: enumLike(body.error?.status), apiReason: reason, apiField: field, apiMessage: apiMessage || text.trim().slice(0, 120) || undefined };
   } catch {
     return {};
   }
