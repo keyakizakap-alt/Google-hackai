@@ -3,32 +3,18 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { RefreshCw } from "lucide-react";
-
-const RELOAD_KEY = "oshiready.versionReload";
-
-/** 新しい版がデプロイされた後、開いたままの古い画面から移動して部品を読み込めなかったときのエラーか */
-function isStaleVersion(error: Error) {
-  const text = `${error.name} ${error.message}`;
-  return /ChunkLoadError|Loading chunk|dynamically imported module|Importing a module script failed|Failed to load chunk/i.test(text);
-}
+import { isStaleVersionError, reloadOnceForNewVersion, reportClientError } from "@/lib/client/staleVersion";
 
 /**
  * 画面の表示中に起きた想定外のエラー。サイドバー・下のメニューと、処理中の AI のプラン作成はそのまま残る。
  * 新しい版に切り替わった直後の読み込みエラーなら、1 回だけ自動で再読み込みする。
  */
 export default function ErrorPage({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
-  const stale = isStaleVersion(error);
+  const stale = isStaleVersionError(error);
   useEffect(() => {
-    if (!stale) return;
-    try {
-      const last = Number(sessionStorage.getItem(RELOAD_KEY) ?? 0);
-      if (Date.now() - last < 30_000) return; // 直前にも再読み込みしていたら繰り返さない
-      sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
-    } catch {
-      /* 保存できない環境でも 1 回は再読み込みする */
-    }
-    window.location.reload();
-  }, [stale]);
+    if (stale) reloadOnceForNewVersion();
+    else reportClientError("page", error);
+  }, [stale, error]);
 
   return (
     <div className="card mx-auto mt-8 max-w-lg p-7 text-center" role="alert">

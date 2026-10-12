@@ -53,7 +53,7 @@ steps:
   # 4. イメージのビルド。タグはコミット ID（どの版が動いているかを特定でき、正確に戻せる）
   - id: build
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "${_IMAGE}:${COMMIT_SHA}", .]
+    args: [build, --build-arg, "DEPLOYMENT_VERSION=${COMMIT_SHA}", -t, "${_IMAGE}:${COMMIT_SHA}", .]
   - id: push
     name: gcr.io/cloud-builders/docker
     args: [push, "${_IMAGE}:${COMMIT_SHA}"]

@@ -10,6 +10,9 @@ RUN npm ci
 FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# デプロイごとの識別子（next.config.ts の deploymentId）。Cloud Build はコミット ID を渡す。未指定ならビルド時刻を使う
+ARG DEPLOYMENT_VERSION=""
+ENV DEPLOYMENT_VERSION=${DEPLOYMENT_VERSION}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # public/ が無い構成でも後段の COPY が失敗しないよう、必ず作っておく
