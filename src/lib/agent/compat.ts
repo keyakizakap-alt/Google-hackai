@@ -6,14 +6,14 @@ import type { FunctionDeclaration, Schema } from "@google/genai";
  * どの段階で通ったかをログに残す（次の調査で原因を特定するため）。
  *
  * 0: 通常（駅すぱあと MCP の道具・考える深さの指定・JSON Schema 形式の引数定義）
- * 1: 駅すぱあと MCP の道具と、考える深さの指定を外す
- * 2: さらに、引数定義を従来の形式（OpenAPI 形式の parameters）に変換する
+ * 1: 考える深さの指定を外し、駅すぱあと MCP の道具の引数定義を従来の形式（OpenAPI 形式の parameters）に変換する
+ * 2: さらに駅すぱあと MCP の道具を外し、アプリの道具の引数定義も従来の形式にする
  */
 export const MAX_COMPAT_LEVEL = 2;
 
 export const COMPAT_SUMMARY: Record<number, string> = {
-  1: "AI がリクエストを受け付けなかったため、追加の機能（乗換案内・考える深さの指定）を外して作り直します",
-  2: "AI がリクエストを受け付けなかったため、道具の定義を互換性の高い形式に変えて作り直します",
+  1: "AI がリクエストを受け付けなかったため、考える深さの指定を外し、乗り換え案内の道具の定義を互換性の高い形式に変えて作り直します",
+  2: "AI がリクエストを受け付けなかったため、乗り換え案内を外し、道具の定義を互換性の高い形式に変えて作り直します",
 };
 
 const TYPE_MAP: Record<string, string> = {

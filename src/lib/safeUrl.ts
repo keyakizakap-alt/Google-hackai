@@ -27,3 +27,13 @@ export const hotpepperSearchUrl = (q: string) =>
   `https://beauty.hotpepper.jp/CSP/bt/salonSearch/search/?freeword=${encodeURIComponent(q)}`;
 export const jalanSearchUrl = (q: string) => `https://www.jalan.net/uw/uwp1700/uww1701.do?keyword=${encodeURIComponent(q)}`;
 export const EKISPERT_ROUTE_URL = "https://roote.ekispert.net/";
+/**
+ * 駅すぱあと for web の経路検索（出発駅・到着駅を入れた状態で開く）。
+ * dep / arr は roote.ekispert.net の検索結果の URL で使われている名前。日時は利用者が画面で指定する
+ */
+export const ekispertRouteSearchUrl = (from: string, to: string) => {
+  const dep = from.trim();
+  const arr = to.trim();
+  if (!dep || !arr) return EKISPERT_ROUTE_URL;
+  return `${EKISPERT_ROUTE_URL}result?dep=${encodeURIComponent(dep)}&arr=${encodeURIComponent(arr)}`;
+};
