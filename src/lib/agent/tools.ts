@@ -330,14 +330,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
+        // 形式の誤りを挟んだら「同じ指摘が続いた」とは数えない
+        ctx.lastRejection = undefined;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
         return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
       }
-      const { errors, warnings } = validateTimeline(parsed.data.items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
-      errors.push(...validateSummary(parsed.data.summary));
-      if (parsed.data.items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
-        errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
-      }
+      const { errors, warnings } = checkSubmission(parsed.data.items, parsed.data.summary, ctx);
       if (errors.length > 0) {
         const key = [...errors].sort().join("\n");
         const repeated = ctx.lastRejection === key;
@@ -345,11 +343,13 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         // 同じ指摘で 2 回続けて差し戻されたら、AI には直せないと判断し、問題の項目を外して仕上げる
         const repaired = repeated && !errors.some((e) => e.startsWith("summary")) ? repairTimeline(parsed.data.items, errors, ctx) : undefined;
         if (repaired) {
+          const mentionsRemoved = (text: string) => repaired.removed.some((r) => r.keywords.some((k) => text.includes(k)));
+          const removedTitles = repaired.removed.map((r) => `「${r.title}」`).join("・");
           ctx.submitted = {
-            summary: parsed.data.summary,
+            summary: removedTitles ? `${parsed.data.summary}（時間が合わなかった${removedTitles}は外しました）`.slice(0, 400) : parsed.data.summary,
             items: repaired.items,
             warnings: [...parsed.data.warnings, ...repaired.warnings, ...repaired.notes],
-            decisions: parsed.data.decisions,
+            decisions: parsed.data.decisions.filter((d) => !mentionsRemoved(`${d.topic} ${d.chosen}`)),
           };
           return {
             ok: true,
@@ -379,6 +379,18 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
   }
 }
 
+/** 提出されたプランの検査（タイムライン・要約の書き方・駅すぱあとの経路の出どころ） */
+function checkSubmission(items: TimelineItem[], summary: string, ctx: AgentContext): { errors: string[]; warnings: string[] } {
+  const { errors, warnings } = validateTimeline(items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
+  errors.push(...validateSummary(summary));
+  if (items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
+    errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
+  }
+  return { errors, warnings };
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** 差し戻しの理由を、画面に出せる短い文にする（内部の ID は省く） */
 function displayError(error: string): string {
   const text = error.replace(/[\w-]+（/g, "（").replace(/^[\w-]+: /, "");
@@ -391,12 +403,23 @@ function displayError(error: string): string {
  * - 移動の確認や雨対策が足りないという指摘には、確認の項目を足す
  * 直した結果をもう一度検査し、問題がなくなったときだけ使う（直せなければ undefined）
  */
-export function repairTimeline(items: TimelineItem[], errors: string[], ctx: AgentContext): { items: TimelineItem[]; warnings: string[]; notes: string[] } | undefined {
+export function repairTimeline(
+  items: TimelineItem[],
+  errors: string[],
+  ctx: AgentContext,
+): { items: TimelineItem[]; warnings: string[]; notes: string[]; removed: { title: string; keywords: string[] }[] } | undefined {
   const notes: string[] = [];
-  const named = new Set(items.filter((it) => errors.some((e) => e.startsWith(`${it.id}:`) || e.includes(`${it.id}（`))).map((it) => it.id));
+  const removed: { title: string; keywords: string[] }[] = [];
+  // 「id: …」か、文頭・空白の直後の「id（…）」だけを一致とみなす（1 が spot-1 に一致しないように）
+  const isNamed = (id: string) => {
+    const labeled = new RegExp(`(^|\\s)${escapeRegExp(id)}（`);
+    return errors.some((e) => e.startsWith(`${id}:`) || labeled.test(e));
+  };
   let next = items.filter((it) => {
-    if (!named.has(it.id) || it.kind === "event" || it.kind === "transit") return true;
+    if (!isNamed(it.id) || it.kind === "event" || it.kind === "transit") return true;
     notes.push(`「${it.title}」は時間が合わなかったため外しました。必要なら「AIに相談して直す」から追加してください`);
+    const label = it.kind === "beauty" && it.category && it.category in BEAUTY_GUIDELINES ? BEAUTY_GUIDELINES[it.category as keyof typeof BEAUTY_GUIDELINES].label : undefined;
+    removed.push({ title: it.title, keywords: [it.title, ...(label ? [label] : [])] });
     return false;
   });
   const eventStart = Date.parse(ctx.event.startAt);
@@ -424,9 +447,10 @@ export function repairTimeline(items: TimelineItem[], errors: string[], ctx: Age
     notes.push("雨・雪の対策の項目を追加しました");
   }
   if (next.length === items.length && notes.length === 0) return undefined;
-  const check = validateTimeline(next, ctx.event, ctx.busy, ctx.now, ctx.forecast);
+  // 直したあとも、提出時と同じ検査（駅すぱあとの経路の出どころを含む）を通ったときだけ使う
+  const check = checkSubmission(next, "", ctx);
   if (check.errors.length > 0) return undefined;
-  return { items: next, warnings: check.warnings, notes };
+  return { items: next, warnings: check.warnings, notes, removed };
 }
 
 /** ルールベース用: イベント日から days 日前の JST 日付の hour 時 */

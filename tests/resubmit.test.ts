@@ -68,6 +68,51 @@ describe("同じ指摘が続いたときの仕上げ", () => {
     expect(ctx.submitted).toBeUndefined();
   });
 
+  it("形式の誤りを挟んだら、同じ指摘が続いたとは数えない", async () => {
+    const ctx = ctxOf();
+    expect((await submit(ctx, [live, check, late])).ok).toBe(false);
+    expect((await executeTool("submit_timeline", { summary: "提案です", items: "壊れた形式" }, ctx)).ok).toBe(false);
+    expect((await submit(ctx, [live, check, late])).ok).toBe(false);
+    expect(ctx.submitted).toBeUndefined();
+  });
+
+  it("駅すぱあとで調べていない経路があるときは、項目を外しても仕上げない", async () => {
+    const ctx = ctxOf();
+    const fakeRoute: TimelineItem = {
+      id: "go", kind: "transit", title: "会場へ移動", start: at(day, "12:00"), end: at(day, "15:00"),
+      route: { from: "長崎", to: "ドーム前千代崎", summary: "新幹線", legs: [], source: "ekispert" }, rationale: "r", requiresBooking: true,
+    };
+    expect((await submit(ctx, [live, fakeRoute, late])).ok).toBe(false);
+    expect((await submit(ctx, [live, fakeRoute, late])).ok).toBe(false);
+    expect(ctx.submitted).toBeUndefined();
+  });
+
+  it("外した項目は、要約と「選んだ理由」からも外す", async () => {
+    const ctx = ctxOf();
+    const args = {
+      summary: "たこ焼きに立ち寄るプランです",
+      items: [live, check, late],
+      decisions: [
+        { topic: "立ち寄り先", chosen: "たこ焼き 16:30", alternatives: [], reason: "r" },
+        { topic: "現地に着く時刻", chosen: "15:00 ごろ", alternatives: [], reason: "r" },
+      ],
+    };
+    await executeTool("submit_timeline", args, ctx);
+    expect((await executeTool("submit_timeline", args, ctx)).ok).toBe(true);
+    expect(ctx.submitted?.decisions.map((d) => d.topic)).toEqual(["現地に着く時刻"]);
+    expect(ctx.submitted?.summary).toContain("時間が合わなかった「たこ焼き」は外しました");
+  });
+
+  it("ID は完全に一致するものだけを外す（1 が spot-1 に一致しない）", async () => {
+    const ctx = ctxOf();
+    const a: TimelineItem = { id: "spot-1", kind: "spot", category: "food", title: "たこ焼き", start: at(day, "12:00"), end: at(day, "13:00"), rationale: "営業時間は事前に確認", requiresBooking: false };
+    const b: TimelineItem = { id: "spot-2", kind: "spot", category: "photo", title: "記念撮影", start: at(day, "12:30"), end: at(day, "13:30"), rationale: "営業時間は事前に確認", requiresBooking: false };
+    const other: TimelineItem = { id: "1", kind: "spot", category: "food", title: "お好み焼き", start: at(prevDay, "12:00"), end: at(prevDay, "13:00"), rationale: "営業時間は事前に確認", requiresBooking: false };
+    await submit(ctx, [live, check, a, b, other]);
+    expect((await submit(ctx, [live, check, a, b, other])).ok).toBe(true);
+    expect(ctx.submitted?.items.map((i) => i.id)).toContain("1");
+  });
+
   it("要約に「予約しました」と書く指摘は、項目を外しても直らないので仕上げない", async () => {
     const ctx = ctxOf();
     const bad = () => executeTool("submit_timeline", { summary: "予約しました", items: [live, check] }, ctx);
