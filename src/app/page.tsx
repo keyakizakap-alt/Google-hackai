@@ -10,7 +10,7 @@ import { MiniCalendar } from "@/components/MiniCalendar";
 import { CountUp, Reveal, TickDigits, useCountdown } from "@/components/motion";
 import { PlanSummaryCard } from "@/components/PlanSummary";
 import { RemindersCard } from "@/components/Reminders";
-import { ConflictBanner, WatchCard } from "@/components/AgentInsights";
+import { CalendarChangeBanner, ConflictBanner, WatchCard } from "@/components/AgentInsights";
 import { FirstSteps } from "@/components/FirstSteps";
 import { ScanImportButton } from "@/components/ScanImport";
 import { StageScene } from "@/components/StageScene";
@@ -357,6 +357,7 @@ export default function Home() {
       <Greeting />
       <FirstSteps />
       <EventSwitcher />
+      <CalendarChangeBanner />
       <ConflictBanner />
       <WatchCard />
       <Hero />

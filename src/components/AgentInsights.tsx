@@ -88,6 +88,47 @@ export function ConflictBanner() {
 }
 
 /**
+ * カレンダー側でライブの日時が変わったが、承認・予約済みのプランがあるため自動では作り直していないもの。
+ * 作り直すかどうかは利用者が決める（新しいプランも承認待ちで止まり、今のプランや予約は勝手に変えない）。
+ */
+export function CalendarChangeBanner() {
+  const { calendarChanges, replanForCalendarChange, dismissCalendarChange, busy, aiReady } = useStore();
+  if (calendarChanges.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {calendarChanges.map((c) => (
+        <section key={c.eventId} role="alert" className="pop-in flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 sm:flex-row sm:items-center">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-amber-600">
+            <CalendarClock className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-ink">カレンダーで「{c.title}」の日時が変わりました</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+              {formatJst(c.before)} → <b className="text-ink">{formatJst(c.after)}</b>
+              。承認済みのプランは前の日時のままです。予約済みのものがあれば、予約の管理で確認してください。
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button type="button" onClick={() => dismissCalendarChange(c.eventId)} className="min-h-[44px] rounded-xl border border-line bg-white px-4 text-xs text-ink-soft hover:bg-lav-50">
+              あとで
+            </button>
+            <button
+              type="button"
+              onClick={() => replanForCalendarChange(c.eventId)}
+              disabled={busy !== null}
+              className="btn-primary flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-xs font-bold text-white"
+            >
+              {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {aiReady ? "新しい日時で AI に作り直してもらう" : "新しい日時で作り直す"}
+            </button>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 見張り: 承認したあとに起きた変化（カレンダーの重なり・公演日の雨）と、AI が作った見直し案。
  * 見直し案は承認待ちの新しいプランで、切り替えるかどうかは利用者が決める。今のプランや予約は勝手に変えない。
  */

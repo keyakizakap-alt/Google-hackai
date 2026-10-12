@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
+import { mergeCalendarEvents } from "@/lib/client/calendarSync";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
 import type { WatchSignal } from "@/lib/agent/watch";
 import { formatJst } from "@/lib/time";
@@ -75,6 +76,14 @@ export interface DetectedLiveEvent {
   timeUnknown: boolean;
   confidence: "high" | "medium";
   source: "gemini" | "rules";
+}
+
+/** カレンダー側でライブの日時が変わったが、承認・予約済みのプランがあるため作り直していないもの */
+export interface CalendarChange {
+  eventId: string;
+  title: string;
+  before: string;
+  after: string;
 }
 
 export interface ImportResult {
@@ -171,7 +180,13 @@ interface Store {
   profile: Profile;
   /** 次回以降の既定値を更新。出発駅だけは全イベント共通なので、変わったら各イベントにも反映する */
   setProfile: (p: Profile) => void;
-  importFromCalendar: () => Promise<ImportResult | null>;
+  /** silent: 定期的な取り込み（画面に「取り込み中」やエラーを出さない） */
+  importFromCalendar: (opts?: { silent?: boolean }) => Promise<ImportResult | null>;
+  /** カレンダーで日時が変わったライブのうち、承認・予約済みのプランがあるもの（作り直すかは利用者が決める） */
+  calendarChanges: CalendarChange[];
+  /** 新しい日時でプランを作り直す（新しいプランも承認待ちで止まる） */
+  replanForCalendarChange: (eventId: string) => void;
+  dismissCalendarChange: (eventId: string) => void;
   /** スクショ・文章から読み取ったイベントを登録（ユーザー確認後に呼ぶ） */
   addScannedEvents: (list: DetectedLiveEvent[]) => number;
   /** 登録済みイベントのプランを自動で作るか */
@@ -270,6 +285,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
+  const eventIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    eventIdRef.current = event?.id ?? null;
+  }, [event]);
+  const [calendarChanges, setCalendarChanges] = useState<CalendarChange[]>([]);
+  // restorePlan は後で定義するため、取り込み処理からは参照で呼ぶ
+  const restorePlanRef = useRef<(id: string | null) => void>(() => undefined);
   const [oshiImages, setOshiImages] = useState<Record<string, string>>({});
   const [selfie, setSelfie] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
@@ -354,43 +376,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const importFromCalendar = useCallback(async (): Promise<ImportResult | null> => {
-    setBusy("importing");
-    setError(null);
+  const importFromCalendar = useCallback(async (opts?: { silent?: boolean }): Promise<ImportResult | null> => {
+    const silent = opts?.silent ?? false;
+    if (!silent) {
+      setBusy("importing");
+      setError(null);
+    }
     try {
       const r = await api<{ source: "calendar" | "demo"; scanned: number; events: DetectedLiveEvent[] }>("/api/calendar/detect-events", {});
-      const known = new Set([...eventsRef.current.map((e) => e.id), ...dismissedRef.current]);
-      const fresh = r.events.filter((d) => !known.has(`cal-${d.key}`));
-      const added = fresh.length;
-      setEvents((prev) => {
-        const next = [...prev];
-        for (const d of fresh) {
-          const id = `cal-${d.key}`;
-          if (next.some((e) => e.id === id)) continue;
-          next.push({
-            id,
-            artist: d.artist,
-            title: d.title,
-            venue: d.venue,
-            venueStation: d.venueStation,
-            startAt: d.startAt,
-            homeStation: profile.homeStation,
-            beautyServices: profile.beautyServices,
-            arriveEarlyForGoods: profile.arriveEarlyForGoods,
-            source: "calendar",
-            timeUnknown: d.timeUnknown,
-          });
+      const merged = mergeCalendarEvents(eventsRef.current, r.events, dismissedRef.current, profile);
+      if (merged.added > 0 || merged.updated.length > 0) setEvents(merged.events);
+      // カレンダーで日時が変わったライブ: 承認前のプランは捨てて作り直す（自動作成がオンなら AI が作る）。
+      // 承認・予約済みのプランは勝手に変えず、作り直すかどうかを利用者に聞く
+      const asked: CalendarChange[] = [];
+      for (const { before, after } of merged.updated) {
+        const cached = planCache.current[after.id];
+        if (cached && (cached.envelope.status === "approved" || cached.envelope.status === "booked")) {
+          asked.push({ eventId: after.id, title: after.title, before: before.startAt, after: after.startAt });
+          continue;
         }
-        return next.sort(byDate);
-      });
-      const result = { source: r.source, scanned: r.scanned, found: r.events.length, added };
-      setLastImport(result);
+        delete planCache.current[after.id];
+        if (eventIdRef.current === after.id) restorePlanRef.current(null);
+      }
+      if (asked.length > 0) setCalendarChanges((prev) => [...prev.filter((c) => !asked.some((a) => a.eventId === c.eventId)), ...asked]);
+      if (merged.updated.length > 0) {
+        const first = merged.updated[0].after;
+        setNotice(`カレンダーで「${first.title}」の日時が ${formatJst(first.startAt)} に変わったため、ライブを更新しました`);
+      }
+      const result = { source: r.source, scanned: r.scanned, found: r.events.length, added: merged.added };
+      if (!silent) setLastImport(result);
       return result;
     } catch (e) {
-      setError((e as Error).message);
+      if (!silent) setError((e as Error).message);
       return null;
     } finally {
-      setBusy(null);
+      if (!silent) setBusy(null);
     }
   }, [profile]);
 
@@ -411,6 +431,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 復元・連携完了時に一度だけ
   }, [restored, session?.calendarConnected]);
+
+  // その後も 10 分ごとと画面に戻ったときに、画面を邪魔せず取り込み直す（新しいライブの追加・日時の変更を反映する）
+  useEffect(() => {
+    if (!restored || !session?.calendarConnected) return;
+    const sync = () => {
+      if (busyRef.current === null) void importFromCalendar({ silent: true });
+    };
+    const timer = setInterval(sync, 10 * 60_000);
+    window.addEventListener("focus", sync);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", sync);
+    };
+  }, [restored, session?.calendarConnected, importFromCalendar]);
 
   const [persistImages, setPersistImagesState] = useState(false);
   const imageFor = useCallback((e: OshiEvent) => oshiImages[artistKey(e.artist)] ?? null, [oshiImages]);
@@ -509,6 +543,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngine(c?.engine ?? null);
     setChat(c?.chat ?? []);
   }, []);
+  useEffect(() => {
+    restorePlanRef.current = restorePlan;
+  }, [restorePlan]);
 
   const planSignature = (e: OshiEvent) => [e.id, e.startAt, e.venueStation, e.homeStation, e.beautyServices.join(","), e.arriveEarlyForGoods].join("|");
 
@@ -783,6 +820,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (event && changed.includes(event.id)) restorePlan(null);
       },
       importFromCalendar,
+      calendarChanges,
+      replanForCalendarChange: (eventId) => {
+        const target = eventsRef.current.find((e) => e.id === eventId);
+        setCalendarChanges((prev) => prev.filter((c) => c.eventId !== eventId));
+        if (!target) return;
+        setActiveId(eventId);
+        void generatePlanFn(target);
+      },
+      dismissCalendarChange: (eventId) => setCalendarChanges((prev) => prev.filter((c) => c.eventId !== eventId)),
       addScannedEvents: (list) => {
         const known = new Set(eventsRef.current.map((e) => e.id));
         const fresh = list.filter((d) => !known.has(`scan-${d.key}`));
@@ -853,6 +899,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setWatched(null);
         setWatch({ signals: [], proposal: null, reviewing: false, error: null });
         planCache.current = {};
+        setCalendarChanges([]);
         restorePlan(null);
         setAvailability(null);
         setLastImport(null);
@@ -992,7 +1039,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
+    [session, oshiColor, events, event, profile, importFromCalendar, calendarChanges, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, selfie, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
