@@ -27,6 +27,17 @@ describe("所要時間の目安", () => {
     expect(e.mode).toBe("在来線・地下鉄");
   });
 
+  it("同じ道府県でも中心から離れた駅（函館 → 札幌ドーム）は、その分の時間を足す", () => {
+    const e = estimateTravel({ from: "函館", to: "福住", venue: "大和ハウス プレミストドーム", arriveBy });
+    expect(e.available).toBe(true);
+    expect(e.minutes![0]).toBeGreaterThanOrEqual(240);
+    expect(e.mode).toBe("特急");
+  });
+
+  it("広い道府県で道府県名だけ（北海道 → 札幌ドーム）のときは、目安を出さない", () => {
+    expect(estimateTravel({ from: "北海道", to: "福住", venue: "大和ハウス プレミストドーム", arriveBy }).available).toBe(false);
+  });
+
   it("飛行機の区間（札幌 → 福岡）も目安を返す", () => {
     const e = estimateTravel({ from: "札幌駅", to: "唐人町", venue: "みずほPayPayドーム福岡", arriveBy });
     expect(e.available).toBe(true);

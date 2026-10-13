@@ -87,19 +87,35 @@ const STATION_TO_PREF: Record<string, string> = {
   大分: "大分", 別府: "大分", 宮崎: "宮崎", 鹿児島: "鹿児島", 鹿児島中央: "鹿児島", 那覇: "沖縄",
 };
 
-/** 入力（駅名・市名・都道府県名）から都道府県を推定する。分からなければ undefined */
-export function prefectureOf(input: string): string | undefined {
+/**
+ * 同じ道府県の中でも、中心の都市から離れた駅（中心の都市までの目安・分）。
+ * 同じ道府県の会場へ行くときだけ使う（別の道府県へは、これらの駅にも空港・新幹線があるため拠点の値を使う）
+ */
+const STATION_TO_CENTER: Record<string, number> = {
+  函館: 210, 新函館北斗: 200, 旭川: 90, 帯広: 160, 釧路: 240, 小樽: 40,
+  八王子: 45, 立川: 30, 小田原: 40, 姫路: 45, 豊橋: 50, 浜松: 40, 小倉: 45, 福山: 40,
+};
+/** 道府県名だけでは場所を絞れないほど広い道府県（同じ道府県の中の目安を出さない） */
+const WIDE_PREFS = new Set(["北海道"]);
+
+/** 入力（駅名・市名・都道府県名）を照合する。station は辞書の駅名（都道府県名だけの入力なら undefined） */
+function lookup(input: string): { pref: string; station?: string } | undefined {
   const name = input.trim().replace(/駅$/, "");
   if (!name) return undefined;
   // 「京都」「東京」のように末尾が都・府・県の名前もあるので、そのままの形を先に照合する
   for (const n of [name, name.replace(/(都|府|県)$/, "")]) {
-    if (STATION_TO_PREF[n]) return STATION_TO_PREF[n];
-    if (PREF_TO_HUB[n]) return n;
+    if (STATION_TO_PREF[n]) return { pref: STATION_TO_PREF[n], station: n };
+    if (PREF_TO_HUB[n]) return { pref: n };
   }
   // 「JR博多」「博多駅前」のように前後に文字が付いた入力。長い名前から照合する
   const keys = Object.keys(STATION_TO_PREF).sort((a, b) => b.length - a.length);
   const hit = keys.find((k) => k.length >= 2 && name.includes(k));
-  return hit ? STATION_TO_PREF[hit] : undefined;
+  return hit ? { pref: STATION_TO_PREF[hit], station: hit } : undefined;
+}
+
+/** 入力（駅名・市名・都道府県名）から都道府県を推定する。分からなければ undefined */
+export function prefectureOf(input: string): string | undefined {
+  return lookup(input)?.pref;
 }
 
 /** 会場の駅から最寄り駅までの最後の移動（地下鉄・バスなど）の目安（分） */
@@ -131,7 +147,8 @@ const label = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} 時間${m % 60 ? 
  */
 export function estimateTravel(params: { from: string; to: string; venue?: string; arriveBy?: string }): TravelEstimate {
   const { from, to } = params;
-  const fromPref = prefectureOf(from);
+  const origin = lookup(from);
+  const fromPref = origin?.pref;
   const toPref = venueArea(params.venue ?? "", to) ?? prefectureOf(to);
   const unknown = (why: string): TravelEstimate => ({ available: false, from, to, summary: why, disclaimer: DISCLAIMER });
   if (!fromPref) return unknown(`出発駅「${from}」の地域が分からないため、所要時間の目安を出せませんでした`);
@@ -142,8 +159,11 @@ export function estimateTravel(params: { from: string; to: string; venue?: strin
   let base: number;
   let mode: string;
   if (fromPref === toPref) {
-    base = 45;
-    mode = "在来線・地下鉄";
+    // 同じ道府県の中：中心の都市から離れた駅はその分を足す。広い道府県で駅が分からなければ目安を出さない
+    if (!origin?.station && WIDE_PREFS.has(fromPref)) return unknown(`「${from}」だけでは${fromPref}のどこから出発するか分からないため、所要時間の目安を出せませんでした。出発駅を入れてください`);
+    const extra = origin?.station ? (STATION_TO_CENTER[origin.station] ?? 0) : 0;
+    base = 45 + extra;
+    mode = extra >= 90 ? "特急" : "在来線・地下鉄";
   } else if (o.hub === d.hub) {
     base = o.access + d.access + LAST_MILE_MIN;
     mode = "在来線・特急";

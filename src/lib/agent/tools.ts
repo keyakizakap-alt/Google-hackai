@@ -374,15 +374,16 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
           ctx.ekispertSucceeded = true;
           return { ok: true, response: r, summary: "乗換案内でルートを調べました" };
         }
-        // フェールオーバー：主系（駅すぱあと）が答えられなかったら、待機系（所要時間の目安）をその場で計算して渡す
-        const fallback = travelEstimateFor(ctx, ctx.event.homeStation, ctx.event.venueStation, defaultArriveBy(ctx.event));
+        // フェールオーバー：主系（駅すぱあと）が答えられなかったら、待機系（所要時間の目安）をその場で計算して渡す。
+        // 失敗した検索の向き（往路・帰り）と時刻を引数から読み取り、同じ移動の目安にする
+        const fallback = failoverEstimate(ctx, args);
         return {
           ok: true,
           response: {
             ...r,
-            fallback: fallback.available ? { ...fallback, howToUse: ESTIMATE_HOW_TO_USE } : undefined,
+            fallback: fallback.available ? fallback : undefined,
             note: fallback.available
-              ? "駅すぱあとで調べられなかったため、fallback の所要時間の目安で組み立てる（route.source は estimate）"
+              ? `駅すぱあとで調べられなかったため、fallback（${fallback.direction}の所要時間の目安）で、この移動だけを組み立てる（route.source は estimate）`
               : "駅すぱあとで調べられなかった。kind=prep, category=transit-check の確認項目を入れる",
           },
           summary: fallback.available ? "乗り換え案内に接続できなかったため、所要時間の目安に切り替えました" : "乗り換え案内に接続できなかったため、検索リンクでご案内します",
@@ -411,6 +412,43 @@ const ESTIMATE_HOW_TO_USE =
 /** 会場の駅に着きたい時刻の既定（物販に並ぶなら開演 2 時間半前、そうでなければ 1 時間前） */
 function defaultArriveBy(event: OshiEvent): string {
   return toJstIso(Date.parse(event.startAt) - (event.arriveEarlyForGoods ? 150 : 60) * MS_MIN);
+}
+
+/** 引数の中の ISO 形式の日時（最初に見つかったもの） */
+function firstIsoIn(args: Record<string, unknown>): number | undefined {
+  for (const v of Object.values(args)) {
+    if (typeof v === "string" && /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v) && Number.isFinite(Date.parse(v))) return Date.parse(v);
+  }
+  return undefined;
+}
+
+/**
+ * 駅すぱあとの呼び出しが失敗したときの代わりの目安。
+ * 引数で会場の駅が自宅の駅より先に出てくる・開演より後の時刻が指定されている場合は帰りとみなし、所要時間だけを返す。
+ * 往路は、指定された時刻（なければ既定）に着くための出発の目安も返す
+ */
+function failoverEstimate(ctx: AgentContext, args: Record<string, unknown>): TravelEstimate & { direction: "往路" | "帰り"; howToUse: string } {
+  const text = JSON.stringify(args);
+  const { homeStation, venueStation } = ctx.event;
+  const iHome = text.indexOf(homeStation);
+  const iVenue = text.indexOf(venueStation);
+  const at = firstIsoIn(args);
+  const isReturn = (iHome >= 0 && iVenue >= 0 && iVenue < iHome) || (at !== undefined && at >= Date.parse(ctx.event.startAt));
+  if (isReturn) {
+    // 所要時間は往復で同じとみなし、往路の目安の向きだけを入れ替える（会場名は会場側の地域の判定に使うため）
+    const out = estimateTravel({ from: homeStation, to: venueStation, venue: ctx.event.venue });
+    const summary = out.available ? out.summary.replace(`${homeStation} → ${venueStation}`, `${venueStation} → ${homeStation}`) : out.summary;
+    return {
+      ...out,
+      from: venueStation,
+      to: homeStation,
+      departBy: undefined,
+      summary,
+      direction: "帰り",
+      howToUse: "帰りの所要時間の目安（出発の時刻は決めていない）。帰りを入れる場合は kind=transit・route.source=estimate・legs は空・fareJpy なしで、start は終演後、end は start に上限の分を足した時刻にする。列車名・発着時刻・運賃は書かない",
+    };
+  }
+  return { ...travelEstimateFor(ctx, homeStation, venueStation, at !== undefined ? toJstIso(at) : defaultArriveBy(ctx.event)), direction: "往路", howToUse: ESTIMATE_HOW_TO_USE };
 }
 
 /** 所要時間の目安。会場名からも都道府県を判定し、arrive_by が読めなければ既定の時刻を使う */

@@ -185,6 +185,25 @@ describe("乗り換えのフェールオーバー（主系 → 待機系）", ()
     expect(ctx).not.toHaveProperty("ekispertSucceeded", true);
   });
 
+  it("帰りの検索（会場の駅が先・終演後の時刻）が失敗したら、帰りの目安を返す（往路の目安を渡さない）", async () => {
+    const { executeTool } = await import("@/lib/agent/tools");
+    const ctx = { event, busy: [], now: Date.now(), rejectedSubmissions: 0 };
+    const out = await executeTool("ekispert_api_search_course", { from: "ドーム前千代崎", to: "長崎", date: `${day}T21:30:00+09:00` }, ctx);
+    expect(out.response).toMatchObject({ fallback: { direction: "帰り", from: "ドーム前千代崎", to: "長崎" } });
+    expect((out.response as { fallback: { departBy?: string; summary: string } }).fallback.departBy).toBeUndefined();
+    expect((out.response as { fallback: { summary: string } }).fallback.summary).toContain("ドーム前千代崎 → 長崎");
+  });
+
+  it("往路の検索で着きたい時刻が指定されていれば、その時刻に間に合う出発の目安を返す", async () => {
+    const { executeTool } = await import("@/lib/agent/tools");
+    const ctx = { event, busy: [], now: Date.now(), rejectedSubmissions: 0 };
+    const arrive = `${day}T14:00:00+09:00`;
+    const out = await executeTool("ekispert_api_search_course", { from: "長崎", to: "ドーム前千代崎", arrival: arrive }, ctx);
+    const fb = (out.response as { fallback: { direction: string; departBy: string; minutes: [number, number] } }).fallback;
+    expect(fb.direction).toBe("往路");
+    expect(Date.parse(arrive) - Date.parse(fb.departBy)).toBeGreaterThanOrEqual(fb.minutes[1] * 60_000);
+  });
+
   it("Google マップの乗換検索のリンクは、出発駅・到着駅を入れて許可リストを通る", () => {
     const url = transitSearchUrl("長崎", "ドーム前千代崎");
     expect(url).toBe(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent("長崎駅")}&destination=${encodeURIComponent("ドーム前千代崎駅")}&travelmode=transit`);
