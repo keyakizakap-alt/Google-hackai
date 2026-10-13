@@ -1,5 +1,6 @@
 import "server-only";
 import type { FunctionDeclaration } from "@google/genai";
+import { config } from "../config";
 import { z } from "zod";
 import { extractFreeSlots, overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
@@ -8,10 +9,11 @@ import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
 import { searchSpots, SPOT_CATEGORIES, SPOT_CATEGORY_LABEL, type SpotCategory } from "../services/spots";
 import { estimateCrowd } from "../services/transit";
 import { estimateTravel, type TravelEstimate } from "../services/travelEstimate";
+import { searchWeb } from "../services/webSearch";
 import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
 import { jstAt, MS_DAY, MS_MIN, toJstIso } from "../time";
-import { validateSummary, validateTimeline } from "./validate";
-import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, type Decision, type OshiEvent, type TimelineItem } from "./types";
+import { validateSummary, validateTimeline, webEvidenceOf } from "./validate";
+import { BEAUTY_SERVICES, DecisionSchema, TimelineItemSchema, WEB_SEARCH_PURPOSES, type Decision, type OshiEvent, type TimelineItem, type WebSearchPurpose, type WebSearchRecord } from "./types";
 
 /** 1 リクエスト分のエージェント実行コンテキスト（メモリ上のみ・リクエスト終了で破棄） */
 export interface AgentContext {
@@ -27,7 +29,16 @@ export interface AgentContext {
   venueArea?: string;
   /** 直前の差し戻しの内容。同じ指摘が続いたら AI に任せず仕上げる */
   lastRejection?: string;
+  /** Google 検索の結果（この回と、作り直す前のプランのもの）。名前・価格の照合と、画面の出典に使う */
+  webSearches?: WebSearchRecord[];
+  /** この回のプラン作成で Google 検索を使った回数（上限は config.gemini.webSearchMaxPerPlan） */
+  webSearchCount?: number;
+  /** ログをつなぐための ID */
+  requestId?: string;
 }
+
+/** Google 検索の道具の名前（設定で止めたときは AI に渡さない） */
+export const WEB_SEARCH_TOOL = "search_web";
 
 const ISO = { type: "string", description: "ISO 8601 日時（例: 2026-10-27T11:00:00+09:00）" } as const;
 const DATE = { type: "string", description: "日付 YYYY-MM-DD（JST）" } as const;
@@ -120,6 +131,20 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: WEB_SEARCH_TOOL,
+    description:
+      "Google 検索で、実在の美容サロン・宿泊施設・飛行機の便と、価格の目安を探す。1 回のプラン作成で使える回数に上限がある（使い切ると available=false）。" +
+      "空席・予約できるかは分からない。結果の text に書かれた名前・便名・価格だけを使い、出典は sources の uri をそのまま sourceUrl に入れる。",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        purpose: { type: "string", enum: [...WEB_SEARCH_PURPOSES], description: "beauty_salon=美容サロン、hotel=宿、flight=飛行機の便" },
+        query: { type: "string", description: "検索の条件（例: 長崎駅 近く 眉毛サロン／京セラドーム大阪 近く ホテル 12月19日／福岡空港 羽田空港 12月19日 午前 便 運賃）" },
+      },
+      required: ["purpose", "query"],
+    },
+  },
+  {
     name: "submit_timeline",
     description:
       "完成したタイムラインを提出する。サーバー側で検証され、問題があれば errors が返るので修正して再提出すること。受理されるとユーザーの承認待ち（pending_approval）になる。",
@@ -164,6 +189,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
                   priceJpy: { type: "integer" },
                   bookingUrl: { type: "string" },
                   slotId: { type: "string" },
+                  sourceUrl: { type: "string", description: "search_web で見つけた店舗・宿のときだけ、出典（sources の uri）をそのまま入れる" },
                 },
                 required: ["name"],
               },
@@ -174,7 +200,8 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
                   to: { type: "string" },
                   summary: { type: "string" },
                   fareJpy: { type: "integer" },
-                  source: { type: "string", enum: ["ekispert", "estimate"], description: "ekispert は駅すぱあとで実際に調べた経路、estimate は estimate_travel_time などの所要時間の目安" },
+                  source: { type: "string", enum: ["ekispert", "estimate", "web"], description: "ekispert は駅すぱあとで実際に調べた経路、estimate は estimate_travel_time などの所要時間の目安、web は search_web で見つけた便（飛行機など）" },
+                  sourceUrl: { type: "string", description: "source が web のときだけ、出典（sources の uri）をそのまま入れる" },
                   legs: {
                     type: "array",
                     items: {
@@ -324,6 +351,42 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         summary: est.available ? `移動の目安：${est.summary.replace(/^.*?：/, "")}` : "乗り換えの目安を出せなかったため、検索リンクでご案内します",
       };
     }
+    case WEB_SEARCH_TOOL: {
+      const purpose = str(args.purpose, 20) as WebSearchPurpose;
+      const query = str(args.query, 120).trim();
+      if (!(WEB_SEARCH_PURPOSES as readonly string[]).includes(purpose) || !query) {
+        return { ok: false, response: { error: "purpose と query が必要です" }, summary: "検索の条件が足りませんでした" };
+      }
+      // 費用を抑えるため、1 回のプラン作成で使える回数を決めている
+      if ((ctx.webSearchCount ?? 0) >= config.gemini.webSearchMaxPerPlan) {
+        return {
+          ok: true,
+          response: { available: false, reason: "このプランで使える Google 検索の回数を使い切りました。これまでの結果か、候補日時の案内で組み立ててください" },
+          summary: "Google 検索の回数の上限に達したため、これまでの結果で組み立てます",
+        };
+      }
+      ctx.webSearchCount = (ctx.webSearchCount ?? 0) + 1;
+      const r = await searchWeb(purpose, query, { requestId: ctx.requestId });
+      const what = { beauty_salon: "美容サロン", hotel: "宿", flight: "飛行機の便" }[purpose];
+      if (!r.available || !r.record) {
+        return {
+          ok: true,
+          response: { available: false, reason: r.reason, howToUse: "検索で見つからなかったので、店舗名・便名・価格は書かない。今までどおり候補日時や目安で組み立てる" },
+          summary: `Google 検索で${what}を探しましたが、見つかりませんでした`,
+        };
+      }
+      ctx.webSearches = [...(ctx.webSearches ?? []), r.record];
+      return {
+        ok: true,
+        response: {
+          available: true,
+          text: r.record.text,
+          sources: r.record.sources.map((s) => ({ title: s.title, uri: s.uri })),
+          howToUse: WEB_HOW_TO_USE[purpose],
+        },
+        summary: `Google 検索で${what}を探しました（出典 ${r.record.sources.length} 件）`,
+      };
+    }
     case "submit_timeline": {
       const parsed = SubmitSchema.safeParse(args);
       if (!parsed.success) {
@@ -395,13 +458,23 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
 
 /** 提出されたプランの検査（タイムライン・要約の書き方・駅すぱあとの経路の出どころ） */
 function checkSubmission(items: TimelineItem[], summary: string, ctx: AgentContext): { errors: string[]; warnings: string[] } {
-  const { errors, warnings } = validateTimeline(items, ctx.event, ctx.busy, ctx.now, ctx.forecast);
+  const { errors, warnings } = validateTimeline(items, ctx.event, ctx.busy, ctx.now, ctx.forecast, webEvidenceOf(ctx.webSearches));
   errors.push(...validateSummary(summary));
   if (items.some((item) => item.route?.source === "ekispert") && !ctx.ekispertSucceeded) {
     errors.push("駅すぱあとから経路を取得していません。実経路として表示せず、確認手順を入れてください");
   }
   return { errors, warnings };
 }
+
+/** Google 検索の結果の使い方（AI への説明） */
+const WEB_HOW_TO_USE: Record<WebSearchPurpose, string> = {
+  beauty_salon:
+    "店舗を入れるときは kind=beauty の provider.name に text に書かれた店舗名、provider.sourceUrl にその店舗が載っている sources の uri、価格が書かれていれば provider.priceJpy（検索時点の参考）を入れる。日時は search_beauty_salons の候補から選ぶ。空席は分からないので「予約サイトで空きを確認」と rationale に書く",
+  hotel:
+    "宿を入れるときは kind=stay の provider.name に text に書かれた施設名、provider.sourceUrl に sources の uri、価格が書かれていれば provider.priceJpy（検索時点の参考）を入れる。空室は分からないので確認を促す",
+  flight:
+    "便を入れるときは kind=transit, category=flight, route.source=web, route.sourceUrl に sources の uri、legs に text に書かれた便名（line）・出発空港・到着空港・発着時刻を入れる。運賃が書かれていれば route.fareJpy（検索時点の参考）。空席は分からないので確認を促す。空港までの移動は別の項目（目安）で入れる",
+};
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

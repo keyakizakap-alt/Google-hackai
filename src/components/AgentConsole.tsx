@@ -24,6 +24,7 @@ export function friendlyStep(name: string): string {
     get_weather_forecast: "天気",
     search_nearby_spots: "立ち寄り先",
     estimate_travel_time: "移動",
+    search_web: "Google 検索",
     submit_timeline: "最終チェック",
     plan: "準備",
     fallback: "切り替え",

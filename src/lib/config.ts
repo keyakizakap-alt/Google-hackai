@@ -89,6 +89,13 @@ export const config = {
      * 残り 2 回になると提出（submit_timeline）だけを許可する。
      */
     maxSteps: Math.max(8, Number(env("AGENT_MAX_STEPS") ?? 12) || 12),
+    /**
+     * Google 検索によるグラウンディング（実在の店舗・宿・飛行機の便と参考価格を探す）を使うか。既定はオン。
+     * 検索 1 回ごとに費用がかかる（公式の料金表で確認）ため、1 回のプラン作成で使える回数を webSearchMaxPerPlan で制限する。
+     * "off" で止める（止めると、店舗名・価格を出さない今までの動きに戻る）
+     */
+    webSearch: env("GEMINI_WEB_SEARCH") !== "off",
+    webSearchMaxPerPlan: 3,
   },
 
   /**

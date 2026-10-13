@@ -2,7 +2,8 @@ import { overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
 import { formatJst, jstDayDiff, MS_MIN } from "../time";
-import { BEAUTY_SERVICES, type BeautyService, type OshiEvent, type TimelineItem } from "./types";
+import { normalizeForMatch, textMentionsPrice } from "../services/webSearchMatch";
+import { BEAUTY_SERVICES, type BeautyService, type OshiEvent, type TimelineItem, type WebSearchRecord } from "./types";
 
 export interface ValidationResult {
   errors: string[];
@@ -23,6 +24,44 @@ export function validateSummary(summary: string): string[] {
     : [];
 }
 
+/** Google 検索で見つけたもの（この回の検索結果の本文と出典の URL）。名前・価格が検索結果にあるかの照合に使う */
+export interface WebEvidence {
+  text: string;
+  urls: ReadonlySet<string>;
+}
+
+/** Google 検索の結果を、検査で照合できる形にする */
+export function webEvidenceOf(records: readonly WebSearchRecord[] | undefined): WebEvidence | undefined {
+  if (!records?.length) return undefined;
+  return { text: records.map((r) => r.text).join("\n"), urls: new Set(records.flatMap((r) => r.sources.map((s) => s.uri))) };
+}
+
+/**
+ * 検索で見つけた店舗・宿・便として書かれた項目の検査。
+ * 出典の URL がこの回の検索結果にあり、名前・便名・価格が検索結果の本文に書かれているものだけを通す（AI に作らせない）。
+ */
+function checkWebSourced(it: TimelineItem, evidence: WebEvidence | undefined, errors: string[]) {
+  const sourceUrl = it.route?.source === "web" ? it.route.sourceUrl : it.provider?.sourceUrl;
+  const usesWeb = Boolean(it.provider?.sourceUrl) || it.route?.source === "web";
+  if (!usesWeb) return;
+  const fail = (why: string) => errors.push(`${it.id}: ${why}。search_web の結果に書かれたものだけを使うか、外してください`);
+  if (!evidence || !sourceUrl || !evidence.urls.has(sourceUrl)) return fail("出典（sourceUrl）が、この回の Google 検索の結果の URL ではありません");
+  const text = normalizeForMatch(evidence.text);
+  // 空や 1 文字の名前は、どの本文にも含まれてしまうので照合に使わない
+  const mentioned = (name: string) => normalizeForMatch(name).length >= 2 && text.includes(normalizeForMatch(name));
+  if (it.provider?.sourceUrl) {
+    if (it.provider.slotId) fail("予約枠（slotId）は検索では分かりません");
+    if (!mentioned(it.provider.name)) fail(`「${it.provider.name}」は検索結果に書かれていません`);
+    if (it.provider.priceJpy !== undefined && !textMentionsPrice(evidence.text, it.provider.priceJpy)) fail(`価格 ${it.provider.priceJpy} 円は検索結果に書かれていません`);
+  }
+  if (it.route?.source === "web") {
+    for (const leg of it.route.legs) {
+      if (!mentioned(leg.line)) fail(`便「${leg.line}」は検索結果に書かれていません`);
+    }
+    if (it.route.fareJpy !== undefined && !textMentionsPrice(evidence.text, it.route.fareJpy)) fail(`運賃 ${it.route.fareJpy} 円は検索結果に書かれていません`);
+  }
+}
+
 /** 差し戻しの文で使う「ID（タイトル・時刻）」。ID だけだと AI がどれを直すか取り違えるため */
 function label(it: TimelineItem): string {
   return `${it.id}（${it.title}・${formatJst(it.start)}〜${formatJst(it.end, { time: true })}）`;
@@ -38,6 +77,7 @@ export function validateTimeline(
   busy: readonly BusyBlock[],
   now = Date.now(),
   forecast?: { sky: string; needsRainGear: boolean },
+  webEvidence?: WebEvidence,
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -50,8 +90,11 @@ export function validateTimeline(
     if (!(e > s)) errors.push(`${it.id}: 終了時刻が開始時刻より前です`);
     if (s < now - 5 * MS_MIN) errors.push(`${it.id}: 過去の日時は指定できません`);
 
+    checkWebSourced(it, webEvidence, errors);
+
     if (it.kind === "beauty") {
-      if (it.provider && (it.provider.name !== "予約サイトで店舗と空きを確認" || it.provider.priceJpy !== undefined || it.provider.slotId)) {
+      // 検索で見つけた店舗（sourceUrl あり）は上の checkWebSourced で確かめる。それ以外は店舗名・価格を書かせない
+      if (it.provider && !it.provider.sourceUrl && (it.provider.name !== "予約サイトで店舗と空きを確認" || it.provider.priceJpy !== undefined || it.provider.slotId)) {
         errors.push(`${it.id}: 実際の店舗・空席・価格は取得していません。候補日時として案内してください`);
       }
       if (e > eventStart) errors.push(`${it.id}: 美容予定はイベント開始前に終わる必要があります`);
@@ -63,6 +106,11 @@ export function validateTimeline(
       }
     }
 
+    // 宿の価格は、Google 検索で見つけた宿（出典あり）のときだけ書ける
+    if (it.kind === "stay" && !it.provider?.sourceUrl && (it.provider?.priceJpy !== undefined || it.provider?.slotId)) {
+      errors.push(`${it.id}: 宿の価格・空室は取得していません。search_web で見つけた宿（出典つき）でなければ、価格を書かないでください`);
+    }
+
     if (it.kind === "spot") {
       // 立ち寄りは公演の妨げにならないこと。遅れると入場に影響するのでエラー扱い
       if (s < eventStart && (eventStart - e) / MS_MIN < 60) {
@@ -71,7 +119,7 @@ export function validateTimeline(
       if (overlapsBusy(busy, s, e, 15)) {
         errors.push(`${it.id}: カレンダーの既存予定と重なっています`);
       }
-      if (it.provider?.priceJpy !== undefined || it.provider?.slotId) {
+      if (it.provider?.priceJpy !== undefined || it.provider?.slotId || it.provider?.sourceUrl) {
         errors.push(`${it.id}: 立ち寄り先の価格・予約枠は取得していません。案内だけにしてください`);
       }
       if (forecast?.needsRainGear && it.category === "photo") {

@@ -61,6 +61,29 @@ const HUB_LINKS: [Hub, Hub, number, Mode][] = [
   ["福岡", "鹿児島", 80, "新幹線"], ["福岡", "那覇", 210, "飛行機"], ["鹿児島", "那覇", 200, "飛行機"],
 ];
 
+/**
+ * 主な手段とは別に、もう一方の手段も現実的な区間（新幹線と飛行機のどちらも選ばれる区間）。
+ * 飛行機は空港までの移動・保安検査の待ちを含めた目安。AI はどちらで着くかを比べて選べる
+ */
+const ALT_LINKS: [Hub, Hub, number, Mode][] = [
+  ["東京", "大阪", 180, "飛行機"], ["東京", "岡山", 200, "飛行機"], ["東京", "広島", 210, "飛行機"], ["東京", "高松", 200, "飛行機"],
+  ["東京", "金沢", 180, "飛行機"], ["仙台", "大阪", 190, "飛行機"], ["名古屋", "福岡", 190, "飛行機"], ["新潟", "名古屋", 190, "飛行機"],
+  ["東京", "福岡", 300, "新幹線"], ["札幌", "仙台", 300, "新幹線"],
+];
+
+/** 拠点の空港（飛行機の便を探すとき・Google フライトのリンクに使う） */
+const HUB_AIRPORT: Record<Hub, string> = {
+  札幌: "新千歳空港", 仙台: "仙台空港", 新潟: "新潟空港", 東京: "羽田空港", 金沢: "小松空港", 名古屋: "中部国際空港",
+  大阪: "伊丹空港", 岡山: "岡山空港", 広島: "広島空港", 高松: "高松空港", 福岡: "福岡空港", 鹿児島: "鹿児島空港", 那覇: "那覇空港",
+};
+/** 拠点とは別に、自前の空港がある県（その県から出発・到着するときはこちらの空港を候補にする） */
+const PREF_AIRPORT: Record<string, string> = {
+  青森: "青森空港", 岩手: "いわて花巻空港", 秋田: "秋田空港", 山形: "山形空港", 富山: "富山空港", 鳥取: "米子空港", 島根: "出雲空港",
+  山口: "山口宇部空港", 徳島: "徳島空港", 愛媛: "松山空港", 高知: "高知龍馬空港", 佐賀: "佐賀空港", 長崎: "長崎空港", 熊本: "熊本空港",
+  大分: "大分空港", 宮崎: "宮崎空港",
+};
+const airportOf = (pref: string, hub: Hub) => PREF_AIRPORT[pref] ?? HUB_AIRPORT[hub];
+
 function hubLink(a: Hub, b: Hub): { minutes: number; mode: Mode } | undefined {
   if (a === b) return { minutes: 0, mode: "新幹線" };
   const hit = HUB_LINKS.find(([x, y]) => (x === a && y === b) || (x === b && y === a));
@@ -134,6 +157,10 @@ export interface TravelEstimate {
   departBy?: string;
   summary: string;
   disclaimer: string;
+  /** もう一方の手段も現実的なときの目安（例: 新幹線の区間の飛行機） */
+  alternatives?: { mode: string; minutes: [number, number]; departBy?: string; summary: string }[];
+  /** 飛行機を使う（または候補にある）ときの出発・到着の空港。便を探すとき（search_web）に使う */
+  airports?: { from: string; to: string };
 }
 
 const DISCLAIMER = "所要時間はアプリ内の表による目安です（列車・時刻・運賃は調べていません）。乗る電車は検索リンクから必ず確かめてください。";
@@ -173,18 +200,29 @@ export function estimateTravel(params: { from: string; to: string; venue?: strin
     base = o.access + link.minutes + d.access + LAST_MILE_MIN;
     mode = link.mode;
   }
-  const minutes: [number, number] = [round15(base), Math.max(round15(base), round15(base * SPREAD))];
   const arriveBy = params.arriveBy ? Date.parse(params.arriveBy) : NaN;
+  const range = (b: number): [number, number] => [round15(b), Math.max(round15(b), round15(b * SPREAD))];
   // 遅い方の見積もりで間に合うように出発する（15 分単位で早めに切り下げる）
-  const departBy = Number.isFinite(arriveBy) ? toJstIso(Math.floor((arriveBy - minutes[1] * MS_MIN) / (15 * MS_MIN)) * 15 * MS_MIN) : undefined;
+  const departFor = (m: [number, number]) => (Number.isFinite(arriveBy) ? toJstIso(Math.floor((arriveBy - m[1] * MS_MIN) / (15 * MS_MIN)) * 15 * MS_MIN) : undefined);
+  const minutes = range(base);
+  const alternatives =
+    o.hub !== d.hub
+      ? ALT_LINKS.filter(([x, y]) => (x === o.hub && y === d.hub) || (x === d.hub && y === o.hub)).map(([, , m, altMode]) => {
+          const r = range(o.access + m + d.access + LAST_MILE_MIN);
+          return { mode: altMode, minutes: r, departBy: departFor(r), summary: `${altMode}なら約 ${label(r[0])}〜${label(r[1])}（目安）` };
+        })
+      : [];
+  const usesAir = mode === "飛行機" || alternatives.some((a) => a.mode === "飛行機");
   return {
     available: true,
     from,
     to,
     minutes,
     mode,
-    departBy,
+    departBy: departFor(minutes),
     summary: `${from} → ${to}：${mode}で約 ${label(minutes[0])}〜${label(minutes[1])}（目安）`,
     disclaimer: DISCLAIMER,
+    ...(alternatives.length ? { alternatives } : {}),
+    ...(usesAir && o.hub !== d.hub ? { airports: { from: airportOf(fromPref, o.hub), to: airportOf(toPref, d.hub) } } : {}),
   };
 }

@@ -7,13 +7,15 @@ import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { venueArea } from "../eventDetection/venues";
 import { getEkispertDeclarations, getEkispertStatus, type EkispertStatus } from "../services/ekispert";
-import { ekispertRouteSearchUrl, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl, transitSearchUrl } from "../safeUrl";
+import { ekispertRouteSearchUrl, flightSearchUrl, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl, transitSearchUrl } from "../safeUrl";
+import { estimateTravel } from "../services/travelEstimate";
+import { isWebSearchEnabled } from "../services/webSearch";
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
 import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
-import { executeTool, NATIVE_DECLARATIONS, type AgentContext } from "./tools";
+import { executeTool, NATIVE_DECLARATIONS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
 
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
@@ -83,6 +85,9 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     now: Date.now(),
     rejectedSubmissions: 0,
     venueArea: venueArea(input.event.venue, input.event.venueStation),
+    requestId: input.requestId,
+    // 作り直しでは、前のプランの検索結果も出典として使える（署名付きのプランから取り出すので改ざんされていない）
+    webSearches: input.previous?.webSearches ? [...input.previous.webSearches] : undefined,
   };
   const trace: TraceStep[] = [];
   const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0, modelCalls: 0, modelLatencyMs: 0 };
@@ -158,6 +163,10 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
     warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
   }
+  const webSourced = items.some((i) => i.provider?.sourceUrl || i.route?.source === "web");
+  if (webSourced) {
+    warnings.push("Google 検索で見つけた店舗・宿・便と価格は、検索した時点の参考です。空席・空室と最新の価格は、出典や予約サイトで必ず確かめてください。");
+  }
 
   const plan: Plan = {
     id: input.previous?.id ?? randomId(8),
@@ -165,6 +174,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     summary: ctx.submitted.summary,
     decisions: ctx.submitted.decisions.slice(0, 6),
     items,
+    // 検索候補（Search Suggestions）の表示が必要なため、検索で見つけたものを使ったときは検索結果を残す
+    ...(webSourced && ctx.webSearches?.length ? { webSearches: ctx.webSearches.slice(-6) } : {}),
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
     revision: input.previous ? input.previous.revision + 1 : 0,
@@ -218,6 +229,21 @@ function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineIt
   const from = item.route?.from ?? (isReturn ? event.venueStation : event.homeStation);
   const to = item.route?.to ?? (isReturn ? event.homeStation : event.venueStation);
   const byEkispert = item.route?.source === "ekispert";
+  // 飛行機（検索で見つけた便・目安で飛行機を使う移動）は、空席と運賃を Google フライトで確かめられるようにする
+  const byAir = item.category === "flight" || item.route?.source === "web" || /飛行機/.test(item.route?.summary ?? "");
+  if (byAir) {
+    const legs = item.route?.legs ?? [];
+    // 便が分からない（目安の）ときは、出発駅・会場から空港を推定する。帰りは往路の空港を入れ替える
+    const outbound = legs.length ? undefined : estimateTravel({ from: isReturn ? to : from, to: isReturn ? from : to, venue: event.venue }).airports;
+    const airports = outbound && isReturn ? { from: outbound.to, to: outbound.from } : outbound;
+    return {
+      ...item,
+      provider: {
+        name: item.provider?.name ?? "Google フライトで空席と運賃を確認",
+        bookingUrl: flightSearchUrl(legs[0]?.from ?? airports?.from ?? from, legs.at(-1)?.to ?? airports?.to ?? to, toJstIso(Date.parse(item.start))),
+      },
+    };
+  }
   return {
     ...item,
     provider: {
@@ -250,7 +276,9 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   const ekispert = compat >= 2 ? null : await getEkispertDeclarations();
   const ekispertDeclarations = ekispert ? (compat >= 1 ? toLegacyDeclarations(ekispert.declarations) : ekispert.declarations) : [];
   // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない（AI が楽な方を選んで乗り換えを調べないのを防ぐ）
-  const nativeBase = ekispertDeclarations.length > 0 ? NATIVE_DECLARATIONS.filter((d) => d.name !== TRANSIT_FALLBACK_TOOL) : NATIVE_DECLARATIONS;
+  const nativeBase = NATIVE_DECLARATIONS.filter(
+    (d) => !(ekispertDeclarations.length > 0 && d.name === TRANSIT_FALLBACK_TOOL) && !(d.name === WEB_SEARCH_TOOL && !isWebSearchEnabled()),
+  );
   const native = compat >= 2 ? toLegacyDeclarations(nativeBase) : nativeBase;
   const declarations: FunctionDeclaration[] = [...ekispertDeclarations, ...native];
   const allowed = new Set([...native.map((d) => d.name!), ...ekispertDeclarations.map((d) => d.name!)]);
