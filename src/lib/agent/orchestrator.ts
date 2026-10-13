@@ -7,7 +7,7 @@ import { logger } from "../logger";
 import type { BusyBlock } from "../privacy/mask";
 import { venueArea } from "../eventDetection/venues";
 import { getEkispertDeclarations, getEkispertStatus, type EkispertStatus } from "../services/ekispert";
-import { ekispertRouteSearchUrl, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl } from "../safeUrl";
+import { ekispertRouteSearchUrl, hotpepperSearchUrl, jalanSearchUrl, safeExternalUrl, transitSearchUrl } from "../safeUrl";
 import { toJstIso } from "../time";
 import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
@@ -15,7 +15,8 @@ import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, type AgentContext } from "./tools";
 
-const TRANSIT_FALLBACK_TOOL = "search_transit_route_mock";
+/** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
+const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
 import type { OshiEvent, Plan, TimelineItem, TraceStep } from "./types";
 
 export interface AgentRunInput {
@@ -154,7 +155,9 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
   if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
   if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
-  if (items.some((i) => i.route?.source === "mock")) warnings.push("移動時間・運賃は目安です。乗車前に必ず最新の情報を確認してください。");
+  if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
+    warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
+  }
 
   const plan: Plan = {
     id: input.previous?.id ?? randomId(8),
@@ -204,8 +207,8 @@ function firstUserPrompt(input: AgentRunInput, ctx: AgentContext): string {
 }
 
 /**
- * 移動の項目（実経路・確認項目とも）に、出発駅と到着駅を入れた乗り換え案内の検索リンクを付ける。
- * 経路を取得できなかったときも、利用者が 1 回押すだけで正しい経路を確かめられるようにする
+ * 移動の項目（実経路・目安・確認項目とも）に、出発駅と到着駅を入れた乗り換え案内の検索リンクを付ける。
+ * 駅すぱあとで調べた経路は駅すぱあと、目安や確認項目は Google マップの乗換検索で、1 回押すだけで確かめられるようにする
  */
 function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineItem {
   const isTransit = item.kind === "transit" || (item.kind === "prep" && item.category === "transit-check");
@@ -214,22 +217,29 @@ function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineIt
   const isReturn = Date.parse(item.start) >= Date.parse(event.startAt);
   const from = item.route?.from ?? (isReturn ? event.venueStation : event.homeStation);
   const to = item.route?.to ?? (isReturn ? event.homeStation : event.venueStation);
-  return { ...item, provider: { name: item.provider?.name ?? "駅すぱあとで経路を検索", bookingUrl: ekispertRouteSearchUrl(from, to) } };
+  const byEkispert = item.route?.source === "ekispert";
+  return {
+    ...item,
+    provider: {
+      name: item.provider?.name ?? (byEkispert ? "駅すぱあとで経路を検索" : "Google マップで乗り換えを検索"),
+      bookingUrl: byEkispert ? ekispertRouteSearchUrl(from, to) : transitSearchUrl(from, to),
+    },
+  };
 }
 
 /** 乗り換えをどう調べるかを、利用者に分かる言葉で書く（「AI が調べたこと」に出す） */
 function transitNote(status: EkispertStatus | "compat"): string {
   switch (status) {
     case "ready":
-      return "乗り換えは駅すぱあとで調べます";
+      return "乗り換えは駅すぱあとで調べます。使えなければ所要時間の目安に切り替えます";
     case "unconfigured":
-      return "乗り換え案内のキーが未設定のため、乗り換えは検索リンクでご案内します";
+      return "乗り換え案内のキーが未設定のため、乗り換えは所要時間の目安で計算します";
     case "no_tools":
-      return "乗り換え案内につながりましたが、使える検索の機能が見つからなかったため、乗り換えは検索リンクでご案内します";
+      return "乗り換え案内につながりましたが、使える検索の機能が見つからなかったため、乗り換えは所要時間の目安で計算します";
     case "compat":
-      return "AI がリクエストを受け付けなかったため乗り換え案内を外しました。乗り換えは検索リンクでご案内します";
+      return "AI がリクエストを受け付けなかったため乗り換え案内を外しました。乗り換えは所要時間の目安で計算します";
     default:
-      return "乗り換え案内につながらなかったため、乗り換えは検索リンクでご案内します（2 分後に再接続します）";
+      return "乗り換え案内につながらなかったため、乗り換えは所要時間の目安で計算します（2 分後に再接続します）";
   }
 }
 

@@ -18,6 +18,7 @@ import { useNow } from "@/components/motion";
 import { useStore } from "@/components/store";
 import type { TimelineItem } from "@/lib/agent/types";
 import { formatJst, relativeDayLabel } from "@/lib/time";
+import { safeExternalUrl } from "@/lib/safeUrl";
 
 const FLOW = ["generating", "pending_approval", "approved", "booked"] as const;
 const HISTORY_LABEL: Record<string, string> = {
@@ -72,7 +73,13 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
             </div>
             {(item.provider || item.location) && (
               <p className="mt-1 text-xs text-ink-soft">
-                {item.provider?.name}
+                {transitLink(item) ? (
+                  <a href={transitLink(item)} target="_blank" rel="noopener noreferrer" className="font-semibold text-lav-700 underline underline-offset-2">
+                    {item.provider?.name}
+                  </a>
+                ) : (
+                  item.provider?.name
+                )}
                 {item.provider?.priceJpy !== undefined && ` ・ ¥${item.provider.priceJpy.toLocaleString()}`}
                 {item.location && ` ・ ${item.location}`}
               </p>
@@ -102,6 +109,7 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
                 ) : (
                   <p className="mt-1">{item.route.summary}</p>
                 )}
+                {item.route.source !== "ekispert" && <p className="mt-1 text-[11px] text-mute">所要時間は目安です。乗る電車はリンクから確かめてください。</p>}
               </div>
             )}
             <p className="mt-2 flex gap-1.5 text-xs leading-relaxed text-ink-soft">
@@ -397,6 +405,12 @@ function EmptyPlan() {
       </div>
     </div>
   );
+}
+
+/** 移動の項目（経路・確認）だけ、乗り換えの検索リンクをその場で開けるようにする（許可リストを通ったものだけ） */
+function transitLink(item: TimelineItem): string | undefined {
+  const isTransit = item.kind === "transit" || (item.kind === "prep" && item.category === "transit-check");
+  return isTransit ? safeExternalUrl(item.provider?.bookingUrl) : undefined;
 }
 
 export default function PlanPage() {

@@ -82,6 +82,10 @@ export function validateTimeline(
     if (it.kind === "transit" && overlapsBusy(busy, s, e)) {
       warnings.push(`${it.title} がカレンダーの既存予定と重なっています。休暇などの調整が必要です`);
     }
+    // 所要時間の目安で組んだ移動に、具体的な列車・運賃を書かない（目安は列車を調べていない）
+    if (it.kind === "transit" && (it.route?.source === "estimate" || it.route?.source === "mock") && (it.route.legs.length > 0 || it.route.fareJpy !== undefined)) {
+      errors.push(`${it.id}: 所要時間の目安で組んだ移動に、列車（legs）や運賃（fareJpy）を書かないでください。目安の要約だけにしてください`);
+    }
     // 往路（開演前に出発する移動）は開演 45 分前までに到着していること
     if (it.kind === "transit" && s < eventStart && (eventStart - e) / MS_MIN < 45) {
       errors.push(`${it.id}: 会場到着が開演 45 分前より遅いです（入場・混雑リスク）`);

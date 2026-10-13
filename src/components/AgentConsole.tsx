@@ -23,7 +23,7 @@ export function friendlyStep(name: string): string {
     estimate_crowd: "混雑",
     get_weather_forecast: "天気",
     search_nearby_spots: "立ち寄り先",
-    search_transit_route_mock: "移動",
+    estimate_travel_time: "移動",
     submit_timeline: "最終チェック",
     plan: "準備",
     fallback: "切り替え",

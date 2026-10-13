@@ -68,7 +68,8 @@ export const TimelineItemSchema = z.object({
       summary: z.string().max(200),
       legs: z.array(RouteLegSchema).max(12).default([]),
       fareJpy: z.number().int().min(0).max(200_000).optional(),
-      source: z.enum(["ekispert", "mock"]),
+      /** ekispert: 駅すぱあとで実際に調べた経路（主系）。estimate: アプリ内の表による所要時間の目安（待機系）。mock は以前の版で保存されたプランの読み込み用 */
+      source: z.enum(["ekispert", "estimate", "mock"]),
     })
     .optional(),
   rationale: z.string().max(300),

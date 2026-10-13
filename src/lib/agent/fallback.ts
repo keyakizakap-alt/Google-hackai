@@ -1,6 +1,7 @@
 import "server-only";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
-import { ekispertRouteSearchUrl } from "../safeUrl";
+import { transitSearchUrl } from "../safeUrl";
+import type { TravelEstimate } from "../services/travelEstimate";
 import { formatJst, MS_MIN, toJstIso } from "../time";
 import { daysBefore, executeTool, type AgentContext } from "./tools";
 import type { Decision, TimelineItem, TraceStep } from "./types";
@@ -74,16 +75,33 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     alternatives: event.arriveEarlyForGoods ? ["開演 90 分前（物販に間に合わない）", "開演直前（入場の列が最も混む）"] : ["開演直前（入場の列が最も混む）"],
     reason: `${event.arriveEarlyForGoods ? "物販に並ぶ時間を確保し、" : ""}混雑の予想（${crowd.summary}）をもとに、入場が集中する前に着くようにしました。`,
   });
+  // 往路：所要時間の目安（アプリ内の表）で、着きたい時刻から出発の目安を逆算する
+  const est = (await call("estimate_travel_time", { from_station: event.homeStation, to_station: event.venueStation, arrive_by: toJstIso(arriveBy) })).response as unknown as TravelEstimate;
+  const departBy = est.available && est.departBy ? Date.parse(est.departBy) : NaN;
+  if (Number.isFinite(departBy) && departBy > ctx.now) {
+    items.push({
+      id: "transit-out",
+      kind: "transit",
+      title: `${event.homeStation}から${event.venueStation}へ移動`,
+      start: toJstIso(departBy),
+      end: toJstIso(arriveBy),
+      route: { from: event.homeStation, to: event.venueStation, summary: est.summary, legs: [], source: "estimate" },
+      rationale: `${est.summary}。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くよう、遅めの見積もりから出発の目安を決めました。乗る電車はリンクから確かめてください。`,
+      requiresBooking: true,
+    });
+  }
   const checkAt = Math.max(ctx.now + MS_MIN, Math.min(eventStart - 15 * MS_MIN, eventStart - 24 * 60 * MS_MIN));
   items.push({
     id: "transit-check",
     kind: "prep",
     category: "transit-check",
-    title: `${event.homeStation}から${event.venueStation}への移動を確認`,
+    title: `${event.homeStation}から${event.venueStation}への電車を確認`,
     start: toJstIso(checkAt),
     end: toJstIso(checkAt + MS_MIN),
-    provider: { name: "駅すぱあとで経路を検索", bookingUrl: ekispertRouteSearchUrl(event.homeStation, event.venueStation) },
-    rationale: `乗り換えの情報はまだ調べられていません。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くことを目安に、乗る電車・かかる時間・運賃を確かめてください。`,
+    provider: { name: "Google マップで乗り換えを検索", bookingUrl: transitSearchUrl(event.homeStation, event.venueStation) },
+    rationale: est.available
+      ? `移動の所要時間は目安です（${est.summary.replace(/^.*?：/, "")}）。乗る電車・運賃を確かめてください。`
+      : `乗り換えの目安を出せませんでした。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くことを目安に、乗る電車・かかる時間・運賃を確かめてください。`,
     requiresBooking: true,
   });
 

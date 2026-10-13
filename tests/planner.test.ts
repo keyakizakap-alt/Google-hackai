@@ -68,9 +68,11 @@ describe("planning tools + validation", () => {
   it("does not invent a route or accept unverified salon prices", async () => {
     const now = Date.now();
     const ctx: AgentContext = { event, busy: [], now, rejectedSubmissions: 0 };
-    const route = await executeTool("search_transit_route_mock", { from_station: "福岡", to_station: "東京" }, ctx);
-    expect(route.response).toMatchObject({ unavailable: true });
+    // 待機系の目安は所要時間の幅だけを返し、列車・時刻・運賃は作らない
+    const route = await executeTool("estimate_travel_time", { from_station: "福岡", to_station: "ドーム前千代崎", arrive_by: event.startAt }, ctx);
+    expect(route.response).toMatchObject({ available: true, minutes: expect.any(Array) });
     expect(route.response).not.toHaveProperty("legs");
+    expect(route.response).not.toHaveProperty("fareJpy");
 
     const day = event.startAt.slice(0, 10);
     const result = validateTimeline([
