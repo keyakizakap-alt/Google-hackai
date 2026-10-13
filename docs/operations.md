@@ -42,7 +42,7 @@
 
 ```
 resource.type="cloud_run_revision"
-resource.labels.service_name="oshiready"
+resource.labels.service_name="google-hackai"
 jsonPayload.message="agent.gemini.failed"
 ```
 

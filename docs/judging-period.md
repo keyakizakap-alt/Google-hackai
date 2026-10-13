@@ -1,7 +1,8 @@
 # 審査期間の運用（〜2026 年 12 月 1 日。余裕をみて 12 月 2 日まで）
 
 提出した状態を保ったまま、審査員がいつ開いても動くようにするための手順。
-すべて Cloud Shell で実行する（`export OSHIREADY_PROJECT_ID='your-project-id'` を先に実行）。
+すべて Cloud Shell で実行する（`export OSHIREADY_PROJECT_ID='your-project-id'` と `export OSHIREADY_SERVICE='google-hackai'` を先に実行）。
+公開中の URL：https://google-hackai-791850738177.asia-northeast1.run.app （サービス名 `google-hackai`・asia-northeast1）
 
 ## 期間中に止まる・壊れる可能性があるもの
 
@@ -47,7 +48,7 @@ bash scripts/cloud-run-demo-mode.sh status    # いまの設定と期限を確�
 git tag submission-2026 <提出したコミット> && git push origin submission-2026
 
 # いま動いているリビジョン名を控える
-gcloud run services describe oshiready --region=asia-northeast1 --format='value(status.latestReadyRevisionName)'
+gcloud run services describe "$OSHIREADY_SERVICE" --region=asia-northeast1 --format='value(status.latestReadyRevisionName)'
 ```
 
 - 期間中は main にマージしない（Dependabot の提案 PR も、期間が終わるまで置いておく）。
@@ -55,7 +56,7 @@ gcloud run services describe oshiready --region=asia-northeast1 --format='value(
 - 万一、変更して壊れたときは、控えたリビジョンに戻す：
 
 ```bash
-gcloud run services update-traffic oshiready --region=asia-northeast1 --to-revisions=<控えたリビジョン名>=100
+gcloud run services update-traffic "$OSHIREADY_SERVICE" --region=asia-northeast1 --to-revisions=<控えたリビジョン名>=100
 ```
 
   戻したあと `judging` などで設定を変える前に、`--to-latest` で最新に向け直すこと（向け直さないと、新しい設定が使われない）。

@@ -24,6 +24,7 @@ bash scripts/cloud-run-bootstrap.sh
 
 ```bash
 export OSHIREADY_PROJECT_ID='<プロジェクトID>'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-enable-demo-calendar.sh
 ```
 
@@ -40,7 +41,7 @@ bash scripts/cloud-run-enable-demo-calendar.sh
 スクリプトの既定は 1 日 25 回（インスタンスごと）。プラン作成・修正・見直し案・ライブの取り込みで 1 回ずつ減る。通しの確認が済んだら、審査に足りる回数へ上げる。
 
 ```bash
-gcloud run services update oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
+gcloud run services update "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
   --update-env-vars=AGENT_DAILY_LIMIT=<回数>
 ```
 

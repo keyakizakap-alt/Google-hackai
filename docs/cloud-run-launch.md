@@ -35,6 +35,7 @@ bash scripts/cloud-run-bootstrap.sh
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-enable-calendar.sh
 ```
 
@@ -44,6 +45,7 @@ Google連携はログイン必須にしない。審査員は手動登録から�
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-doctor.sh
 ```
 
@@ -54,13 +56,14 @@ API の有効化・直近のビルド・リビジョンの起動状況・設定�
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
-SA="$(gcloud run services describe oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')"
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
+SA="$(gcloud run services describe "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')"
 # まだ無ければ作る（値は画面にもシェル履歴にも出さない）
 gcloud secrets describe oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" >/dev/null 2>&1 || \
   openssl rand -base64 48 | gcloud secrets create oshiready-session-secret --data-file=- --replication-policy=automatic --project "$OSHIREADY_PROJECT_ID"
 gcloud secrets add-iam-policy-binding oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" \
   --member="serviceAccount:${SA}" --role='roles/secretmanager.secretAccessor'
-gcloud run services update oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
+gcloud run services update "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
   --update-secrets=SESSION_SECRET=oshiready-session-secret:latest
 ```
 

@@ -8,7 +8,7 @@ set -euo pipefail
 
 : "${OSHIREADY_PROJECT_ID:?Set OSHIREADY_PROJECT_ID}"
 REGION="${OSHIREADY_REGION:-asia-northeast1}"
-SERVICE="oshiready"
+SERVICE="${OSHIREADY_SERVICE:-oshiready}"  # 既存のサービス名が違うときは export OSHIREADY_SERVICE=google-hackai
 P=(--project "$OSHIREADY_PROJECT_ID")
 
 URL="$(gcloud run services describe "$SERVICE" --region "$REGION" "${P[@]}" --format='value(status.url)')"
