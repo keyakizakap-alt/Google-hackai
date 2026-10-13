@@ -7,6 +7,8 @@
 
 ## ダッシュボードに登録するもの
 
+> 2026-10-13 更新：Google 検索で実在の店・宿・便を探す機能、移動手段の飛行機、ライブごとのプラン一覧、エラー画面の修正を、説明文・図・動作確認の方法・台本・Zenn 記事に反映済み。**公開中の Cloud Run に反映するには再デプロイが必要**（反映前に動画を撮ると、画面と説明文が合わなくなる）。
+
 | # | 提出物 | 必須 | 状態 | 用意するもの・やること |
 |---|---|---|---|---|
 | 1 | GitHub リポジトリの連携 | 必須 | 要操作 | ダッシュボードから GitHub App をインストールし、`keyakizakap-alt/Google-hackai` を連携する（非公開のままでよい） |
@@ -23,7 +25,7 @@
 | 条件 | 状態 | 根拠 |
 |---|---|---|
 | Google Cloud の実行プロダクトを使う | Cloud Run | `Dockerfile`・`cloudbuild.yaml`・`scripts/cloud-run-bootstrap.sh` |
-| Google Cloud の AI 技術を使う | Gemini（Vertex AI 経由も可） | `@google/genai`、`src/lib/agent/orchestrator.ts` |
+| Google Cloud の AI 技術を使う | Gemini（Vertex AI 経由も可。Function Calling・構造化出力・Google 検索によるグラウンディング） | `@google/genai`、`src/lib/agent/orchestrator.ts`、`src/lib/services/webSearch.ts` |
 | 日本語で記載する | 対応済み | README・ドキュメント・画面の文言 |
 | OSS のライセンス情報を明記する | 対応済み | README の「ライセンス」、`LICENSE` |
 | どこを開発し、どこがモックかを説明する | 対応済み | README の「開発した範囲とモックの箇所」 |
