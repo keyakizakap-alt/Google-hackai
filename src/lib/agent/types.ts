@@ -59,6 +59,8 @@ export const TimelineItemSchema = z.object({
       priceJpy: z.number().int().min(0).max(1_000_000).optional(),
       bookingUrl: z.string().max(300).optional(),
       slotId: z.string().max(60).optional(),
+      /** Google 検索で見つけた店舗・宿のときの出典（検索結果の URL）。これがあるときだけ実在の名前・参考価格を書ける */
+      sourceUrl: z.string().max(800).optional(),
     })
     .optional(),
   route: z
@@ -68,8 +70,13 @@ export const TimelineItemSchema = z.object({
       summary: z.string().max(200),
       legs: z.array(RouteLegSchema).max(12).default([]),
       fareJpy: z.number().int().min(0).max(200_000).optional(),
-      /** ekispert: 駅すぱあとで実際に調べた経路（主系）。estimate: アプリ内の表による所要時間の目安（待機系）。mock は以前の版で保存されたプランの読み込み用 */
-      source: z.enum(["ekispert", "estimate", "mock"]),
+      /**
+       * ekispert: 駅すぱあとで実際に調べた経路（主系）。estimate: アプリ内の表による所要時間の目安（待機系）。
+       * web: Google 検索で見つけた便（飛行機など。空席は未確認）。mock は以前の版で保存されたプランの読み込み用
+       */
+      source: z.enum(["ekispert", "estimate", "web", "mock"]),
+      /** source が web のときの出典（検索結果の URL） */
+      sourceUrl: z.string().max(800).optional(),
     })
     .optional(),
   rationale: z.string().max(300),
@@ -86,6 +93,20 @@ export const DecisionSchema = z.object({
 });
 export type Decision = z.infer<typeof DecisionSchema>;
 
+/** Google 検索の結果（プランの出典と、検索候補の表示に使う）。検索で見つけた名前・価格の検査にも使う */
+export const WEB_SEARCH_PURPOSES = ["beauty_salon", "hotel", "flight"] as const;
+export type WebSearchPurpose = (typeof WEB_SEARCH_PURPOSES)[number];
+export const WebSearchRecordSchema = z.object({
+  purpose: z.enum(WEB_SEARCH_PURPOSES),
+  /** 検索結果をもとに AI がまとめた本文（検索で見つかった事実だけ） */
+  text: z.string().max(3000),
+  sources: z.array(z.object({ title: z.string().max(200), uri: z.string().max(800) })).max(10),
+  /** Google の検索候補（Search Suggestions）。表示が必須のため、受け取ったまま保持する */
+  suggestionsHtml: z.string().max(20_000).optional(),
+  searchedAt: isoDate,
+});
+export type WebSearchRecord = z.infer<typeof WebSearchRecordSchema>;
+
 export const PlanSchema = z.object({
   id: z.string().max(40),
   event: OshiEventSchema,
@@ -94,6 +115,8 @@ export const PlanSchema = z.object({
   warnings: z.array(z.string().max(200)).max(10),
   /** 省略可（以前に作ったプランの署名を壊さないため） */
   decisions: z.array(DecisionSchema).max(6).optional(),
+  /** Google 検索で調べた結果（省略可。以前に作ったプランの署名を壊さないため） */
+  webSearches: z.array(WebSearchRecordSchema).max(6).optional(),
   generatedBy: z.object({ engine: z.enum(["gemini", "rule-based"]), model: z.string().max(60) }),
   revision: z.number().int().min(0).max(50),
   createdAt: isoDate,

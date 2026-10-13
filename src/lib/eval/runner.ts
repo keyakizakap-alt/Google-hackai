@@ -1,4 +1,4 @@
-import { validateTimeline } from "../agent/validate";
+import { validateTimeline, webEvidenceOf } from "../agent/validate";
 import type { Plan, PlanStatus, TraceStep } from "../agent/types";
 import { safeExternalUrl } from "../safeUrl";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
@@ -70,7 +70,7 @@ export function scoreScenario(s: Scenario, out: RunOutcome, now = Date.now()): S
     error: out.error,
     rejected,
     selfCorrected: completed && rejected > 0,
-    finalValid: completed && validateTimeline(items, s.event, s.busy, now, s.forecast).errors.length === 0,
+    finalValid: completed && validateTimeline(items, s.event, s.busy, now, s.forecast, webEvidenceOf(out.plan?.webSearches)).errors.length === 0,
     beautyCovered: completed && s.event.beautyServices.every((b) => beauty.some((i) => i.category === b)),
     beautyInWindow: beauty.length ? inWindow / beauty.length : undefined,
     weatherChecked: tools.includes("get_weather_forecast"),

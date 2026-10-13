@@ -7,13 +7,15 @@ export const ALLOWED_LINK_HOSTS = [
   "www.jalan.net", // 宿泊予約
   "roote.ekispert.net", // 乗換案内
   "www.ekispert.net",
-  "www.google.com", // Google マップの乗換検索（パスが /maps/dir/ のものだけ。下の ALLOWED_PATHS）
+  "www.google.com", // Google マップの乗換検索・Google フライト（パスを下の ALLOWED_PATHS で絞る）
+  "vertexaisearch.cloud.google.com", // Google 検索の出典（Gemini が返す転送用の URL。作成から約 30 日で開けなくなる）
 ] as const;
 
 /** ホストごとに許可するパス。ここにないホストはパスを問わない */
-const ALLOWED_PATHS: Partial<Record<(typeof ALLOWED_LINK_HOSTS)[number], string>> = {
-  // google.com は /url?q=… のような転送リンクを通さないよう、経路検索のページだけにする
-  "www.google.com": "/maps/dir/",
+const ALLOWED_PATHS: Partial<Record<(typeof ALLOWED_LINK_HOSTS)[number], readonly string[]>> = {
+  // google.com は /url?q=… のような転送リンクを通さないよう、経路検索と航空券検索のページだけにする
+  "www.google.com": ["/maps/dir/", "/travel/flights"],
+  "vertexaisearch.cloud.google.com": ["/grounding-api-redirect/"],
 };
 
 export function safeExternalUrl(raw: string | undefined | null): string | undefined {
@@ -23,8 +25,8 @@ export function safeExternalUrl(raw: string | undefined | null): string | undefi
     if (u.protocol !== "https:") return undefined;
     if (u.username || u.password) return undefined;
     if (!(ALLOWED_LINK_HOSTS as readonly string[]).includes(u.hostname)) return undefined;
-    const path = ALLOWED_PATHS[u.hostname as (typeof ALLOWED_LINK_HOSTS)[number]];
-    if (path && !u.pathname.startsWith(path)) return undefined;
+    const paths = ALLOWED_PATHS[u.hostname as (typeof ALLOWED_LINK_HOSTS)[number]];
+    if (paths && !paths.some((p) => u.pathname.startsWith(p))) return undefined;
     return u.toString();
   } catch {
     return undefined;
@@ -55,4 +57,13 @@ export const transitSearchUrl = (from: string, to: string) => {
   const station = (s: string) => (s.trim().endsWith("駅") ? s.trim() : `${s.trim()}駅`);
   if (!from.trim() || !to.trim()) return "https://www.google.com/maps/dir/?api=1&travelmode=transit";
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(station(from))}&destination=${encodeURIComponent(station(to))}&travelmode=transit`;
+};
+
+/**
+ * Google フライトの検索（出発地・到着地・日付を入れた状態で開く）。空席と最新の運賃は利用者がここで確かめる。
+ * q= に文章で条件を入れる形は Google フライトで広く使われている書き方（公式の仕様としては未確認）
+ */
+export const flightSearchUrl = (from: string, to: string, date?: string) => {
+  const q = [`${from.trim()}から${to.trim()}`, date ? date.slice(0, 10) : ""].filter(Boolean).join(" ");
+  return `https://www.google.com/travel/flights?hl=ja&q=${encodeURIComponent(`航空券 ${q}`)}`;
 };

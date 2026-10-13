@@ -2,7 +2,8 @@ import { overlapsBusy } from "../availability";
 import type { BusyBlock } from "../privacy/mask";
 import { BEAUTY_GUIDELINES } from "../services/beauty";
 import { formatJst, jstDayDiff, MS_MIN } from "../time";
-import { BEAUTY_SERVICES, type BeautyService, type OshiEvent, type TimelineItem } from "./types";
+import { normalizeForMatch, textMentionsPrice } from "../services/webSearchMatch";
+import { BEAUTY_SERVICES, type BeautyService, type OshiEvent, type TimelineItem, type WebSearchRecord } from "./types";
 
 export interface ValidationResult {
   errors: string[];
@@ -23,6 +24,80 @@ export function validateSummary(summary: string): string[] {
     : [];
 }
 
+/**
+ * Google 検索で見つけたもの。検索 1 回ごとに、まとめた本文と出典の URL を組で持つ
+ * （別の検索の出典や価格を組み合わせて通さないため）
+ */
+export interface WebEvidence {
+  records: readonly { text: string; urls: ReadonlySet<string> }[];
+}
+
+/** Google 検索の結果を、検査で照合できる形にする */
+export function webEvidenceOf(records: readonly WebSearchRecord[] | undefined): WebEvidence | undefined {
+  if (!records?.length) return undefined;
+  return { records: records.map((r) => ({ text: r.text, urls: new Set(r.sources.map((s) => s.uri)) })) };
+}
+
+/** JST の「9:05」の形（検索結果の時刻と照合する） */
+function jstClock(iso: string): string | undefined {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return undefined;
+  const j = new Date(t + 9 * 60 * MS_MIN);
+  return `${j.getUTCHours()}:${String(j.getUTCMinutes()).padStart(2, "0")}`;
+}
+const mentionsClock = (line: string, clock: string) => new RegExp(`(^|[^0-9])0?${clock}(?![0-9])`).test(line.normalize("NFKC"));
+
+/**
+ * 検索で見つけた店舗・宿・便として書かれた項目の検査（AI に作らせない）。
+ * - 出典（sourceUrl）が、この回のどれかの検索結果の URL であること
+ * - 名前・便名が、その検索結果の本文の 1 行（1 件）に書かれていること
+ * - 価格・空港・発着時刻も、同じ行に書かれていること（別の店舗や便の値を付け替えさせない）
+ */
+function checkWebSourced(it: TimelineItem, evidence: WebEvidence | undefined, errors: string[]) {
+  const sourceUrl = it.route?.source === "web" ? it.route.sourceUrl : it.provider?.sourceUrl;
+  const usesWeb = Boolean(it.provider?.sourceUrl) || it.route?.source === "web";
+  if (!usesWeb) return;
+  const fail = (why: string) => errors.push(`${it.id}: ${why}。search_web の結果に書かれたものだけを使うか、外してください`);
+  const record = sourceUrl ? evidence?.records.find((r) => r.urls.has(sourceUrl)) : undefined;
+  if (!record) return fail("出典（sourceUrl）が、この回の Google 検索の結果の URL ではありません");
+  const lines = record.text.split(/\n+/).filter((l) => l.trim());
+  // 空や 1 文字の名前は、どの本文にも含まれてしまうので照合に使わない
+  const inLine = (line: string, name: string) => normalizeForMatch(name).length >= 2 && normalizeForMatch(line).includes(normalizeForMatch(name));
+  const linesOf = (name: string) => lines.filter((l) => inLine(l, name));
+
+  if (it.provider?.sourceUrl) {
+    if (it.provider.slotId) fail("予約枠（slotId）は検索では分かりません");
+    const own = linesOf(it.provider.name);
+    if (own.length === 0) fail(`「${it.provider.name}」は、出典の検索結果に書かれていません`);
+    else if (it.provider.priceJpy !== undefined && !own.some((l) => textMentionsPrice(l, it.provider!.priceJpy!))) {
+      fail(`価格 ${it.provider.priceJpy} 円は、検索結果の「${it.provider.name}」の行に書かれていません`);
+    }
+  }
+  if (it.route?.source === "web") {
+    if (it.route.legs.length === 0) return fail("便（legs）がありません。検索結果の便名・空港・発着時刻を legs に入れてください");
+    const legLines: string[] = [];
+    for (const leg of it.route.legs) {
+      const own = linesOf(leg.line);
+      if (own.length === 0) {
+        fail(`便「${leg.line}」は、出典の検索結果に書かれていません`);
+        continue;
+      }
+      const airport = (name: string) => name.replace(/(空港|駅)$/, "");
+      const dep = leg.departure ? jstClock(leg.departure) : undefined;
+      const arr = leg.arrival ? jstClock(leg.arrival) : undefined;
+      // 便名と同じ行に、空港と発着時刻が書かれていること（出発時刻は必須）
+      const match = own.find(
+        (l) => inLine(l, airport(leg.from)) && inLine(l, airport(leg.to)) && dep !== undefined && mentionsClock(l, dep) && (arr === undefined || mentionsClock(l, arr)),
+      );
+      if (!match) fail(`便「${leg.line}」の空港・発着時刻が、検索結果の行と合いません（出発時刻 departure は必須）`);
+      else legLines.push(match);
+    }
+    if (it.route.fareJpy !== undefined && !legLines.some((l) => textMentionsPrice(l, it.route!.fareJpy!))) {
+      fail(`運賃 ${it.route.fareJpy} 円は、検索結果の便の行に書かれていません`);
+    }
+  }
+}
+
 /** 差し戻しの文で使う「ID（タイトル・時刻）」。ID だけだと AI がどれを直すか取り違えるため */
 function label(it: TimelineItem): string {
   return `${it.id}（${it.title}・${formatJst(it.start)}〜${formatJst(it.end, { time: true })}）`;
@@ -38,6 +113,7 @@ export function validateTimeline(
   busy: readonly BusyBlock[],
   now = Date.now(),
   forecast?: { sky: string; needsRainGear: boolean },
+  webEvidence?: WebEvidence,
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -50,8 +126,11 @@ export function validateTimeline(
     if (!(e > s)) errors.push(`${it.id}: 終了時刻が開始時刻より前です`);
     if (s < now - 5 * MS_MIN) errors.push(`${it.id}: 過去の日時は指定できません`);
 
+    checkWebSourced(it, webEvidence, errors);
+
     if (it.kind === "beauty") {
-      if (it.provider && (it.provider.name !== "予約サイトで店舗と空きを確認" || it.provider.priceJpy !== undefined || it.provider.slotId)) {
+      // 検索で見つけた店舗（sourceUrl あり）は上の checkWebSourced で確かめる。それ以外は店舗名・価格を書かせない
+      if (it.provider && !it.provider.sourceUrl && (it.provider.name !== "予約サイトで店舗と空きを確認" || it.provider.priceJpy !== undefined || it.provider.slotId)) {
         errors.push(`${it.id}: 実際の店舗・空席・価格は取得していません。候補日時として案内してください`);
       }
       if (e > eventStart) errors.push(`${it.id}: 美容予定はイベント開始前に終わる必要があります`);
@@ -63,6 +142,11 @@ export function validateTimeline(
       }
     }
 
+    // 宿の価格は、Google 検索で見つけた宿（出典あり）のときだけ書ける
+    if (it.kind === "stay" && !it.provider?.sourceUrl && (it.provider?.priceJpy !== undefined || it.provider?.slotId)) {
+      errors.push(`${it.id}: 宿の価格・空室は取得していません。search_web で見つけた宿（出典つき）でなければ、価格を書かないでください`);
+    }
+
     if (it.kind === "spot") {
       // 立ち寄りは公演の妨げにならないこと。遅れると入場に影響するのでエラー扱い
       if (s < eventStart && (eventStart - e) / MS_MIN < 60) {
@@ -71,7 +155,7 @@ export function validateTimeline(
       if (overlapsBusy(busy, s, e, 15)) {
         errors.push(`${it.id}: カレンダーの既存予定と重なっています`);
       }
-      if (it.provider?.priceJpy !== undefined || it.provider?.slotId) {
+      if (it.provider?.priceJpy !== undefined || it.provider?.slotId || it.provider?.sourceUrl) {
         errors.push(`${it.id}: 立ち寄り先の価格・予約枠は取得していません。案内だけにしてください`);
       }
       if (forecast?.needsRainGear && it.category === "photo") {

@@ -7,6 +7,7 @@ import {
   Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
+import { WebSearchSources } from "@/components/WebSearchSources";
 import { AddToCalendarButton } from "@/components/Reminders";
 import { CalendarChangeBanner, ConflictBanner, DecisionsCard, WatchCard } from "@/components/AgentInsights";
 import { isInAppBookable } from "@/lib/booking/eligible";
@@ -80,18 +81,24 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
                 ) : (
                   item.provider?.name
                 )}
-                {item.provider?.priceJpy !== undefined && ` ・ ¥${item.provider.priceJpy.toLocaleString()}`}
+                {item.provider?.priceJpy !== undefined && ` ・ ${item.provider.sourceUrl ? "検索時点の参考 " : ""}¥${item.provider.priceJpy.toLocaleString()}`}
                 {item.location && ` ・ ${item.location}`}
+                {item.provider?.sourceUrl && <SourceLink url={item.provider.sourceUrl} />}
               </p>
             )}
             {item.route && (
               <div className="mt-2 rounded-xl bg-lav-50/70 px-3 py-2 text-xs text-ink-soft">
                 <p className="font-semibold text-ink">
                   {item.route.from} → {item.route.to}
-                  {item.route.fareJpy !== undefined && <span className="ml-2 font-normal">約 ¥{item.route.fareJpy.toLocaleString()}</span>}
-                  <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${item.route.source === "ekispert" ? "bg-lav-200 text-lav-700" : "bg-white text-mute"}`}>
-                    {item.route.source === "ekispert" ? "乗換案内" : "目安"}
+                  {item.route.fareJpy !== undefined && (
+                    <span className="ml-2 font-normal">
+                      {item.route.source === "web" ? "検索時点の参考 " : "約 "}¥{item.route.fareJpy.toLocaleString()}
+                    </span>
+                  )}
+                  <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${item.route.source === "ekispert" || item.route.source === "web" ? "bg-lav-200 text-lav-700" : "bg-white text-mute"}`}>
+                    {ROUTE_SOURCE_LABEL[item.route.source]}
                   </span>
+                  {item.route.source === "web" && item.route.sourceUrl && <SourceLink url={item.route.sourceUrl} />}
                 </p>
                 {item.route.legs.length > 0 ? (
                   <ul className="mt-1.5 space-y-0.5">
@@ -109,7 +116,11 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
                 ) : (
                   <p className="mt-1">{item.route.summary}</p>
                 )}
-                {item.route.source !== "ekispert" && <p className="mt-1 text-[11px] text-mute">所要時間は目安です。乗る電車はリンクから確かめてください。</p>}
+                {item.route.source === "web" ? (
+                  <p className="mt-1 text-[11px] text-mute">Google 検索で見つけた便です。空席と最新の運賃はリンクから確かめてください。</p>
+                ) : (
+                  item.route.source !== "ekispert" && <p className="mt-1 text-[11px] text-mute">所要時間は目安です。乗る便・電車はリンクから確かめてください。</p>
+                )}
               </div>
             )}
             <p className="mt-2 flex gap-1.5 text-xs leading-relaxed text-ink-soft">
@@ -410,6 +421,24 @@ function EmptyPlan() {
   );
 }
 
+const ROUTE_SOURCE_LABEL: Record<NonNullable<TimelineItem["route"]>["source"], string> = {
+  ekispert: "乗換案内",
+  web: "Google 検索",
+  estimate: "目安",
+  mock: "目安",
+};
+
+/** Google 検索で見つけたものの出典（許可リストを通ったものだけ） */
+function SourceLink({ url }: { url: string }) {
+  const href = safeExternalUrl(url);
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="ml-2 inline-flex items-center rounded bg-lav-100 px-1.5 py-0.5 text-[10px] font-semibold text-lav-700 underline-offset-2 hover:underline">
+      Google 検索の出典
+    </a>
+  );
+}
+
 /** 移動の項目（経路・確認）だけ、乗り換えの検索リンクをその場で開けるようにする（許可リストを通ったものだけ） */
 function transitLink(item: TimelineItem): string | undefined {
   const isTransit = item.kind === "transit" || (item.kind === "prep" && item.category === "transit-check");
@@ -499,6 +528,7 @@ export default function PlanPage() {
               ))}
             </ol>
           </section>
+          <WebSearchSources records={plan.webSearches} />
           <TracePanel />
         </div>
 
