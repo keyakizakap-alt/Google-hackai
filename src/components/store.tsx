@@ -134,7 +134,11 @@ async function api<T>(path: string, body?: unknown, action?: string): Promise<T>
     cache: "no-store",
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
+  if (!res.ok) {
+    const { error, reason } = json as { error?: string; reason?: string };
+    // AI に接続できなかった理由の種類（例: PERMISSION_DENIED）を添える。管理者がログを見なくても原因の見当を付けられるように
+    throw new Error(`${error ?? `HTTP ${res.status}`}${reason ? `（理由: ${reason}）` : ""}`);
+  }
   return json as T;
 }
 

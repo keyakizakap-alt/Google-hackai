@@ -43,10 +43,27 @@ export interface AgentRunOutput {
 const DEADLINE_MS = 150_000;
 
 export class AgentUnavailableError extends Error {
-  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください") {
+  /**
+   * 失敗の理由の種類（例: PERMISSION_DENIED、HTTP_400 tools[0]…、TypeError）。画面とレスポンスに出して、ログを見なくても原因の見当が付くようにする。
+   * Google の API が返す決まった名前・リクエストの項目名・例外の名前だけで、説明文や利用者のデータは含めない
+   */
+  readonly reason?: string;
+  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください", reason?: string) {
     super(message);
     this.name = "AgentUnavailableError";
+    this.reason = reason;
   }
+}
+
+/** 失敗の理由の種類を、画面に出してよい形（英数字・記号の短い名前）だけで作る */
+export function failureReason(e: unknown): string | undefined {
+  const info = geminiErrorInfo(e);
+  const status = (e as { status?: unknown } | null)?.status;
+  const parts = [
+    info.apiReason ?? info.apiStatus ?? (typeof status === "number" ? `HTTP_${status}` : (e as Error | null)?.name),
+    info.apiField,
+  ].filter((p): p is string => typeof p === "string" && /^[\w.[\]-]{1,120}$/.test(p));
+  return parts.length ? parts.join(" ").slice(0, 160) : undefined;
 }
 
 /** 制限時間内にプランを仕上げられなかった（AI の応答が遅い）。接続の失敗とは分けて扱う */
@@ -124,7 +141,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
           if (status === 400 && usage.modelCalls === 0) {
             await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
           }
-          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined, failureReason(e));
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
