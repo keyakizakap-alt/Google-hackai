@@ -21,7 +21,7 @@ AIコーディングエージェント向けの作業ガイド。人間向けの
 | フロントエンド | Next.js 16（App Router）+ React 19 + TypeScript + Tailwind CSS v4 |
 | バックエンド／実行環境 | Next.js Route Handlers（`src/app/api`）。本番は Cloud Run（`Dockerfile`、standalone 出力）、プレビューは Vercel |
 | AI | Gemini（`@google/genai`、Function Calling・構造化出力）。モデルは環境変数 `GEMINI_MODEL`、予備は `GEMINI_FALLBACK_MODEL`（任意）、考える深さは `GEMINI_THINKING_LEVEL`（既定 `LOW`）、道具の使わせ方は `GEMINI_TOOL_MODE`（既定 `AUTO`。`ANY` は Vertex AI で拒否されたため既定にしない）。呼び出しは `src/lib/gemini.ts` の共通部品を使い、429・5xx は自動で再試行する |
-| 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP（主系）と所要時間の目安（待機系・API なし・`src/lib/services/travelEstimate.ts`。駅すぱあとが使えないときに自動で切り替え）、気象庁の公開 JSON（API キー不要・`src/lib/signals/weather.ts`）、Google 検索によるグラウンディング（実在のサロン・宿・飛行機の便と価格の目安。`src/lib/services/webSearch.ts`。別の呼び出しで googleSearch だけを使い、1 プラン 3 回まで。`GEMINI_WEB_SEARCH=off` で止める。検索結果にない名前・価格は検査で差し戻す）、予約の部品（`BOOKING_PROVIDERS`、既定はデモ予約） |
+| 外部連携 | Google カレンダー（OAuth・読み取り専用）、駅すぱあと MCP（主系）と所要時間の目安（待機系・API なし・`src/lib/services/travelEstimate.ts`。駅すぱあとが使えないときに自動で切り替え）、気象庁の公開 JSON（API キー不要・`src/lib/signals/weather.ts`）、Google 検索によるグラウンディング（実在のサロン・宿・飛行機の便と価格の目安。`src/lib/services/webSearch.ts`。別の呼び出しで googleSearch だけを使い、呼び出しは 1 プラン 3 回まで（課金は検索クエリ単位で、1 回の呼び出しで複数になりうる）。`GEMINI_WEB_SEARCH=off` で止める。検索結果にない名前・価格は検査で差し戻す）、予約の部品（`BOOKING_PROVIDERS`、既定はデモ予約） |
 | データストア | サーバー側は持たない（署名付きの状態をクライアントが保持）。端末側は IndexedDB / localStorage |
 | リージョン | asia-northeast1（Cloud Run） |
 

@@ -38,7 +38,7 @@ OshiReady は、AI エージェントに「調べて提案する」ことだけ�
 | T10 | 期限切れの古いプランで予約を進める | 期限切れの封筒は、見張りの「参照」だけに使える。承認・予約の検証には通らない。見直し案は古い承認を引き継がず、新しい承認待ちとして作る | `tests/watch.test.ts` |
 | T11 | 他サイトから API を呼ばせる（CSRF） | 同一オリジンの確認。承認・予約・キャンセルは専用ヘッダーも必須 | `tests/booking.test.ts` |
 | T12 | 画面にスクリプトを差し込む（XSS） | リクエストごとの nonce 付き Content-Security-Policy。通信先は自サイトのみ | — （`src/proxy.ts`） |
-| T13 | AI が実在しない店名・便・価格を、検索で見つけたように書く | 検索結果を 1 回ごとに「本文と出典 URL」の組で持ち、店名・便名・空港・発着時刻・価格が、出典の検索結果の同じ行にあるものだけを通す。出典のない宿の名前は一般的な案内に置き換える | `tests/webSearch.test.ts` |
+| T13 | AI が実在しない店名・便・価格を、検索で見つけたように書く | 検索結果を 1 回ごとに「本文と出典 URL」の組で持ち、店名・便名・空港・発着時刻・価格が、その出典が裏付けている記述（Gemini の groundingSupports）の同じ行にあるものだけを通す。AI がまとめた本文の、裏付けのない部分は照合に使わない。出典のない宿の名前は一般的な案内に置き換える | `tests/webSearch.test.ts` |
 | T14 | 検索結果の HTML（Google の検索候補）に仕込まれた文字が画面で動く | スクリプトを動かせない sandbox 付きの iframe の中に、受け取ったまま表示する（同じ画面には差し込まない） | — （`src/components/WebSearchSources.tsx`） |
 | T15 | 検索の出典を装った転送リンクで、別のサイトへ誘導する | 許可するのは Google の出典の転送 URL（`/grounding-api-redirect/`）と Google フライト（`/travel/flights`）のパスだけ。`google.com/url?q=` などは通さない | `tests/webSearch.test.ts` |
 

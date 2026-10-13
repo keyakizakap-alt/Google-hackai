@@ -101,6 +101,11 @@ export const WebSearchRecordSchema = z.object({
   /** 検索結果をもとに AI がまとめた本文（検索で見つかった事実だけ） */
   text: z.string().max(3000),
   sources: z.array(z.object({ title: z.string().max(200), uri: z.string().max(800) })).max(10),
+  /**
+   * 本文のうち、出典のページが裏付けている部分（Gemini の groundingSupports）。名前・価格の照合はここだけで行う
+   * （本文は AI がまとめた文章なので、裏付けのない部分に作り話が混ざりうるため）
+   */
+  claims: z.array(z.object({ text: z.string().max(500), uris: z.array(z.string().max(800)).max(10) })).max(40).optional(),
   /** Google の検索候補（Search Suggestions）。表示が必須のため、受け取ったまま保持する */
   suggestionsHtml: z.string().max(20_000).optional(),
   searchedAt: isoDate,

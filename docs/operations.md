@@ -25,7 +25,7 @@
 | 道具の使わせ方 | `GEMINI_TOOL_MODE`（既定 `AUTO`。`VALIDATED`・`ANY` も選べるが、`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
 | AI 呼び出しの 1 日の上限 | `AGENT_DAILY_LIMIT` |
-| Google 検索（実在の店・宿・便と参考価格を探す） | `GEMINI_WEB_SEARCH`（既定はオン。`off` で止める。1 回のプラン作成で最大 3 回。検索 1 回ごとに費用がかかる） |
+| Google 検索（実在の店・宿・便と参考価格を探す） | `GEMINI_WEB_SEARCH`（既定はオン。`off` で止める。検索の呼び出しは 1 回のプラン作成で最大 3 回。課金は Google 側で実行された検索クエリの数で数え、1 回の呼び出しで複数のクエリが走ることがある（公式ドキュメント・2026-10-13 時点）） |
 | 駅すぱあとで使うツール | `EKISPERT_ALLOWED_TOOLS` |
 | アプリの公開 URL | `APP_BASE_URL`（Vercel では未設定でも本番ドメインを自動で使用） |
 | IP の取り出し位置（Cloud Run 等） | `TRUSTED_PROXY_HOPS` |
