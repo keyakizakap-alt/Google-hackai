@@ -75,10 +75,12 @@ function PlanGroup({ title, events, plans, empty, muted = false }: { title: stri
   );
 }
 
-function PlanRow({ event, envelope, muted }: { event: OshiEvent; envelope?: PlanEnvelope; muted: boolean }) {
+function PlanRow({ event, envelope: saved, muted }: { event: OshiEvent; envelope?: PlanEnvelope; muted: boolean }) {
   const router = useRouter();
   const { selectEvent, generatePlan, busy, event: active } = useStore();
   const now = useNow();
+  // 期限（2 時間）が切れた承認待ちのプランは、承認できないので「未作成」として扱う（端末からは 1 分ごとに外す）
+  const envelope = saved && (now === null || Date.parse(saved.expiresAt) > now || saved.status === "approved" || saved.status === "booked") ? saved : undefined;
   const planning = busy === "planning" && active?.id === event.id;
   const plan = envelope?.plan;
   const items = plan?.items ?? [];

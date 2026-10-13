@@ -118,6 +118,9 @@ export interface Reservation {
   updatedAt: string;
 }
 
+/** 端末に残すプランか（承認待ちは 2 時間の期限まで。承認・予約したプランは期限が切れても表示だけは残す） */
+const isKept = (env: PlanEnvelope, now: number) => Date.parse(env.expiresAt) > now || env.status === "approved" || env.status === "booked";
+
 const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true };
 
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
@@ -348,7 +351,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setWatched(saved.watched ?? null);
         // 承認待ちのプランは期限（2 時間）が切れたら捨てる。承認・予約したプランは、期限が切れても表示だけは残す
         // （予約には進めない。消えると、自動作成で AI が同じイベントのプランを作り直してしまう）
-        const keep = (env: PlanEnvelope) => Date.parse(env.expiresAt) > Date.now() || env.status === "approved" || env.status === "booked";
+        const keep = (env: PlanEnvelope) => isKept(env, Date.now());
         const env = saved.envelope;
         if (env && keep(env)) setEnvelope(env);
         const savedPlans = Object.fromEntries(Object.entries(saved.plans ?? {}).filter(([, p]) => keep(p)));
@@ -553,6 +556,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (envelope) planCache.current[envelope.plan.event.id] = { envelope, trace, usage, engine, chat };
   }, [envelope, trace, usage, engine, chat]);
+  // 開いたままでも、期限（2 時間）が切れた承認待ちのプランは一覧から外す（承認・予約したプランは残す）
+  useEffect(() => {
+    const prune = () =>
+      setPlans((prev) => {
+        const expired = Object.keys(prev).filter((id) => !isKept(prev[id], Date.now()));
+        if (expired.length === 0) return prev;
+        const next = { ...prev };
+        for (const id of expired) delete next[id];
+        return next;
+      });
+    prune();
+    const t = setInterval(prune, 60_000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     if (envelope) setPlans((prev) => (prev[envelope.plan.event.id] === envelope ? prev : { ...prev, [envelope.plan.event.id]: envelope }));
   }, [envelope]);
@@ -794,7 +811,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       event,
       plans,
       selectEvent: (id) => {
-        if (id === event?.id) return;
+        if (id === event?.id) {
+          // 選択が外れて先頭のライブを表示している（activeId が空）ときも、そのライブの保存済みプランを開く
+          setActiveId(id);
+          if (envelope?.plan.event.id !== id) restorePlan(id);
+          return;
+        }
         setActiveId(id);
         restorePlan(id);
         setAvailability(null);
