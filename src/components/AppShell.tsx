@@ -14,14 +14,18 @@ import { BUSY_LABEL, OSHI_COLORS, useStore } from "./store";
 const NAV = [
   { href: "/", label: "ホーム", en: "Home", icon: House },
   { href: "/events", label: "イベント", en: "Event", icon: CalendarDays },
-  { href: "/plan", label: "プラン", en: "Plan", icon: ClipboardList },
+  // 一覧（/plans）と、各ライブのプラン（/plan）の両方で光らせる
+  { href: "/plans", label: "プラン", en: "Plan", icon: ClipboardList, activeFor: "/plan" },
   { href: "/bookings", label: "予約", en: "Booking", icon: MapPin },
   { href: "/settings", label: "設定", en: "Settings", icon: Settings },
 ];
 
 function useActive() {
   const path = usePathname();
-  return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+  return (href: string) => {
+    const prefix = NAV.find((n) => n.href === href)?.activeFor ?? href;
+    return href === "/" ? path === "/" : path.startsWith(prefix);
+  };
 }
 
 function PendingBell({ light = false }: { light?: boolean }) {

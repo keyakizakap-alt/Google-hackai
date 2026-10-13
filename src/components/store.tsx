@@ -118,6 +118,9 @@ export interface Reservation {
   updatedAt: string;
 }
 
+/** 端末に残すプランか（承認待ちは 2 時間の期限まで。承認・予約したプランは期限が切れても表示だけは残す） */
+const isKept = (env: PlanEnvelope, now: number) => Date.parse(env.expiresAt) > now || env.status === "approved" || env.status === "booked";
+
 const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow", "hair"], arriveEarlyForGoods: true };
 
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
@@ -172,6 +175,8 @@ interface Store {
   events: OshiEvent[];
   /** 現在プランを作る対象のイベント */
   event: OshiEvent | null;
+  /** ライブごとの最新のプラン（プラン一覧で使う。この端末に保存し、再読み込みしても残る） */
+  plans: Record<string, PlanEnvelope>;
   selectEvent: (id: string) => void;
   /** 保存する。自動作成がオンなら、保存後に AI エージェントが準備プランを作り始める */
   saveEvent: (e: OshiEvent) => void;
@@ -289,9 +294,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [calendarChanges, setCalendarChanges] = useState<CalendarChange[]>([]);
   // restorePlan は後で定義するため、取り込み処理からは参照で呼ぶ
   const restorePlanRef = useRef<(id: string | null) => void>(() => undefined);
+  const forgetPlanRef = useRef<(id: string) => void>(() => undefined);
   const [oshiImages, setOshiImages] = useState<Record<string, string>>({});
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [envelope, setEnvelope] = useState<PlanEnvelope | null>(null);
+  /** ライブごとの最新のプラン（端末に保存する。表示中のプランは envelope） */
+  const [plans, setPlans] = useState<Record<string, PlanEnvelope>>({});
+  const plansRef = useRef(plans);
+  useEffect(() => {
+    plansRef.current = plans;
+  }, [plans]);
+  /** あるライブのプランを忘れる（ライブの内容が変わった・削除した） */
+  const forgetPlan = useCallback((id: string) => {
+    delete planCache.current[id];
+    setPlans((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
   const [trace, setTrace] = useState<TraceStep[]>([]);
   const [usage, setUsage] = useState<PlanResponse["usage"] | null>(null);
   const [engine, setEngine] = useState<PlanResponse["engine"] | null>(null);
@@ -329,8 +351,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setWatched(saved.watched ?? null);
         // 承認待ちのプランは期限（2 時間）が切れたら捨てる。承認・予約したプランは、期限が切れても表示だけは残す
         // （予約には進めない。消えると、自動作成で AI が同じイベントのプランを作り直してしまう）
+        const keep = (env: PlanEnvelope) => isKept(env, Date.now());
         const env = saved.envelope;
-        if (env && (Date.parse(env.expiresAt) > Date.now() || env.status === "approved" || env.status === "booked")) setEnvelope(env);
+        if (env && keep(env)) setEnvelope(env);
+        const savedPlans = Object.fromEntries(Object.entries(saved.plans ?? {}).filter(([, p]) => keep(p)));
+        if (env && keep(env)) savedPlans[env.plan.event.id] = env;
+        setPlans(savedPlans);
       }
       setRestored(true);
     }).catch(() => { if (alive) setRestored(true); });
@@ -340,10 +366,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed, watched }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed, watched, plans }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
     }, 200);
     return () => clearTimeout(timer);
-  }, [restored, events, activeId, profile, reservations, envelope, dismissed, watched]);
+  }, [restored, events, activeId, profile, reservations, envelope, dismissed, watched, plans]);
 
   useEffect(() => {
     if (!notice) return;
@@ -386,12 +412,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // 承認・予約済みのプランは勝手に変えず、作り直すかどうかを利用者に聞く
       const asked: CalendarChange[] = [];
       for (const { before, after } of merged.updated) {
-        const cached = planCache.current[after.id];
-        if (cached && (cached.envelope.status === "approved" || cached.envelope.status === "booked")) {
+        const latest = planCache.current[after.id]?.envelope ?? plansRef.current[after.id];
+        if (latest && (latest.status === "approved" || latest.status === "booked")) {
           asked.push({ eventId: after.id, title: after.title, before: before.startAt, after: after.startAt });
           continue;
         }
-        delete planCache.current[after.id];
+        forgetPlanRef.current(after.id);
         if (eventIdRef.current === after.id) restorePlanRef.current(null);
       }
       if (asked.length > 0) setCalendarChanges((prev) => [...prev.filter((c) => !asked.some((a) => a.eventId === c.eventId)), ...asked]);
@@ -530,10 +556,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (envelope) planCache.current[envelope.plan.event.id] = { envelope, trace, usage, engine, chat };
   }, [envelope, trace, usage, engine, chat]);
+  // 開いたままでも、期限（2 時間）が切れた承認待ちのプランは一覧から外す（承認・予約したプランは残す）
+  useEffect(() => {
+    const prune = () =>
+      setPlans((prev) => {
+        const expired = Object.keys(prev).filter((id) => !isKept(prev[id], Date.now()));
+        if (expired.length === 0) return prev;
+        const next = { ...prev };
+        for (const id of expired) delete next[id];
+        return next;
+      });
+    prune();
+    const t = setInterval(prune, 60_000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (envelope) setPlans((prev) => (prev[envelope.plan.event.id] === envelope ? prev : { ...prev, [envelope.plan.event.id]: envelope }));
+  }, [envelope]);
 
   const restorePlan = useCallback((eventId: string | null) => {
     const c = eventId ? planCache.current[eventId] : undefined;
-    setEnvelope(c?.envelope ?? null);
+    // この画面で作っていないプランも、端末に保存した最新のものを開く（調べた過程は残っていない）
+    setEnvelope(c?.envelope ?? (eventId ? plansRef.current[eventId] : undefined) ?? null);
     setTrace(c?.trace ?? []);
     setUsage(c?.usage ?? null);
     setEngine(c?.engine ?? null);
@@ -541,7 +585,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     restorePlanRef.current = restorePlan;
-  }, [restorePlan]);
+    forgetPlanRef.current = forgetPlan;
+  }, [restorePlan, forgetPlan]);
 
   const planSignature = (e: OshiEvent) => [e.id, e.startAt, e.venueStation, e.homeStation, e.beautyServices.join(","), e.arriveEarlyForGoods].join("|");
 
@@ -764,8 +809,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       events,
       event,
+      plans,
       selectEvent: (id) => {
-        if (id === event?.id) return;
+        if (id === event?.id) {
+          // 選択が外れて先頭のライブを表示している（activeId が空）ときも、そのライブの保存済みプランを開く
+          setActiveId(id);
+          if (envelope?.plan.event.id !== id) restorePlan(id);
+          return;
+        }
         setActiveId(id);
         restorePlan(id);
         setAvailability(null);
@@ -784,7 +835,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return;
         }
         setActiveId(e.id);
-        delete planCache.current[e.id]; // 内容が変わったので作り直す
+        forgetPlan(e.id); // 内容が変わったので作り直す
         restorePlan(null);
         setPlanError(null);
         setAvailability(null);
@@ -792,7 +843,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeEvent: (id) => {
         const removed = eventsRef.current.find((x) => x.id === id);
         setEvents((prev) => prev.filter((x) => x.id !== id));
-        delete planCache.current[id];
+        forgetPlan(id);
         // カレンダーから取り込んだものは、次の取り込みで復活させない
         if (id.startsWith("cal-")) setDismissed((prev) => (prev.includes(id) ? prev : [...prev, id]));
         if (event?.id === id) {
@@ -810,7 +861,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const changed = eventsRef.current.filter((e) => e.homeStation !== p.homeStation).map((e) => e.id);
         if (changed.length === 0) return;
         setEvents((prev) => prev.map((e) => (changed.includes(e.id) ? { ...e, homeStation: p.homeStation } : e)));
-        for (const id of changed) delete planCache.current[id];
+        for (const id of changed) forgetPlan(id);
         if (event && changed.includes(event.id)) restorePlan(null);
       },
       importFromCalendar,
@@ -891,6 +942,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setWatched(null);
         setWatch({ signals: [], proposal: null, reviewing: false, error: null });
         planCache.current = {};
+        setPlans({});
         setCalendarChanges([]);
         restorePlan(null);
         setAvailability(null);
@@ -1031,7 +1083,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await refreshSession();
       },
     }),
-    [session, oshiColor, events, event, profile, importFromCalendar, calendarChanges, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
+    [session, oshiColor, events, event, plans, forgetPlan, profile, importFromCalendar, calendarChanges, lastImport, autoPlan, restorePlan, generatePlanFn, eventImage, setEventImage, oshiImages, imageFor, persistImages, setPersistImages, reservations, availability, envelope, trace, usage, engine, chat, bookings, busy, error, notice, planError, refreshSession, extractAvailability, run, revisePlanFn, conflicts, aiReady, watch, autoReview, watchTarget, requestReviewFor, applyPlan],
   );
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

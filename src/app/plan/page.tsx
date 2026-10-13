@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Activity, Bot, Check, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
+  Activity, Bot, Check, ChevronLeft, ChevronRight, LoaderCircle, Lock, Send, ShieldCheck, Sparkles, TriangleAlert,
 } from "lucide-react";
 import { AgentConsole } from "@/components/AgentConsole";
 import { WebSearchSources } from "@/components/WebSearchSources";
@@ -468,6 +468,10 @@ export default function PlanPage() {
     <div className="space-y-5 px-1">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          <Link href="/plans" className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-lav-700 hover:underline">
+            <ChevronLeft className="h-3.5 w-3.5" />
+            プラン一覧
+          </Link>
           <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
