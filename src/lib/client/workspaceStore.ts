@@ -11,6 +11,8 @@ export interface SavedWorkspace {
   dismissed?: string[];
   /** 見張りの対象（承認・予約した最新のプラン）。期限切れでも署名で改ざんを確かめられるので残しておく */
   watched?: PlanEnvelope | null;
+  /** ライブごとの最新のプラン（プラン一覧で使う） */
+  plans?: Record<string, PlanEnvelope>;
 }
 
 const DB = "oshiready";
