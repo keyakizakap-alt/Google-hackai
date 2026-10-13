@@ -86,8 +86,9 @@ function PlanRow({ event, envelope: saved, muted }: { event: OshiEvent; envelope
   const items = plan?.items ?? [];
   const count = (pred: (i: (typeof items)[number]) => boolean) => items.filter(pred).length;
   const beauty = count((i) => i.kind === "beauty");
-  const flights = count((i) => i.category === "flight" || i.route?.source === "web" || /飛行機/.test(i.route?.summary ?? ""));
-  const transit = count((i) => i.kind === "transit") - flights;
+  const isFlight = (i: (typeof items)[number]) => i.kind === "transit" && (i.category === "flight" || i.route?.source === "web" || /(：|^)飛行機で/.test(i.route?.summary ?? ""));
+  const flights = count(isFlight);
+  const transit = count((i) => i.kind === "transit" && !isFlight(i));
   const stay = count((i) => i.kind === "stay");
   // これから先で、いちばん近い準備（本番以外）
   const next = now === null || muted ? undefined : items.find((i) => i.kind !== "event" && Date.parse(i.start) > now);

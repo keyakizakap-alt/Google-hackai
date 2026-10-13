@@ -19,7 +19,7 @@ import { executeTool, NATIVE_DECLARATIONS, WEB_SEARCH_TOOL, type AgentContext } 
 
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
-import type { OshiEvent, Plan, TimelineItem, TraceStep } from "./types";
+import type { OshiEvent, Plan, TimelineItem, TraceStep, WebSearchRecord } from "./types";
 
 export interface AgentRunInput {
   event: OshiEvent;
@@ -193,7 +193,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     decisions: ctx.submitted.decisions.slice(0, 6),
     items,
     // 検索候補（Search Suggestions）の表示が必要なため、検索で見つけたものを使ったときは検索結果を残す
-    ...(webSourced && ctx.webSearches?.length ? { webSearches: ctx.webSearches.slice(-6) } : {}),
+    // プランが出典として使っている検索結果だけを残す（作り直しても、使っている出典は消えない。封筒も大きくしすぎない）
+    ...(webSourced && usedSearches(ctx.webSearches, items).length ? { webSearches: usedSearches(ctx.webSearches, items) } : {}),
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
     revision: input.previous ? input.previous.revision + 1 : 0,
@@ -210,6 +211,17 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     ...usage,
   });
   return { plan, trace, usage, engine };
+}
+
+/** 飛行機の移動か（検索で見つけた便、または目安の主な手段が飛行機）。「飛行機は使わない」のような文では判定しない */
+export function isAirTravel(item: TimelineItem): boolean {
+  return item.category === "flight" || item.route?.source === "web" || /(：|^)飛行機で/.test(item.route?.summary ?? "");
+}
+
+/** プランの項目が出典として使っている検索結果（最大 6 件） */
+function usedSearches(records: readonly WebSearchRecord[] | undefined, items: readonly TimelineItem[]): WebSearchRecord[] {
+  const used = new Set(items.flatMap((i) => [i.provider?.sourceUrl, i.route?.sourceUrl]).filter((u): u is string => Boolean(u)));
+  return (records ?? []).filter((r) => r.sources.some((s) => used.has(s.uri))).slice(-6);
 }
 
 /** Google 検索で見つけたもの（出典あり）でない宿は、実在の施設名を出さず、予約サイトで探す案内にする */
@@ -255,7 +267,7 @@ function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineIt
   const to = item.route?.to ?? (isReturn ? event.homeStation : event.venueStation);
   const byEkispert = item.route?.source === "ekispert";
   // 飛行機（検索で見つけた便・目安で飛行機を使う移動）は、空席と運賃を Google フライトで確かめられるようにする
-  const byAir = item.category === "flight" || item.route?.source === "web" || /飛行機/.test(item.route?.summary ?? "");
+  const byAir = isAirTravel(item);
   if (byAir) {
     const legs = item.route?.legs ?? [];
     // 便が分からない（目安の）ときは、出発駅・会場から空港を推定する。帰りは往路の空港を入れ替える
@@ -302,7 +314,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   const ekispertDeclarations = ekispert ? (compat >= 1 ? toLegacyDeclarations(ekispert.declarations) : ekispert.declarations) : [];
   // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない（AI が楽な方を選んで乗り換えを調べないのを防ぐ）
   const nativeBase = NATIVE_DECLARATIONS.filter(
-    (d) => !(ekispertDeclarations.length > 0 && d.name === TRANSIT_FALLBACK_TOOL) && !(d.name === WEB_SEARCH_TOOL && !isWebSearchEnabled()),
+    // 互換モード 2 では Google 検索の道具も外す（最初の呼び出しで形を拒否されたとき、増やした部分を減らして通す）
+    (d) => !(ekispertDeclarations.length > 0 && d.name === TRANSIT_FALLBACK_TOOL) && !(d.name === WEB_SEARCH_TOOL && (!isWebSearchEnabled() || compat >= 2)),
   );
   const native = compat >= 2 ? toLegacyDeclarations(nativeBase) : nativeBase;
   const declarations: FunctionDeclaration[] = [...ekispertDeclarations, ...native];

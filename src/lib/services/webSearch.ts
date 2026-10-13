@@ -1,4 +1,5 @@
 import "server-only";
+import type { ThinkingLevel } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
 import { createGenAI } from "../gemini";
 import { logger } from "../logger";
@@ -20,8 +21,10 @@ import type { WebSearchPurpose, WebSearchRecord } from "../agent/types";
 const TIMEOUT_MS = 25_000;
 const MAX_TEXT = 3000;
 const MAX_SOURCES = 8;
-const MAX_CLAIMS = 40;
-const MAX_SUGGESTIONS_HTML = 20_000;
+const MAX_CLAIMS = 20;
+/** 1 つの記述に付ける出典の数（封筒が大きくなりすぎないように） */
+const MAX_URIS_PER_CLAIM = 3;
+const MAX_SUGGESTIONS_HTML = 12_000;
 
 export interface WebSearchOutcome {
   available: boolean;
@@ -42,6 +45,8 @@ export async function searchWeb(purpose: WebSearchPurpose, query: string, opts: 
       config: {
         systemInstruction: WEB_SEARCH_INSTRUCTION,
         tools: [{ googleSearch: {} }],
+        // プラン作成と同じ考える深さにする（既定の深さだと遅く、制限時間に近づくため）
+        ...(config.gemini.thinkingLevel ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
         abortSignal: opts.signal ?? AbortSignal.timeout(TIMEOUT_MS),
       },
     });
@@ -58,7 +63,7 @@ export async function searchWeb(purpose: WebSearchPurpose, query: string, opts: 
     const claims = (meta?.groundingSupports ?? [])
       .map((s) => ({
         text: (s.segment?.text ?? "").slice(0, 500),
-        uris: [...new Set((s.groundingChunkIndices ?? []).map((i) => chunkUris[i] ?? "").filter((u) => kept.has(u)))].slice(0, 10),
+        uris: [...new Set((s.groundingChunkIndices ?? []).map((i) => chunkUris[i] ?? "").filter((u) => kept.has(u)))].slice(0, MAX_URIS_PER_CLAIM),
       }))
       .filter((c) => c.text.trim() && c.uris.length > 0)
       .slice(0, MAX_CLAIMS);

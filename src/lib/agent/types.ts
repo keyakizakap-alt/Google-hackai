@@ -57,7 +57,8 @@ export const TimelineItemSchema = z.object({
     .object({
       name: z.string().max(60),
       priceJpy: z.number().int().min(0).max(1_000_000).optional(),
-      bookingUrl: z.string().max(300).optional(),
+      /** 日本語の空港名・駅名を入れた検索リンク（URL エンコードで長くなる）や、検索の出典の転送 URL も入るため、余裕をもたせる */
+      bookingUrl: z.string().max(1000).optional(),
       slotId: z.string().max(60).optional(),
       /** Google 検索で見つけた店舗・宿のときの出典（検索結果の URL）。これがあるときだけ実在の名前・参考価格を書ける */
       sourceUrl: z.string().max(800).optional(),
@@ -105,9 +106,9 @@ export const WebSearchRecordSchema = z.object({
    * 本文のうち、出典のページが裏付けている部分（Gemini の groundingSupports）。名前・価格の照合はここだけで行う
    * （本文は AI がまとめた文章なので、裏付けのない部分に作り話が混ざりうるため）
    */
-  claims: z.array(z.object({ text: z.string().max(500), uris: z.array(z.string().max(800)).max(10) })).max(40).optional(),
+  claims: z.array(z.object({ text: z.string().max(500), uris: z.array(z.string().max(800)).max(3) })).max(20).optional(),
   /** Google の検索候補（Search Suggestions）。表示が必須のため、受け取ったまま保持する */
-  suggestionsHtml: z.string().max(20_000).optional(),
+  suggestionsHtml: z.string().max(12_000).optional(),
   searchedAt: isoDate,
 });
 export type WebSearchRecord = z.infer<typeof WebSearchRecordSchema>;

@@ -13,7 +13,7 @@ export const MAX_COMPAT_LEVEL = 2;
 
 export const COMPAT_SUMMARY: Record<number, string> = {
   1: "AI がリクエストを受け付けなかったため、考える深さの指定を外し、乗り換え案内の道具の定義を互換性の高い形式に変えて作り直します",
-  2: "AI がリクエストを受け付けなかったため、乗り換え案内を外し、道具の定義を互換性の高い形式に変えて作り直します",
+  2: "AI がリクエストを受け付けなかったため、乗り換え案内と Google 検索を外し、道具の定義を互換性の高い形式に変えて作り直します",
 };
 
 const TYPE_MAP: Record<string, string> = {

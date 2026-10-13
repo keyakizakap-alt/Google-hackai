@@ -214,3 +214,23 @@ describe("飛行機の目安", () => {
     expect(e.airports).toBeUndefined();
   });
 });
+
+describe("飛行機の移動とリンク", () => {
+  it("「飛行機で」が主な手段の目安だけを飛行機とみなし、「飛行機は使わない」は含めない", async () => {
+    const { isAirTravel } = await import("@/lib/agent/orchestrator");
+    const base = { id: "t", kind: "transit" as const, title: "移動", start: `${day}T09:00:00+09:00`, end: `${day}T12:00:00+09:00`, rationale: "r", requiresBooking: false };
+    const route = (summary: string) => ({ ...base, route: { from: "長崎", to: "水道橋", summary, legs: [], source: "estimate" as const } });
+    expect(isAirTravel(route("長崎 → 水道橋：飛行機で約 4 時間（目安）"))).toBe(true);
+    expect(isAirTravel(route("新幹線で移動（飛行機は使わない）"))).toBe(false);
+  });
+
+  it("日本語の空港名が長くても、Google フライトのリンクはプランに保存できる", async () => {
+    const { flightSearchUrl } = await import("@/lib/safeUrl");
+    const { TimelineItemSchema } = await import("@/lib/agent/types");
+    const url = flightSearchUrl("東京国際空港（羽田空港）第2ターミナル", "JR長崎駅 → 京セラドーム大阪 最寄りの空港", day);
+    expect(url.length).toBeGreaterThan(300);
+    const item = { id: "f", kind: "transit", title: "飛行機", start: `${day}T09:00:00+09:00`, end: `${day}T11:00:00+09:00`, rationale: "r", requiresBooking: true, provider: { name: "Google フライトで空席と運賃を確認", bookingUrl: url } };
+    expect(TimelineItemSchema.safeParse(item).success).toBe(true);
+  });
+});
+
