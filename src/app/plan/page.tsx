@@ -133,7 +133,10 @@ function RevisePanel() {
   const { chat, busy, revisePlan, envelope } = useStore();
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "nearest" }), [chat.length]);
+  // 何も返さない（Chrome / Edge 150 から scrollIntoView は Promise を返し、後片付けとして呼ばれて落ちるため）
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "nearest" });
+  }, [chat.length]);
   const canRevise = Boolean(envelope && ["pending_approval", "approved", "rejected"].includes(envelope.status));
   const suggestions = ["ヘアカットは4日前にしたい", "物販はなし、開演1時間前着で", "サロンは土日の午前がいい"];
   const submit = async (t: string) => {
