@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * React は戻り値を画面を離れるときなどに呼び出すため、関数以外だと「i is not a function」で画面ごと落ちる。
  * 例：`useEffect(() => el.scrollIntoView())` は、Chrome / Edge 150 から scrollIntoView が Promise を返すようになり落ちた。
  */
-const SRC = new URL("../src", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
@@ -28,8 +29,10 @@ function badEffects(file: string, text: string): string[] {
     if (ts.isCallExpression(n) && /^(React\.)?use(Layout)?Effect$/.test(n.expression.getText(sf))) {
       const cb = n.arguments[0];
       if (cb && (ts.isArrowFunction(cb) || ts.isFunctionExpression(cb))) {
-        if (!ts.isBlock(cb.body)) out.push(`${at(cb)} 式の値をそのまま返している`);
-        else {
+        // `() => () => cleanup()` のように、関数をそのまま返す書き方は正しい
+        if (!ts.isBlock(cb.body)) {
+          if (!isFn(cb.body)) out.push(`${at(cb)} 式の値をそのまま返している`);
+        } else {
           const walk = (m: ts.Node) => {
             if (m !== cb && isFn(m)) return;
             if (ts.isReturnStatement(m) && m.expression && !isFn(m.expression)) out.push(`${at(m)} 関数以外を返している`);
@@ -57,6 +60,7 @@ describe("useEffect の後片付け", () => {
       "useEffect(() => { return 1; }, []);",
       "useEffect(() => { const t = setTimeout(f); return () => clearTimeout(t); }, []);",
       "useEffect(() => { el.focus(); }, []);",
+      "useEffect(() => () => unsubscribe(), []);",
     ].join("\n");
     expect(badEffects(join(SRC, "x.tsx"), code)).toHaveLength(2);
   });
