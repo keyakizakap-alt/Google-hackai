@@ -95,46 +95,67 @@ describe("Google 検索の部品", () => {
 });
 
 describe("検索で見つけたものの検査", () => {
+  const SALON_SRC = SOURCE;
+  const FLIGHT_SRC = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/flight";
+  const records = [
+    { text: "- 眉サロン ルミエール 長崎駅前店／長崎駅 徒歩3分／眉毛ワックス 5,500円\n- ブロウスタジオ ソラ／浜町／7,700円", urls: new Set([SALON_SRC]) },
+    { text: "- JAL 1840便／長崎空港 9:05 → 羽田空港 10:45／運賃 32,000円\n- ANA 664便／長崎空港 11:30 → 羽田空港 13:10／運賃 28,500円", urls: new Set([FLIGHT_SRC]) },
+  ];
   const beauty = (provider: Record<string, unknown>) => ({
     id: "brow-1", kind: "beauty" as const, category: "brow", title: "眉毛サロン",
     start: `${day}T11:00:00+09:00`, end: `${day}T12:00:00+09:00`, rationale: "r", requiresBooking: true,
-    provider: { name: "眉サロン ルミエール 長崎駅前店", ...provider },
+    provider: { name: "眉サロン ルミエール 長崎駅前店", sourceUrl: SALON_SRC, ...provider },
   });
+  const leg = { line: "JAL 1840便", from: "長崎空港", to: "羽田空港", departure: `${day}T09:05:00+09:00`, arrival: `${day}T10:45:00+09:00` };
   const flight = (route: Record<string, unknown>) => ({
     id: "fly", kind: "transit" as const, category: "flight", title: "飛行機で東京へ",
     start: `${day}T09:05:00+09:00`, end: `${day}T10:45:00+09:00`, rationale: "r", requiresBooking: true,
-    route: { from: "長崎空港", to: "羽田空港", summary: "JAL 1840便", source: "web" as const, sourceUrl: SOURCE, legs: [{ line: "JAL 1840便", from: "長崎空港", to: "羽田空港" }], ...route },
+    route: { from: "長崎空港", to: "羽田空港", summary: "JAL 1840便", source: "web" as const, sourceUrl: FLIGHT_SRC, legs: [leg], ...route },
   });
   const check = async (items: unknown[], withEvidence = true) => {
     const { validateTimeline } = await import("@/lib/agent/validate");
-    const evidence = withEvidence ? { text: "- 眉サロン ルミエール 長崎駅前店／眉毛ワックス 5,500円\n- JAL 1840便 長崎空港 9:05 → 羽田空港 10:45 運賃 32,000円", urls: new Set([SOURCE]) } : undefined;
-    return validateTimeline(items as never, event, [], Date.now(), undefined, evidence).errors.join(" ");
+    return validateTimeline(items as never, event, [], Date.now(), undefined, withEvidence ? { records } : undefined).errors.join(" ");
   };
 
-  it("検索結果にある店舗名・価格・出典なら通す", async () => {
-    expect(await check([beauty({ sourceUrl: SOURCE, priceJpy: 5500 })])).not.toMatch(/検索結果|出典|実際の店舗/);
+  it("検索結果にある店舗名・その店舗の価格・出典なら通す", async () => {
+    expect(await check([beauty({ priceJpy: 5500 })])).not.toMatch(/検索結果|出典|実際の店舗/);
   });
 
   it("検索結果にない店舗名・価格や、検索していない出典は差し戻す", async () => {
-    expect(await check([beauty({ sourceUrl: SOURCE, name: "架空のサロン" })])).toContain("検索結果に書かれていません");
-    expect(await check([beauty({ sourceUrl: SOURCE, priceJpy: 4800 })])).toContain("価格 4800 円");
+    expect(await check([beauty({ name: "架空のサロン" })])).toContain("書かれていません");
+    expect(await check([beauty({ priceJpy: 4800 })])).toContain("価格 4800 円");
     expect(await check([beauty({ sourceUrl: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/zzz" })])).toContain("出典");
-    expect(await check([beauty({ sourceUrl: SOURCE })], false)).toContain("出典");
+    expect(await check([beauty({})], false)).toContain("出典");
+  });
+
+  it("別の検索の出典や、同じ検索の別の店舗の価格を組み合わせたら差し戻す", async () => {
+    // サロンの名前に、飛行機の検索の出典を付けた
+    expect(await check([beauty({ sourceUrl: FLIGHT_SRC })])).toContain("書かれていません");
+    // ルミエールに、ブロウスタジオ ソラの価格を付けた
+    expect(await check([beauty({ priceJpy: 7700 })])).toContain("価格 7700 円");
   });
 
   it("出典のない店舗名は今までどおり差し戻す", async () => {
-    expect(await check([beauty({})])).toContain("実際の店舗");
+    expect(await check([beauty({ sourceUrl: undefined })])).toContain("実際の店舗");
   });
 
-  it("出典のない宿の価格は差し戻す", async () => {
-    const stay = { id: "hotel", kind: "stay", title: "宿", start: `${day}T21:00:00+09:00`, end: `${day}T23:00:00+09:00`, rationale: "r", requiresBooking: true, provider: { name: "どこかのホテル", priceJpy: 9000 } };
+  it("出典のない宿の価格は差し戻し、名前は予約サイトの案内に置き換える", async () => {
+    const stay = { id: "hotel", kind: "stay" as const, title: "宿", start: `${day}T21:00:00+09:00`, end: `${day}T23:00:00+09:00`, rationale: "r", requiresBooking: true, provider: { name: "どこかのホテル", priceJpy: 9000 } };
     expect(await check([stay])).toContain("宿の価格");
+    const { withoutUnsourcedNames } = await import("@/lib/agent/orchestrator");
+    expect(withoutUnsourcedNames({ ...stay, provider: { name: "どこかのホテル" } }).provider?.name).toBe("予約サイトで宿と空室を確認");
+    expect(withoutUnsourcedNames({ ...stay, provider: { name: "ホテル実在", sourceUrl: SALON_SRC } }).provider?.name).toBe("ホテル実在");
   });
 
-  it("便は検索結果にある便名・運賃だけを通す", async () => {
-    expect(await check([flight({ fareJpy: 32000 })])).not.toMatch(/検索結果|出典/);
-    expect(await check([flight({ legs: [{ line: "ANA 999便", from: "長崎空港", to: "羽田空港" }] })])).toContain("ANA 999便");
-    expect(await check([flight({ fareJpy: 9800 })])).toContain("運賃 9800 円");
+  it("便は、同じ行の便名・空港・発着時刻・運賃がそろったものだけを通す", async () => {
+    expect(await check([flight({ fareJpy: 32000 })])).not.toMatch(/検索結果|出典|便/);
+    expect(await check([flight({ legs: [] })])).toContain("便（legs）がありません");
+    expect(await check([flight({ legs: [{ ...leg, line: "ANA 999便" }] })])).toContain("ANA 999便");
+    expect(await check([flight({ legs: [{ ...leg, to: "成田空港" }] })])).toContain("空港・発着時刻");
+    expect(await check([flight({ legs: [{ ...leg, departure: `${day}T08:00:00+09:00` }] })])).toContain("空港・発着時刻");
+    expect(await check([flight({ legs: [{ ...leg, departure: undefined }] })])).toContain("出発時刻");
+    // JAL 1840便に、ANA 664便の運賃を付けた
+    expect(await check([flight({ fareJpy: 28500 })])).toContain("運賃 28500 円");
   });
 
   it("価格の書き方の違い（5,500円・5500・1万2000）を同じものとして照合する", async () => {

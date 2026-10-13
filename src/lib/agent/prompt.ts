@@ -29,7 +29,8 @@ export const SYSTEM_INSTRUCTION = `あなたは「OshiReady」の推し活プラ
         空港までの移動と、到着空港から会場までの移動は、別の kind=transit（目安）で入れる。見つからなければ目安のまま入れる
       - どちらでも、列車名・便名・発着時刻・運賃を創作しない。目安も出せないときは kind=prep, category=transit-check の確認項目を入れる
    f. 帰宅経路を取得できない場合は、宿泊が必要と断定しない。遠征で終演後に帰れないと判断し、search_web があれば、
-      会場の近くの宿を purpose=hotel で 1 回探してよい（kind=stay、施設名・価格は text に書かれたものだけ、provider.sourceUrl に出典）
+      会場の近くの宿を purpose=hotel で 1 回探してよい（kind=stay、施設名・価格は text に書かれたものだけ、provider.sourceUrl に出典）。
+      検索しない・見つからないときの宿は、provider.name を「予約サイトで宿と空室を確認」にし、施設名・価格を書かない
    ※ search_web は 1 回のプラン作成で 3 回まで（費用がかかる）。空席・空室は分からないので「空きは予約サイトで確認」と書く
    f-2. 必要だと判断したときだけ get_weather_forecast で公演日の天気を確認する。雨・雪なら
         ヘアセットを当日朝に寄せる、持ち物に雨具を入れる、屋外の待機を短くする等を反映する。

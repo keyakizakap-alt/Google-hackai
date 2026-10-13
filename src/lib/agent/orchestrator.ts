@@ -146,6 +146,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   let replacedLinks = 0;
   const items = [...ctx.submitted.items]
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+    .map(withoutUnsourcedNames)
     .map((it) => {
       if (!it.provider?.bookingUrl) return withTransitSearchLink(it, input.event);
       const safe = safeExternalUrl(it.provider.bookingUrl);
@@ -192,6 +193,13 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     ...usage,
   });
   return { plan, trace, usage, engine };
+}
+
+/** Google 検索で見つけたもの（出典あり）でない宿は、実在の施設名を出さず、予約サイトで探す案内にする */
+const GENERIC_STAY = "予約サイトで宿と空室を確認";
+export function withoutUnsourcedNames(item: TimelineItem): TimelineItem {
+  if (item.kind !== "stay" || !item.provider || item.provider.sourceUrl || item.provider.name === GENERIC_STAY) return item;
+  return { ...item, provider: { name: GENERIC_STAY, bookingUrl: item.provider.bookingUrl } };
 }
 
 /** 道具の使わせ方の指定。既定の AUTO では何も送らない（ANY は一部の環境で拒否されるため。config.ts 参照） */

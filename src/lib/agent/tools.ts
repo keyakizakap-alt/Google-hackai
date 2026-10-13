@@ -469,11 +469,11 @@ function checkSubmission(items: TimelineItem[], summary: string, ctx: AgentConte
 /** Google 検索の結果の使い方（AI への説明） */
 const WEB_HOW_TO_USE: Record<WebSearchPurpose, string> = {
   beauty_salon:
-    "店舗を入れるときは kind=beauty の provider.name に text に書かれた店舗名、provider.sourceUrl にその店舗が載っている sources の uri、価格が書かれていれば provider.priceJpy（検索時点の参考）を入れる。日時は search_beauty_salons の候補から選ぶ。空席は分からないので「予約サイトで空きを確認」と rationale に書く",
+    "店舗を入れるときは kind=beauty の provider.name に text に書かれた店舗名（1 行に 1 件。価格はその店舗の行のもの）、provider.sourceUrl にその店舗が載っている sources の uri、価格が書かれていれば provider.priceJpy（検索時点の参考）を入れる。日時は search_beauty_salons の候補から選ぶ。空席は分からないので「予約サイトで空きを確認」と rationale に書く",
   hotel:
     "宿を入れるときは kind=stay の provider.name に text に書かれた施設名、provider.sourceUrl に sources の uri、価格が書かれていれば provider.priceJpy（検索時点の参考）を入れる。空室は分からないので確認を促す",
   flight:
-    "便を入れるときは kind=transit, category=flight, route.source=web, route.sourceUrl に sources の uri、legs に text に書かれた便名（line）・出発空港・到着空港・発着時刻を入れる。運賃が書かれていれば route.fareJpy（検索時点の参考）。空席は分からないので確認を促す。空港までの移動は別の項目（目安）で入れる",
+    "便を入れるときは kind=transit, category=flight, route.source=web, route.sourceUrl に sources の uri、legs に text の同じ行に書かれた便名（line）・出発空港（from）・到着空港（to）・出発時刻（departure、必須）・到着時刻（arrival）を ISO 形式で入れる。運賃が書かれていれば route.fareJpy（検索時点の参考）。空席は分からないので確認を促す。空港までの移動は別の項目（目安）で入れる",
 };
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

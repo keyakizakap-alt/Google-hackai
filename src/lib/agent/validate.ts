@@ -24,41 +24,77 @@ export function validateSummary(summary: string): string[] {
     : [];
 }
 
-/** Google 検索で見つけたもの（この回の検索結果の本文と出典の URL）。名前・価格が検索結果にあるかの照合に使う */
+/**
+ * Google 検索で見つけたもの。検索 1 回ごとに、まとめた本文と出典の URL を組で持つ
+ * （別の検索の出典や価格を組み合わせて通さないため）
+ */
 export interface WebEvidence {
-  text: string;
-  urls: ReadonlySet<string>;
+  records: readonly { text: string; urls: ReadonlySet<string> }[];
 }
 
 /** Google 検索の結果を、検査で照合できる形にする */
 export function webEvidenceOf(records: readonly WebSearchRecord[] | undefined): WebEvidence | undefined {
   if (!records?.length) return undefined;
-  return { text: records.map((r) => r.text).join("\n"), urls: new Set(records.flatMap((r) => r.sources.map((s) => s.uri))) };
+  return { records: records.map((r) => ({ text: r.text, urls: new Set(r.sources.map((s) => s.uri)) })) };
 }
 
+/** JST の「9:05」の形（検索結果の時刻と照合する） */
+function jstClock(iso: string): string | undefined {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return undefined;
+  const j = new Date(t + 9 * 60 * MS_MIN);
+  return `${j.getUTCHours()}:${String(j.getUTCMinutes()).padStart(2, "0")}`;
+}
+const mentionsClock = (line: string, clock: string) => new RegExp(`(^|[^0-9])0?${clock}(?![0-9])`).test(line.normalize("NFKC"));
+
 /**
- * 検索で見つけた店舗・宿・便として書かれた項目の検査。
- * 出典の URL がこの回の検索結果にあり、名前・便名・価格が検索結果の本文に書かれているものだけを通す（AI に作らせない）。
+ * 検索で見つけた店舗・宿・便として書かれた項目の検査（AI に作らせない）。
+ * - 出典（sourceUrl）が、この回のどれかの検索結果の URL であること
+ * - 名前・便名が、その検索結果の本文の 1 行（1 件）に書かれていること
+ * - 価格・空港・発着時刻も、同じ行に書かれていること（別の店舗や便の値を付け替えさせない）
  */
 function checkWebSourced(it: TimelineItem, evidence: WebEvidence | undefined, errors: string[]) {
   const sourceUrl = it.route?.source === "web" ? it.route.sourceUrl : it.provider?.sourceUrl;
   const usesWeb = Boolean(it.provider?.sourceUrl) || it.route?.source === "web";
   if (!usesWeb) return;
   const fail = (why: string) => errors.push(`${it.id}: ${why}。search_web の結果に書かれたものだけを使うか、外してください`);
-  if (!evidence || !sourceUrl || !evidence.urls.has(sourceUrl)) return fail("出典（sourceUrl）が、この回の Google 検索の結果の URL ではありません");
-  const text = normalizeForMatch(evidence.text);
+  const record = sourceUrl ? evidence?.records.find((r) => r.urls.has(sourceUrl)) : undefined;
+  if (!record) return fail("出典（sourceUrl）が、この回の Google 検索の結果の URL ではありません");
+  const lines = record.text.split(/\n+/).filter((l) => l.trim());
   // 空や 1 文字の名前は、どの本文にも含まれてしまうので照合に使わない
-  const mentioned = (name: string) => normalizeForMatch(name).length >= 2 && text.includes(normalizeForMatch(name));
+  const inLine = (line: string, name: string) => normalizeForMatch(name).length >= 2 && normalizeForMatch(line).includes(normalizeForMatch(name));
+  const linesOf = (name: string) => lines.filter((l) => inLine(l, name));
+
   if (it.provider?.sourceUrl) {
     if (it.provider.slotId) fail("予約枠（slotId）は検索では分かりません");
-    if (!mentioned(it.provider.name)) fail(`「${it.provider.name}」は検索結果に書かれていません`);
-    if (it.provider.priceJpy !== undefined && !textMentionsPrice(evidence.text, it.provider.priceJpy)) fail(`価格 ${it.provider.priceJpy} 円は検索結果に書かれていません`);
+    const own = linesOf(it.provider.name);
+    if (own.length === 0) fail(`「${it.provider.name}」は、出典の検索結果に書かれていません`);
+    else if (it.provider.priceJpy !== undefined && !own.some((l) => textMentionsPrice(l, it.provider!.priceJpy!))) {
+      fail(`価格 ${it.provider.priceJpy} 円は、検索結果の「${it.provider.name}」の行に書かれていません`);
+    }
   }
   if (it.route?.source === "web") {
+    if (it.route.legs.length === 0) return fail("便（legs）がありません。検索結果の便名・空港・発着時刻を legs に入れてください");
+    const legLines: string[] = [];
     for (const leg of it.route.legs) {
-      if (!mentioned(leg.line)) fail(`便「${leg.line}」は検索結果に書かれていません`);
+      const own = linesOf(leg.line);
+      if (own.length === 0) {
+        fail(`便「${leg.line}」は、出典の検索結果に書かれていません`);
+        continue;
+      }
+      const airport = (name: string) => name.replace(/(空港|駅)$/, "");
+      const dep = leg.departure ? jstClock(leg.departure) : undefined;
+      const arr = leg.arrival ? jstClock(leg.arrival) : undefined;
+      // 便名と同じ行に、空港と発着時刻が書かれていること（出発時刻は必須）
+      const match = own.find(
+        (l) => inLine(l, airport(leg.from)) && inLine(l, airport(leg.to)) && dep !== undefined && mentionsClock(l, dep) && (arr === undefined || mentionsClock(l, arr)),
+      );
+      if (!match) fail(`便「${leg.line}」の空港・発着時刻が、検索結果の行と合いません（出発時刻 departure は必須）`);
+      else legLines.push(match);
     }
-    if (it.route.fareJpy !== undefined && !textMentionsPrice(evidence.text, it.route.fareJpy)) fail(`運賃 ${it.route.fareJpy} 円は検索結果に書かれていません`);
+    if (it.route.fareJpy !== undefined && !legLines.some((l) => textMentionsPrice(l, it.route!.fareJpy!))) {
+      fail(`運賃 ${it.route.fareJpy} 円は、検索結果の便の行に書かれていません`);
+    }
   }
 }
 
