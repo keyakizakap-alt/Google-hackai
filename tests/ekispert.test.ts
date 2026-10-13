@@ -5,7 +5,7 @@ vi.hoisted(() => {
   process.env.GEMINI_API_KEY = "test-key";
 });
 import { isAllowedTool, normalizeMcpSchema } from "@/lib/services/ekispert";
-import { ekispertRouteSearchUrl, safeExternalUrl } from "@/lib/safeUrl";
+import { ekispertRouteSearchUrl, safeExternalUrl, transitSearchUrl } from "@/lib/safeUrl";
 
 /**
  * 駅すぱあと MCP を使って乗り換えを調べられるようにするための確認。
@@ -89,6 +89,8 @@ vi.mock("@/lib/services/ekispert", async (importOriginal) => {
   return {
     ...actual,
     getEkispertStatus: () => "ready",
+    // 主系の呼び出しは失敗させ、待機系への切り替えを確かめる
+    callEkispertTool: async () => ({ error: "駅すぱあと MCP の呼び出しに失敗しました" }),
     getEkispertDeclarations: async () => ({
       declarations: [{ name: "ekispert_api_search_course", description: "[駅すぱあと API MCP] 経路探索", parametersJsonSchema: { type: "object", properties: { from: { type: "string" } }, required: ["from"] } }],
       nameMap: new Map([["ekispert_api_search_course", "api_search_course"]]),
@@ -142,21 +144,21 @@ describe("プラン作成と乗り換え案内", () => {
     expect(out.plan.summary).toBe("ok");
     expect(names(seen[0])).toContain("ekispert_api_search_course");
     // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない
-    expect(names(seen[0])).not.toContain("search_transit_route_mock");
+    expect(names(seen[0])).not.toContain("estimate_travel_time");
     const level1 = seen[1].config?.tools?.[0].functionDeclarations?.find((d) => d.name === "ekispert_api_search_course");
     expect(level1).toMatchObject({ parameters: { type: "OBJECT", required: ["from"] } });
     expect(level1).not.toHaveProperty("parametersJsonSchema");
     expect(names(seen[2])).not.toContain("ekispert_api_search_course");
     // 駅すぱあとを外したら、予備の道具を渡す
-    expect(names(seen[2])).toContain("search_transit_route_mock");
+    expect(names(seen[2])).toContain("estimate_travel_time");
   });
 
   it("経路を調べられなかった項目に、出発駅と到着駅を入れた検索リンクを付ける（帰りは逆向き）", async () => {
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
     const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "ekispert-link" });
     const link = (id: string) => out.plan.items.find((i) => i.id === id)?.provider?.bookingUrl;
-    expect(link("out")).toBe(ekispertRouteSearchUrl("長崎", "ドーム前千代崎"));
-    expect(link("back")).toBe(ekispertRouteSearchUrl("ドーム前千代崎", "長崎"));
+    expect(link("out")).toBe(transitSearchUrl("長崎", "ドーム前千代崎"));
+    expect(link("back")).toBe(transitSearchUrl("ドーム前千代崎", "長崎"));
     expect(out.trace[0].summary).toContain("駅すぱあとで調べます");
   });
 });
@@ -169,5 +171,23 @@ describe("駅すぱあとが断った理由のログ", () => {
     const e = Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {"error":"Unsupported protocol version","key":"secret-key-123"}'), { code: 400 });
     expect(failureReason(e)).toBe('{"error":"Unsupported protocol version","key":"[key]"}');
     vi.unstubAllEnvs();
+  });
+});
+
+describe("乗り換えのフェールオーバー（主系 → 待機系）", () => {
+  it("駅すぱあとの呼び出しが失敗したら、その場で所要時間の目安を fallback として返す", async () => {
+    const { executeTool } = await import("@/lib/agent/tools");
+    const ctx = { event, busy: [], now: Date.now(), rejectedSubmissions: 0 };
+    const out = await executeTool("ekispert_api_search_course", { from: "長崎" }, ctx);
+    expect(out.ok).toBe(true);
+    expect(out.summary).toContain("所要時間の目安に切り替えました");
+    expect(out.response).toMatchObject({ fallback: { available: true, minutes: expect.any(Array), departBy: expect.any(String) } });
+    expect(ctx).not.toHaveProperty("ekispertSucceeded", true);
+  });
+
+  it("Google マップの乗換検索のリンクは、出発駅・到着駅を入れて許可リストを通る", () => {
+    const url = transitSearchUrl("長崎", "ドーム前千代崎");
+    expect(url).toBe(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent("長崎駅")}&destination=${encodeURIComponent("ドーム前千代崎駅")}&travelmode=transit`);
+    expect(safeExternalUrl(url)).toBe(url);
   });
 });

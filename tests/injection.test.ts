@@ -152,7 +152,8 @@ describe("モデルが乗っ取られても、承認なしで予約には進ま�
         const url = it.provider?.bookingUrl;
         if (!url) continue;
         const isTransit = it.kind === "transit" || it.category === "transit-check";
-        expect(new URL(url).hostname, url).toBe(isTransit ? "roote.ekispert.net" : "beauty.hotpepper.jp");
+        if (isTransit) expect(url, url).toMatch(/^https:\/\/(www\.google\.com\/maps\/dir\/|roote\.ekispert\.net\/)/);
+        else expect(new URL(url).hostname, url).toBe("beauty.hotpepper.jp");
       }
       // 修正指示がモデルに届くときは、囲みの外に出られない形になっている
       if (a.channel === "instruction") {

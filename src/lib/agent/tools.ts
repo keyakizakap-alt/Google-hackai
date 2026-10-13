@@ -7,6 +7,7 @@ import { BEAUTY_GUIDELINES, searchSalonSlots } from "../services/beauty";
 import { callEkispertTool, EKISPERT_PREFIX } from "../services/ekispert";
 import { searchSpots, SPOT_CATEGORIES, SPOT_CATEGORY_LABEL, type SpotCategory } from "../services/spots";
 import { estimateCrowd } from "../services/transit";
+import { estimateTravel, type TravelEstimate } from "../services/travelEstimate";
 import { getForecast, jstDateKey, type Forecast } from "../signals/weather";
 import { jstAt, MS_DAY, MS_MIN, toJstIso } from "../time";
 import { validateSummary, validateTimeline } from "./validate";
@@ -105,12 +106,16 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
-    name: "search_transit_route_mock",
+    name: "estimate_travel_time",
     description:
-      "駅すぱあとが使えないときだけ使う。経路データが取得できないことを返す。具体的な列車・所要時間・運賃は生成しない。",
+      "出発駅から会場の駅までの所要時間の目安（分の幅・主な手段）と、arrive_by に間に合う出発の目安を返す。アプリ内の表による目安で、列車名・発着時刻・運賃は返さない。",
     parametersJsonSchema: {
       type: "object",
-      properties: { from_station: { type: "string" }, to_station: { type: "string" }, arrive_by: ISO },
+      properties: {
+        from_station: { type: "string", description: "出発駅（通常はユーザーの出発駅）" },
+        to_station: { type: "string", description: "会場の最寄り駅" },
+        arrive_by: { ...ISO, description: "会場の駅に着きたい時刻（ISO 8601）" },
+      },
       required: ["from_station", "to_station", "arrive_by"],
     },
   },
@@ -169,7 +174,7 @@ export const NATIVE_DECLARATIONS: FunctionDeclaration[] = [
                   to: { type: "string" },
                   summary: { type: "string" },
                   fareJpy: { type: "integer" },
-                  source: { type: "string", enum: ["ekispert", "mock"] },
+                  source: { type: "string", enum: ["ekispert", "estimate"], description: "ekispert は駅すぱあとで実際に調べた経路、estimate は estimate_travel_time などの所要時間の目安" },
                   legs: {
                     type: "array",
                     items: {
@@ -308,12 +313,15 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
           : "その時間で立ち寄れる場所は見つかりませんでした",
       };
     }
-    case "search_transit_route_mock": {
-      // 経路は作らず「調べられない」ことだけを返す。失敗ではなく想定どおりの結果なので、画面では ✗ にしない
+    case "estimate_travel_time": {
+      // 待機系：アプリ内の表で所要時間の目安を出す（駅すぱあとが使えないとき）。目安が出なくても失敗ではない
+      const est = travelEstimateFor(ctx, str(args.from_station, 40), str(args.to_station, 40), str(args.arrive_by, 40));
       return {
         ok: true,
-        response: { unavailable: true, note: "経路・所要時間・運賃は未取得。kind=prep, category=transit-check の確認項目を入れる（検索リンクはアプリが付ける）" },
-        summary: "乗り換えは、出発駅と会場の駅を入れた検索リンクでご案内します（時刻は決めていません）",
+        response: est.available
+          ? { ...est, howToUse: ESTIMATE_HOW_TO_USE }
+          : { ...est, howToUse: "目安を出せなかった。kind=prep, category=transit-check の確認項目を入れる（検索リンクはアプリが付ける）" },
+        summary: est.available ? `移動の目安：${est.summary.replace(/^.*?：/, "")}` : "乗り換えの目安を出せなかったため、検索リンクでご案内します",
       };
     }
     case "submit_timeline": {
@@ -362,8 +370,23 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
     default:
       if (name.startsWith(EKISPERT_PREFIX)) {
         const r = (await callEkispertTool(name, args)) as Record<string, unknown>;
-        if (!r.error && !r.isError) ctx.ekispertSucceeded = true;
-        return { ok: !r.error && !r.isError, response: r, summary: r.error ? "乗換案内に接続できませんでした" : "乗換案内でルートを調べました" };
+        if (!r.error && !r.isError) {
+          ctx.ekispertSucceeded = true;
+          return { ok: true, response: r, summary: "乗換案内でルートを調べました" };
+        }
+        // フェールオーバー：主系（駅すぱあと）が答えられなかったら、待機系（所要時間の目安）をその場で計算して渡す
+        const fallback = travelEstimateFor(ctx, ctx.event.homeStation, ctx.event.venueStation, defaultArriveBy(ctx.event));
+        return {
+          ok: true,
+          response: {
+            ...r,
+            fallback: fallback.available ? { ...fallback, howToUse: ESTIMATE_HOW_TO_USE } : undefined,
+            note: fallback.available
+              ? "駅すぱあとで調べられなかったため、fallback の所要時間の目安で組み立てる（route.source は estimate）"
+              : "駅すぱあとで調べられなかった。kind=prep, category=transit-check の確認項目を入れる",
+          },
+          summary: fallback.available ? "乗り換え案内に接続できなかったため、所要時間の目安に切り替えました" : "乗り換え案内に接続できなかったため、検索リンクでご案内します",
+        };
       }
       return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
   }
@@ -380,6 +403,21 @@ function checkSubmission(items: TimelineItem[], summary: string, ctx: AgentConte
 }
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 所要時間の目安の使い方（AI への説明） */
+const ESTIMATE_HOW_TO_USE =
+  "往路を kind=transit・route.source=estimate・legs は空・fareJpy なしで入れ、start は departBy ごろ、end は着きたい時刻にする。route.summary にこの目安の要約を書く。列車名・発着時刻・運賃は書かない";
+
+/** 会場の駅に着きたい時刻の既定（物販に並ぶなら開演 2 時間半前、そうでなければ 1 時間前） */
+function defaultArriveBy(event: OshiEvent): string {
+  return toJstIso(Date.parse(event.startAt) - (event.arriveEarlyForGoods ? 150 : 60) * MS_MIN);
+}
+
+/** 所要時間の目安。会場名からも都道府県を判定し、arrive_by が読めなければ既定の時刻を使う */
+function travelEstimateFor(ctx: AgentContext, from: string, to: string, arriveBy: string): TravelEstimate {
+  const at = Number.isFinite(Date.parse(arriveBy)) ? arriveBy : defaultArriveBy(ctx.event);
+  return estimateTravel({ from: from || ctx.event.homeStation, to: to || ctx.event.venueStation, venue: ctx.event.venue, arriveBy: at });
+}
 
 /** 差し戻しの理由を、画面に出せる短い文にする（内部の ID は省く） */
 function displayError(error: string): string {

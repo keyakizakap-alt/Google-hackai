@@ -24,7 +24,7 @@
 OshiReady は、ライブの日時から逆算して、美容・移動・宿泊・当日の準備のプランを作る AI エージェントです。
 
 1. **ライブを自動で見つける**：Google カレンダーを連携すると、予定からライブを見つけて登録します。チケットのスクリーンショットや当選メールの文章からも読み取れます
-2. **エージェントが自分で調べて逆算する**：Gemini の Function Calling で、空き時間・美容の推奨タイミング・施術の候補日時・会場周辺の混雑・公演日の天気・経路（駅すぱあと MCP）を、必要なものだけ自分で選んで調べ、準備のタイムラインを組み立てます
+2. **エージェントが自分で調べて逆算する**：Gemini の Function Calling で、空き時間・美容の推奨タイミング・施術の候補日時・会場周辺の混雑・公演日の天気・経路（駅すぱあと MCP。使えないときは所要時間の目安に自動で切り替え）を、必要なものだけ自分で選んで調べ、準備のタイムラインを組み立てます
 3. **人が承認するまで予約しない**：プランは必ず「承認待ち」で止まります。予約は、ユーザーが内容を確認して承認し、「予約する」を押したものだけ進みます
 4. **承認した後も見張る**：カレンダーに後から入った予定や公演日の天気を見張り、困ることが見つかればエージェントが見直し案を作ります。見直し案も承認待ちで止まり、今のプランや予約は勝手に変えません
 5. **当日まで寄り添う**：前日・直前のリマインド（アプリ内通知とカレンダー用ファイル）を端末の中だけで作ります
@@ -52,7 +52,7 @@ OshiReady は、ライブの日時から逆算して、美容・移動・宿泊�
 
 ### 使用技術
 
-Cloud Run / Gemini（Gemini API・Vertex AI、Function Calling・構造化出力）/ Cloud Build / Artifact Registry / Secret Manager / Cloud Logging / Google Calendar API / 駅すぱあと API MCP / 気象庁の天気予報データ / Next.js 16・React 19・TypeScript・Tailwind CSS v4
+Cloud Run / Gemini（Gemini API・Vertex AI、Function Calling・構造化出力）/ Cloud Build / Artifact Registry / Secret Manager / Cloud Logging / Google Calendar API / 駅すぱあと API MCP（使えないときは所要時間の目安に自動で切り替え）/ 気象庁の天気予報データ / Next.js 16・React 19・TypeScript・Tailwind CSS v4
 
 ### 補足
 
