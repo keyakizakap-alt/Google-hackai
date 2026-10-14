@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ホームを一画面に収める配置を使える広さ（横 1280px 以上かつ縦 740px 以上） */
+@custom-variant fit (@media (min-width: 80rem) and (min-height: 46.25rem));
+
 /*
  * OshiReady design tokens
  * コンセプト: 「推しに会う日のステージ照明」。ラベンダーの夜空 × 推しカラーのペンライト。
@@ -276,16 +279,15 @@ body {
   to { transform: translateX(-50%); }
 }
 
-/* ---------- Reveal on scroll ---------- */
+/* ---------- Reveal（表示したときにふわっと出す） ----------
+ * CSS のアニメーションだけで動かす。スクリプトが読み込まれる前や失敗したときでも、最後は必ず表示される
+ */
 .reveal {
-  opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
-  transition-delay: var(--delay, 0ms);
+  animation: reveal-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--delay, 0ms);
 }
-.reveal.is-in {
-  opacity: 1;
-  transform: none;
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(18px); }
 }
 
 /* 逆算タイムラインの線が上から描かれる */
@@ -373,8 +375,7 @@ body {
     transition-duration: 0.001ms !important;
   }
   .reveal {
-    opacity: 1;
-    transform: none;
+    animation: none;
   }
 }
 

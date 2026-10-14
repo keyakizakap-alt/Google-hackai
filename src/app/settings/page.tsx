@@ -5,6 +5,7 @@ import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ImagePlus, Radar, ShieldC
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
 
 /** 状態の札の色。つながっている＝緑、別の手段で代わりに動いている＝紫、未設定・準備中＝灰 */
@@ -40,11 +41,10 @@ export default function SettingsPage() {
   const googleStatus = googleConnected ? "連携中" : demoConnected ? "デモのカレンダーで連携中" : googleReady ? "未連携" : "準備中";
   const googleTone: Tone = googleConnected ? "ok" : demoConnected ? "alt" : "off";
   return (
-    <div className="space-y-5 px-1">
-      <div>
-        <h1 className="text-xl font-bold text-ink">設定</h1>
-        <p className="mt-1 text-sm text-ink-soft">連携サービスの状態とプライバシー設定です。</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Settings" title="設定">
+        連携サービスの状態とプライバシー設定です。
+      </PageHeader>
 
       <section className="card px-5">
         <ul className="divide-y divide-line">

@@ -118,7 +118,7 @@ export function AddToCalendarButton({ className = "", label = "カレンダー�
 }
 
 /** ホームの「リマインド」カード */
-export function RemindersCard() {
+export function RemindersCard({ className = "" }: { className?: string }) {
   const reminders = useReminders();
   const now = useNow(60_000);
   const [state, setState] = useState<ReturnType<typeof notificationState>>("off");
@@ -126,7 +126,7 @@ export function RemindersCard() {
     const t = setTimeout(() => setState(notificationState()), 0);
     return () => clearTimeout(t);
   }, []);
-  const list = now === null ? [] : upcomingReminders(reminders, now).slice(0, 5);
+  const list = now === null ? [] : upcomingReminders(reminders, now).slice(0, 2);
 
   const toggle = async () => {
     if (state === "on") {
@@ -150,14 +150,15 @@ export function RemindersCard() {
   };
 
   return (
-    <section className="card p-6" aria-labelledby="reminders">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className={`card p-5 ${className}`} aria-labelledby="reminders">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <p className="font-display text-sm italic text-mute">Reminders</p>
           <h2 id="reminders" className="flex items-center gap-2 text-[17px] font-bold text-ink">
             <BellRing className="h-5 w-5 text-lav-600" /> リマインド
           </h2>
         </div>
+        {/* アプリを閉じていても知らせてほしいときは、カレンダーに入れてもらう（スマホのカレンダーが通知する） */}
         {state !== "unsupported" && (
           <button
             type="button"
@@ -165,21 +166,19 @@ export function RemindersCard() {
             aria-checked={state === "on"}
             disabled={state === "denied"}
             onClick={() => void toggle()}
-            className={`min-h-[40px] rounded-full px-4 text-xs font-bold transition ${state === "on" ? "bg-night text-white" : "border border-line text-ink hover:bg-lav-50"} disabled:opacity-50`}
+            title="公演の前日・予約の前日と 2 時間前・まだ予約していないものを、このアプリを開いている間にお知らせします"
+            className={`min-h-[36px] shrink-0 rounded-full px-3.5 text-xs font-bold transition ${state === "on" ? "bg-night text-white" : "border border-line text-ink hover:bg-lav-50"} disabled:opacity-50`}
           >
-            {state === "on" ? "通知オン" : state === "denied" ? "通知がブロックされています" : "通知をオンにする"}
+            {state === "on" ? "通知オン" : state === "denied" ? "通知がブロック中" : "通知をオンにする"}
           </button>
         )}
       </div>
-      <p className="mt-1 text-xs leading-relaxed text-mute">
-        公演の前日・予約の前日と 2 時間前・まだ予約していないものをお知らせします。アプリを閉じていても知らせてほしいときは「カレンダーに追加」を使ってください（スマホのカレンダーが通知します）。
-      </p>
       {list.length === 0 ? (
-        <p className="mt-4 rounded-2xl bg-cloud px-4 py-6 text-center text-xs text-mute">これからのリマインドはありません</p>
+        <p className="mt-3 rounded-2xl bg-cloud px-4 py-3 text-center text-xs text-mute">これからのリマインドはありません</p>
       ) : (
-        <ul className="mt-4 divide-y divide-line">
+        <ul className="mt-2 divide-y divide-line">
           {list.map((r) => (
-            <li key={r.id} className="flex items-start gap-3 py-3">
+            <li key={r.id} className="flex items-start gap-3 py-2">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${r.kind === "todo" ? "bg-rose-400" : r.kind === "live" ? "bg-lav-600" : "bg-lav-300"}`} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink">{r.title}</p>
@@ -190,7 +189,8 @@ export function RemindersCard() {
           ))}
         </ul>
       )}
-      <AddToCalendarButton className="mt-4 min-h-[44px] w-full rounded-xl border border-line text-sm font-bold text-ink hover:bg-lav-50" />
+      <AddToCalendarButton className="mt-3 min-h-[40px] w-full rounded-xl border border-line text-sm font-bold text-ink hover:bg-lav-50" />
+      <p className="mt-1.5 text-center text-[10px] text-mute">アプリを閉じていても、カレンダーの通知で気づけます</p>
     </section>
   );
 }

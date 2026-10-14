@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type CSSProperties } from "react";
 import { CircleCheck, ExternalLink, Info, LoaderCircle, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { ItemIcon } from "@/components/icons";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore, type Reservation, type ReservationStatus } from "@/components/store";
 import { safeExternalUrl } from "@/lib/safeUrl";
 import { formatJst } from "@/lib/time";
@@ -181,10 +182,7 @@ export default function BookingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-display text-xl italic text-mute">Reservations</p>
-        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">予約の管理</h1>
-      </div>
+      <PageHeader eyebrow="Reservations" title="予約の管理" />
 
       <div className="flex items-start gap-3 rounded-2xl bg-lav-50 px-4 py-3 text-xs leading-relaxed text-ink-soft">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-lav-600" />
@@ -196,9 +194,9 @@ export default function BookingsPage() {
 
       <div className="grid grid-cols-3 gap-3">
         {(["todo", "reserved", "cancelled"] as const).map((s) => (
-          <div key={s} className="card p-4 text-center">
+          <div key={s} className="card px-2 py-4 text-center sm:p-4">
             <p className="font-display text-4xl font-semibold text-ink">{count(s)}</p>
-            <p className="text-[11px] font-bold text-mute">{STATUS[s].label}</p>
+            <p className="whitespace-nowrap text-[11px] font-bold text-mute">{STATUS[s].label}</p>
           </div>
         ))}
       </div>
@@ -210,7 +208,7 @@ export default function BookingsPage() {
             role="tab"
             aria-selected={filter === f.id}
             onClick={() => setFilter(f.id)}
-            className={`min-h-[44px] shrink-0 rounded-full px-5 text-sm transition ${filter === f.id ? "bg-night font-bold text-white" : "border border-line bg-white text-ink-soft hover:border-rose-300"}`}
+            className={`min-h-[44px] shrink-0 rounded-full px-4 text-[13px] transition sm:px-5 sm:text-sm ${filter === f.id ? "bg-night font-bold text-white" : "border border-line bg-white text-ink-soft hover:border-rose-300"}`}
           >
             {f.label}
           </button>

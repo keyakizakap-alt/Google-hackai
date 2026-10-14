@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, LoaderCircle, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { StageScene } from "@/components/StageScene";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
 import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
 import { GoogleG } from "@/components/brand";
@@ -71,32 +72,35 @@ function RegisteredEvents({ editingId, onEdit }: { editingId: string | null; onE
         {events.map((e, i) => {
           const active = e.id === event?.id;
           return (
-            <li key={e.id} className="pop-in flex flex-wrap items-center gap-3 py-3.5" style={{ "--delay": `${i * 70}ms` } as CSSProperties}>
+            <li key={e.id} className="pop-in flex items-center gap-2 py-3.5 sm:gap-3" style={{ "--delay": `${i * 70}ms` } as CSSProperties}>
               <button onClick={() => selectEvent(e.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={active}>
                 <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full font-display text-lg font-semibold ${active ? "bg-night text-white" : "bg-lav-50 text-lav-600"}`}>
                   {Number(e.startAt.slice(8, 10))}
                 </span>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate text-[15px] font-bold text-ink">{e.title}</span>
-                    {e.source === "calendar" && (
-                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">
-                        <GoogleG className="h-3 w-3" /> 自動取り込み
-                      </span>
-                    )}
-                    {e.source === "scan" && <span className="shrink-0 rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">スクショ・文章から</span>}
-                    {active && <span className="shrink-0 rounded-full bg-rose-400 px-2 py-0.5 text-[10px] font-bold text-white">選択中</span>}
-                  </span>
+                <span className="min-w-0 flex-1">
+                  <span className="line-clamp-2 text-[15px] font-bold leading-snug text-ink [word-break:auto-phrase]">{e.title}</span>
                   <span className="block truncate text-xs text-mute">
                     {e.artist} ・ {formatJst(e.startAt)}
                     {e.timeUnknown && "（時刻未定）"} ・ {e.venue}（{e.venueStation}）
                   </span>
+                  {/* 札は題名の下に並べる（狭い画面で題名が潰れないように） */}
+                  {(e.source === "calendar" || e.source === "scan" || active) && (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {e.source === "calendar" && (
+                        <span className="flex items-center gap-1 rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">
+                          <GoogleG className="h-3 w-3" /> 自動取り込み
+                        </span>
+                      )}
+                      {e.source === "scan" && <span className="rounded-full bg-lav-50 px-2 py-0.5 text-[10px] font-bold text-lav-600">スクショ・文章から</span>}
+                      {active && <span className="rounded-full bg-rose-400 px-2 py-0.5 text-[10px] font-bold text-white">選択中</span>}
+                    </span>
+                  )}
                 </span>
               </button>
-              <button onClick={() => onEdit(e.id)} className={`min-h-[40px] rounded-lg px-3 text-xs font-bold ${editingId === e.id ? "bg-lav-100 text-lav-700" : "text-ink-soft hover:bg-lav-50"}`}>
+              <button onClick={() => onEdit(e.id)} className={`min-h-[40px] shrink-0 rounded-lg px-3 text-xs font-bold ${editingId === e.id ? "bg-lav-100 text-lav-700" : "text-ink-soft hover:bg-lav-50"}`}>
                 編集
               </button>
-              <button onClick={() => { removeEvent(e.id); if (editingId === e.id) onEdit(null); }} className="grid h-10 w-10 place-items-center rounded-lg text-mute hover:bg-rose-50 hover:text-rose-500" aria-label={`${e.title} を削除`}>
+              <button onClick={() => { removeEvent(e.id); if (editingId === e.id) onEdit(null); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-mute hover:bg-rose-50 hover:text-rose-500" aria-label={`${e.title} を削除`}>
                 <Trash2 className="h-4 w-4" />
               </button>
             </li>
@@ -280,11 +284,9 @@ export default function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-display text-xl italic text-mute">Events</p>
-        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">イベント</h1>
-        <p className="mt-1 text-sm text-ink-soft">Google カレンダーからライブを自動で取り込めます。取り込んだ内容は画面上部のティッカーやホームにすぐ反映されます。</p>
-      </div>
+      <PageHeader eyebrow="Events" title="イベント">
+        Google カレンダーからライブを自動で取り込めます。取り込んだ内容は画面上部のティッカーやホームにすぐ反映されます。
+      </PageHeader>
 
       <RegisteredEvents editingId={targetId} onEdit={setEditingId} />
 

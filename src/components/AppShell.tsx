@@ -220,7 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <PendingBell light />
         </header>
 
-        <main className="mx-auto max-w-[1240px] px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-14 lg:pt-6">
+        <main className="mx-auto max-w-[1240px] px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-8 lg:pt-6">
           <Suspense>
             <CalendarConnectNotice />
           </Suspense>

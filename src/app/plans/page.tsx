@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BedDouble, ChevronRight, LoaderCircle, Plane, Search, Sparkles, TrainFront } from "lucide-react";
 import { useNow } from "@/components/motion";
 import { STATUS_LABEL } from "@/components/PlanSummary";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
 import type { OshiEvent, PlanEnvelope } from "@/lib/agent/types";
 import { formatJst, jstDayDiff } from "@/lib/time";
@@ -30,12 +31,10 @@ export default function PlansPage() {
   const past = events.filter(isPast).reverse();
 
   return (
-    <div className="space-y-6 px-1">
-      <div>
-        <p className="font-display text-lg italic text-mute">My Plans</p>
-        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">プラン一覧</h1>
-        <p className="mt-1 text-sm text-ink-soft">ライブごとに、準備プランをまとめて見られます。開くと、内容の確認・承認・予約に進めます。</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="My Plans" title="プラン一覧">
+        ライブごとに、準備プランをまとめて見られます。開くと、内容の確認・承認・予約に進めます。
+      </PageHeader>
 
       {events.length === 0 ? (
         <section className="card p-7 text-center">
@@ -65,7 +64,7 @@ function PlanGroup({ title, events, plans, empty, muted = false }: { title: stri
       {events.length === 0 ? (
         <p className="text-sm text-mute">{empty}</p>
       ) : (
-        <ul className="grid gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
           {events.map((e) => (
             <PlanRow key={e.id} event={e} envelope={plans[e.id]} muted={muted} />
           ))}
@@ -115,7 +114,7 @@ function PlanRow({ event, envelope: saved, muted }: { event: OshiEvent; envelope
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="truncate text-[15px] font-bold text-ink">{event.title}</p>
+          <p className="min-w-0 max-w-full truncate text-[15px] font-bold text-ink">{event.title}</p>
           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${planning ? "bg-lav-50 text-lav-700" : envelope ? (STATUS_TONE[envelope.status] ?? "bg-lav-50 text-lav-700") : "bg-white text-mute ring-1 ring-line"}`}>
             {planning ? "作成中" : envelope ? STATUS_LABEL[envelope.status] : "プラン未作成"}
           </span>

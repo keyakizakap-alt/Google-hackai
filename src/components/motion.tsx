@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 
-/** スクロールで要素が入ってきたらフェードアップさせる（reduced-motion では即表示） */
+/**
+ * 表示したときにフェードアップさせる（reduced-motion では即表示）。
+ * CSS のアニメーションだけで動かし、スクリプトの読み込みを待たずに必ず表示されるようにする
+ */
 export function Reveal({
   children,
   delay = 0,
@@ -10,25 +13,8 @@ export function Reveal({
   className = "",
   ...rest
 }: { children: ReactNode; delay?: number; as?: ElementType; className?: string } & Record<string, unknown>) {
-  const ref = useRef<HTMLElement>(null);
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setInView(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: "0px 0px -8% 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
   return (
-    <Tag ref={ref} className={`reveal ${inView ? "is-in" : ""} ${className}`} style={{ "--delay": `${delay}ms` } as CSSProperties} {...rest}>
+    <Tag className={`reveal ${className}`} style={{ "--delay": `${delay}ms` } as CSSProperties} {...rest}>
       {children}
     </Tag>
   );
