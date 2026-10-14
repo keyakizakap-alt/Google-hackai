@@ -396,7 +396,7 @@ function EmptyPlan() {
           </p>
           {planError && !planning && event && (
             <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs leading-relaxed text-rose-200" role="alert">
-              プランを作れませんでした：{planError}
+              {planError}
             </p>
           )}
           {planning ? (

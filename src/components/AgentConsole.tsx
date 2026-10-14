@@ -34,8 +34,8 @@ export function friendlyStep(name: string): string {
     submit_timeline: "最終チェック",
     plan: "準備",
     fallback: "切り替え",
-    model_fallback: "予備のAI",
-    compat_mode: "互換モード",
+    model_fallback: "切り替え",
+    compat_mode: "切り替え",
   };
   return map[name] ?? "安全確認";
 }

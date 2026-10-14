@@ -82,7 +82,9 @@ describe("errorResponse（設定不足）", () => {
     const body = (await res.json()) as { error: string; code: string };
     expect(body.code).toBe("CONFIG_MISSING");
     expect(body.error).not.toContain("SESSION_SECRET");
-    expect(body.error).toContain("準備がまだ整っていない");
+    expect(body.error).toContain("ただいまプランを作れない状態です");
+    // 開発者向けの言葉（管理者・設定・初期設定など）は出さない
+    expect(body.error).not.toMatch(/管理者|設定/);
   });
 });
 

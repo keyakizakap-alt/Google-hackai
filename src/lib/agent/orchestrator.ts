@@ -48,7 +48,7 @@ export class AgentUnavailableError extends Error {
    * Google の API が返す決まった名前・リクエストの項目名・例外の名前だけで、説明文や利用者のデータは含めない
    */
   readonly reason?: string;
-  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください", reason?: string) {
+  constructor(message = "AI が混み合っていて、プランを作れませんでした。少し時間をおいて、もう一度お試しください。登録したライブはそのまま残っています", reason?: string) {
     super(message);
     this.name = "AgentUnavailableError";
     this.reason = reason;
@@ -80,7 +80,7 @@ function isTimeout(e: unknown): boolean {
   return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError";
 }
 
-const SLOW_MESSAGE = "AI の応答に時間がかかり、制限時間内にプランを仕上げられませんでした。もう一度お試しください";
+const SLOW_MESSAGE = "プラン作りに時間がかかってしまいました。もう一度お試しください。登録したライブはそのまま残っています";
 
 /** 予備のモデルで作り直すのに最低限ほしい残り時間 */
 const MIN_TIME_FOR_FALLBACK_MS = 30_000;
@@ -146,7 +146,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
-        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
+        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、別の AI で作り直しています" });
       }
     }
   }
@@ -154,7 +154,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     if (engine === "gemini") {
       // 通信はできたが、決められた回数内にタイムラインを提出できなかった
       logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model });
-      throw new AgentUnavailableError("AI がプランを仕上げられませんでした。もう一度お試しください");
+      throw new AgentUnavailableError("うまくプランを仕上げられませんでした。もう一度お試しください。登録したライブはそのまま残っています");
     }
     await runRuleBasedPlanner(ctx, trace);
   }
@@ -296,14 +296,9 @@ function transitNote(status: EkispertStatus | "compat"): string {
   switch (status) {
     case "ready":
       return "乗り換えは駅すぱあとで調べます。使えなければ所要時間の目安に切り替えます";
-    case "unconfigured":
-      return "乗り換え案内のキーが未設定のため、乗り換えは所要時間の目安で計算します";
-    case "no_tools":
-      return "乗り換え案内につながりましたが、使える検索の機能が見つからなかったため、乗り換えは所要時間の目安で計算します";
-    case "compat":
-      return "AI がリクエストを受け付けなかったため乗り換え案内を外しました。乗り換えは所要時間の目安で計算します";
+    // 使えない理由（キーの設定・接続の状態）は開発者向けの情報なので画面には出さない（ログで確かめる）
     default:
-      return "乗り換え案内につながらなかったため、乗り換えは所要時間の目安で計算します（2 分後に再接続します）";
+      return "乗り換えは、所要時間の目安で計算します";
   }
 }
 
