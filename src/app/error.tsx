@@ -43,7 +43,6 @@ export default function ErrorPage({ error, retry }: { error: Error & { digest?: 
           ホームに戻る
         </Link>
       </div>
-      {error.digest && <p className="mt-4 text-[11px] text-mute">問い合わせ用の番号：{error.digest}</p>}
     </div>
   );
 }

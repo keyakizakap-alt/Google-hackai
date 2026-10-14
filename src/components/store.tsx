@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
 import { mergeCalendarEvents } from "@/lib/client/calendarSync";
-import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
+import { clampEventText, type BookingResult, type OshiEvent, type PlanEnvelope, type TimelineItem, type TraceStep } from "@/lib/agent/types";
 import type { WatchSignal } from "@/lib/agent/watch";
 import { isTransientPlanFailure, PLAN_RETRY_DELAY_MS } from "@/lib/planRetry";
 import { formatJst } from "@/lib/time";
@@ -127,12 +127,16 @@ const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
 const formatJstShort = (iso: string) => formatJst(iso);
 
-/** サーバーが説明を返さなかったとき（混み合い・再起動中など）に出す文。番号だけでは何が起きたか分からないため */
+/**
+ * サーバーが説明を返さなかったとき（混み合い・再起動中など）に出す文。
+ * 状態コードなどの開発者向けの情報は画面に出さず（ログに残る）、利用者が次に何をすればよいかと、データが消えていないことを伝える
+ */
 function fallbackError(status: number): string {
   return status >= 500
-    ? `サーバーに一時的につながりませんでした。少し待ってからもう一度お試しください（HTTP ${status}）`
-    : `通信に失敗しました（HTTP ${status}）`;
+    ? "ただいま混み合っています。少し時間をおいて、もう一度お試しください。登録したライブやプランはそのまま残っています"
+    : "うまく通信できませんでした。もう一度お試しください。登録したライブやプランはそのまま残っています";
 }
+const OFFLINE_ERROR = "インターネットにつながっていないようです。電波の良い場所で、もう一度お試しください。登録したライブやプランはそのまま残っています";
 
 /** サーバーが断ったときのエラー。状態コードと理由の種類を持たせ、やり直してよいかの判断に使う */
 class ApiError extends Error {
@@ -143,17 +147,23 @@ class ApiError extends Error {
 }
 
 async function api<T>(path: string, body?: unknown, action?: string): Promise<T> {
-  const res = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", ...(action ? { "x-oshiready-action": action } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "content-type": "application/json", ...(action ? { "x-oshiready-action": action } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    // 通信そのものができなかった（「Failed to fetch」のような英語の説明を画面に出さない）
+    throw new Error(OFFLINE_ERROR);
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const { error, reason } = json as { error?: string; reason?: string };
-    // AI に接続できなかった理由の種類（例: PERMISSION_DENIED）を添える。管理者がログを見なくても原因の見当を付けられるように
-    throw new ApiError(`${error ?? fallbackError(res.status)}${reason ? `（理由: ${reason}）` : ""}`, res.status, reason);
+    // 理由の種類（例: PERMISSION_DENIED）は画面に出さず、自動でやり直すかどうかの判断にだけ使う（原因はサーバーのログで確かめる）
+    throw new ApiError(error ?? fallbackError(res.status), res.status, reason);
   }
   return json as T;
 }
@@ -612,7 +622,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const generatePlanFn = useCallback(
     async (eventOverride?: OshiEvent, opts?: { auto?: boolean }) => {
-      const target = eventOverride ?? event;
+      // 以前に保存した長すぎる値（住所つきの会場名など）があっても、プラン作成で弾かれないように切りそろえる
+      const chosen = eventOverride ?? event;
+      const target = chosen ? clampEventText(chosen) : null;
       if (!target) {
         setError("先にイベントを登録してください");
         return false;
@@ -914,7 +926,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setEvents((prev) =>
           [
             ...prev,
-            ...fresh.map((d) => ({
+            ...fresh.map((d) => clampEventText({
               id: `scan-${d.key}`,
               artist: d.artist,
               title: d.title,
@@ -966,7 +978,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r))),
       removeReservation: (id) => setReservations((prev) => prev.filter((r) => r.id !== id)),
       clearLocalData: async () => {
-        await clearWorkspace();
+        try {
+          await clearWorkspace();
+        } catch {
+          // 保存領域が使えない・壊れているときに、押しても何も起きないように見えないよう知らせる
+          setError("この端末の保存データを削除できませんでした。ブラウザの設定から、このサイトのデータを削除してください");
+          return;
+        }
         setEvents([]);
         setActiveId(null);
         setReservations([]);

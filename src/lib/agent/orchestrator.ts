@@ -15,7 +15,26 @@ import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
 import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
-import { executeTool, NATIVE_DECLARATIONS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
+import { executeTool, NATIVE_DECLARATIONS, SUBMIT_RESERVE_MS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
+
+/** プランに入れられる項目の上限（PlanSchema と同じ） */
+const MAX_PLAN_ITEMS = 20;
+
+/**
+ * 項目が上限を超えたら、優先度の低いもの（準備 → 美容 → 宿）の、後ろの方から外す。
+ * 提出は 20 件まで通るが、自動で足す確認項目（乗り換えの確認・雨具）で 22 件になり、保存（署名）の時点で失敗していた
+ */
+export function capItems<T extends { id: string; kind: string }>(items: T[]): T[] {
+  if (items.length <= MAX_PLAN_ITEMS) return items;
+  const drop = new Set<string>();
+  for (const kind of ["prep", "beauty", "stay"]) {
+    for (const it of [...items].reverse()) {
+      if (items.length - drop.size <= MAX_PLAN_ITEMS) break;
+      if (it.kind === kind) drop.add(it.id);
+    }
+  }
+  return items.filter((i) => !drop.has(i.id)).slice(0, MAX_PLAN_ITEMS);
+}
 
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
@@ -25,6 +44,8 @@ export interface AgentRunInput {
   event: OshiEvent;
   busy: readonly BusyBlock[];
   calendarSource: "calendar" | "demo";
+  /** 連携しているが、一時的に予定を読めなかった（注意書きの言い方を変える） */
+  calendarUnavailable?: boolean;
   previous?: Plan;
   instruction?: string;
   requestId: string;
@@ -48,7 +69,7 @@ export class AgentUnavailableError extends Error {
    * Google の API が返す決まった名前・リクエストの項目名・例外の名前だけで、説明文や利用者のデータは含めない
    */
   readonly reason?: string;
-  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください", reason?: string) {
+  constructor(message = "AI が混み合っていて、プランを作れませんでした。少し時間をおいて、もう一度お試しください。登録したライブはそのまま残っています", reason?: string) {
     super(message);
     this.name = "AgentUnavailableError";
     this.reason = reason;
@@ -80,7 +101,7 @@ function isTimeout(e: unknown): boolean {
   return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError";
 }
 
-const SLOW_MESSAGE = "AI の応答に時間がかかり、制限時間内にプランを仕上げられませんでした。もう一度お試しください";
+const SLOW_MESSAGE = "プラン作りに時間がかかってしまいました。もう一度お試しください。登録したライブはそのまま残っています";
 
 /** 予備のモデルで作り直すのに最低限ほしい残り時間 */
 const MIN_TIME_FOR_FALLBACK_MS = 30_000;
@@ -115,6 +136,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   if (isGeminiConfigured()) {
     engine = "gemini";
     const deadline = Date.now() + DEADLINE_MS;
+    ctx.deadline = deadline;
     const models = modelCandidates();
     let compat = 0;
     for (let i = 0; i < models.length; i++) {
@@ -145,7 +167,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
-        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、予備のモデルで作り直します" });
+        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、別の AI で作り直しています" });
       }
     }
   }
@@ -153,7 +175,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     if (engine === "gemini") {
       // 通信はできたが、決められた回数内にタイムラインを提出できなかった
       logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model });
-      throw new AgentUnavailableError("AI がプランを仕上げられませんでした。もう一度お試しください");
+      throw new AgentUnavailableError("うまくプランを仕上げられませんでした。もう一度お試しください。登録したライブはそのまま残っています");
     }
     await runRuleBasedPlanner(ctx, trace);
   }
@@ -176,7 +198,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か確かめられないリンク ${replacedLinks} 件を、公式の検索ページに置き換えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  if (input.calendarUnavailable) warnings.unshift("カレンダーの予定を読み込めなかったため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  else if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
   if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
   if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
     warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
@@ -191,13 +214,14 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     event: input.event,
     summary: ctx.submitted.summary,
     decisions: ctx.submitted.decisions.slice(0, 6),
-    items,
+    items: capItems(items),
     // 検索候補（Search Suggestions）の表示が必要なため、検索で見つけたものを使ったときは検索結果を残す
     // プランが出典として使っている検索結果だけを残す（作り直しても、使っている出典は消えない。封筒も大きくしすぎない）
     ...(webSourced && usedSearches(ctx.webSearches, items).length ? { webSearches: usedSearches(ctx.webSearches, items) } : {}),
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
-    revision: input.previous ? input.previous.revision + 1 : 0,
+    // 版番号には上限（50）があるため、見直しが続いても超えないようにする
+    revision: input.previous ? Math.min(input.previous.revision + 1, 50) : 0,
     createdAt: new Date().toISOString(),
   };
   logger.info("agent.completed", {
@@ -295,14 +319,9 @@ function transitNote(status: EkispertStatus | "compat"): string {
   switch (status) {
     case "ready":
       return "乗り換えは駅すぱあとで調べます。使えなければ所要時間の目安に切り替えます";
-    case "unconfigured":
-      return "乗り換え案内のキーが未設定のため、乗り換えは所要時間の目安で計算します";
-    case "no_tools":
-      return "乗り換え案内につながりましたが、使える検索の機能が見つからなかったため、乗り換えは所要時間の目安で計算します";
-    case "compat":
-      return "AI がリクエストを受け付けなかったため乗り換え案内を外しました。乗り換えは所要時間の目安で計算します";
+    // 使えない理由（キーの設定・接続の状態）は開発者向けの情報なので画面には出さない（ログで確かめる）
     default:
-      return "乗り換え案内につながらなかったため、乗り換えは所要時間の目安で計算します（2 分後に再接続します）";
+      return "乗り換えは、所要時間の目安で計算します";
   }
 }
 
@@ -341,8 +360,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   for (let step = 0; step < config.gemini.maxSteps; step++) {
     if (Date.now() > deadline) throw new AgentDeadlineError();
     const started = Date.now();
-    // 残り 2 回になったら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
-    const mustSubmit = step >= config.gemini.maxSteps - 2;
+    // 残り 2 回になったら、または締め切りが近づいたら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
+    const mustSubmit = step >= config.gemini.maxSteps - 2 || deadline - Date.now() < SUBMIT_RESERVE_MS;
     const res = await ai.models.generateContent({
       model,
       contents,
@@ -373,15 +392,27 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     }
     contents.push(modelContent);
 
-    const responseParts: Part[] = [];
-    for (const call of calls) {
+    const run = async (call: (typeof calls)[number]) => {
       const name = call.name ?? "";
       const t0 = Date.now();
       const outcome = allowed.has(name)
         ? await executeTool(name, (call.args ?? {}) as Record<string, unknown>, ctx)
         : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
-      trace.push({ step: trace.length + 1, type: allowed.has(name) ? "tool" : "guardrail", name, ok: outcome.ok, latencyMs: Date.now() - t0, summary: outcome.summary });
-      logger.info("agent.tool", { requestId: input.requestId, tool: name, toolOk: outcome.ok, latencyMs: Date.now() - t0 });
+      return { call, name, outcome, latencyMs: Date.now() - t0 };
+    };
+    // 調べものの道具は互いに独立しているので、同時に実行する（Google 検索 3 件を順番に待つと、それだけで 1 分以上かかり時間切れになっていた）。
+    // 提出（submit_timeline）は、同じ回の調べものの結果（天気・検索の出典）を使って検証するため、そのあとで実行する
+    const research = calls.filter((c) => c.name !== "submit_timeline");
+    const submits = calls.filter((c) => c.name === "submit_timeline");
+    const results = await Promise.all(research.map(run));
+    for (const c of submits) results.push(await run(c));
+    const byCall = new Map(results.map((r) => [r.call, r]));
+    const responseParts: Part[] = [];
+    // 記録と応答は、AI が呼んだ順に並べる
+    for (const call of calls) {
+      const { name, outcome, latencyMs } = byCall.get(call)!;
+      trace.push({ step: trace.length + 1, type: allowed.has(name) ? "tool" : "guardrail", name, ok: outcome.ok, latencyMs, summary: outcome.summary });
+      logger.info("agent.tool", { requestId: input.requestId, tool: name, toolOk: outcome.ok, latencyMs });
       responseParts.push({ functionResponse: { id: call.id, name, response: outcome.response } });
     }
     contents.push({ role: "user", parts: responseParts });

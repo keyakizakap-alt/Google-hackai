@@ -117,7 +117,13 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
                 onChange={async (e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
-                  if (f) setImage(await toDataUrl(f));
+                  if (!f) return;
+                  try {
+                    setImage(await toDataUrl(f));
+                  } catch {
+                    // 大きすぎる写真・中身が対応していない形式（HEIC など）だと読み込めない。何も起きないように見えないよう知らせる
+                    setErr("この画像は読み込めませんでした。別の画像を選ぶか、チケットやメールの文章を貼り付けてください");
+                  }
                 }}
               />
             </label>

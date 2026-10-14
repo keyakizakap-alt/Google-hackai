@@ -4,7 +4,7 @@ import { appBaseUrl, ConfigError } from "./config";
 import { randomId } from "./crypto";
 import { GuardrailError } from "./agent/stateMachine";
 import { AgentUnavailableError } from "./agent/orchestrator";
-import { CalendarAuthError } from "./google/calendar";
+import { CalendarAuthError, CalendarBusyError } from "./google/calendar";
 import { logger, traceFromRequest } from "./logger";
 
 export function requestMeta(req: Request) {
@@ -137,16 +137,20 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
     // 秘密の値そのものは出さず、どの設定が足りないかだけを伝える
     logger.error("config.missing", { ...meta, errorCode: e.setting });
     return NextResponse.json(
-      { error: "アプリの準備がまだ整っていないため、プランを作れませんでした。しばらくしてからもう一度お試しください。（管理者の方へ：初期設定が足りていません）", code: "CONFIG_MISSING", requestId: meta.requestId },
+      { error: "ただいまプランを作れない状態です。ご不便をおかけしてすみません。時間をおいて、もう一度お試しください", code: "CONFIG_MISSING", requestId: meta.requestId },
       { status: 503 },
     );
+  }
+  if (e instanceof CalendarBusyError) {
+    logger.warn("calendar.busy", { ...meta, httpStatus: e.httpStatus });
+    return NextResponse.json({ error: e.message, code: "CALENDAR_BUSY" }, { status: 503 });
   }
   if (e instanceof CalendarAuthError) {
     logger.warn("calendar.auth", meta);
     return NextResponse.json({ error: e.message, code: "CALENDAR_AUTH" }, { status: 401 });
   }
   logger.error("unhandled", { ...meta, errorCode: e instanceof Error ? e.name : "unknown" });
-  return NextResponse.json({ error: "処理中にエラーが発生しました", requestId: meta.requestId }, { status: 500 });
+  return NextResponse.json({ error: "うまく処理できませんでした。もう一度お試しください。登録したライブや予約の記録はそのまま残っています", requestId: meta.requestId }, { status: 500 });
 }
 
 /**

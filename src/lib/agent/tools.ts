@@ -35,7 +35,16 @@ export interface AgentContext {
   webSearchCount?: number;
   /** ログをつなぐための ID */
   requestId?: string;
+  /** プラン作成全体の締め切り（epoch ミリ秒）。時間のかかる道具（Google 検索）は、これを超えないように打ち切る */
+  deadline?: number;
 }
+
+/** 提出（submit_timeline）と検証のために、最後に残しておく時間 */
+export const SUBMIT_RESERVE_MS = 40_000;
+/** これより残りが少ないときは Google 検索を始めない（検索だけで締め切りを使い切らないように） */
+const MIN_TIME_FOR_WEB_SEARCH_MS = 15_000;
+/** Google 検索 1 回の待ち時間の上限 */
+const WEB_SEARCH_TIMEOUT_MS = 25_000;
 
 /** Google 検索の道具の名前（設定で止めたときは AI に渡さない） */
 export const WEB_SEARCH_TOOL = "search_web";
@@ -241,6 +250,43 @@ const SubmitSchema = z.object({
 });
 
 const str = (v: unknown, max = 60) => (typeof v === "string" ? v.slice(0, max) : "");
+
+/**
+ * 提出された表示用の文字を、プランの項目の上限の長さに切る（中身の検査はこのあと SubmitSchema で行う）。
+ * AI には見えない上限（タイトル 60 文字など）で差し戻すと、1 回の呼び出しと時間をむだに使い、時間切れの原因になっていた。
+ * 例：ライブ本体の項目のタイトルに、80 文字までの公演名をそのまま入れる
+ */
+export function clampSubmission(args: Record<string, unknown>): Record<string, unknown> {
+  const cut = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : v);
+  const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
+  const list = (v: unknown) => (Array.isArray(v) ? v : undefined);
+  const items = list(args.items)?.map((raw) => {
+    const it = obj(raw);
+    if (!it) return raw;
+    const provider = obj(it.provider);
+    const route = obj(it.route);
+    return {
+      ...it,
+      title: cut(it.title, 60),
+      location: cut(it.location, 60),
+      rationale: cut(it.rationale, 300),
+      ...(provider ? { provider: { ...provider, name: cut(provider.name, 60) } } : {}),
+      ...(route ? { route: { ...route, summary: cut(route.summary, 200) } } : {}),
+    };
+  });
+  const decisions = list(args.decisions)?.slice(0, 6).map((raw) => {
+    const d = obj(raw);
+    return d ? { ...d, topic: cut(d.topic, 40), chosen: cut(d.chosen, 80), reason: cut(d.reason, 200), alternatives: list(d.alternatives)?.slice(0, 3).map((a) => cut(a, 60)) ?? d.alternatives } : raw;
+  });
+  const warnings = list(args.warnings)?.slice(0, 10).map((w) => cut(w, 200));
+  return {
+    ...args,
+    summary: cut(args.summary, 400),
+    ...(items ? { items } : {}),
+    ...(decisions ? { decisions } : {}),
+    ...(warnings ? { warnings } : {}),
+  };
+}
 const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
 export interface ToolOutcome {
@@ -365,8 +411,17 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
           summary: "Google 検索の回数の上限に達したため、これまでの結果で組み立てます",
         };
       }
+      // 締め切りが近いときは検索しない。提出の時間を残すため、検索は「残り時間 − 提出の分」までで打ち切る
+      const budget = ctx.deadline ? Math.min(WEB_SEARCH_TIMEOUT_MS, ctx.deadline - Date.now() - SUBMIT_RESERVE_MS) : WEB_SEARCH_TIMEOUT_MS;
+      if (budget < MIN_TIME_FOR_WEB_SEARCH_MS) {
+        return {
+          ok: true,
+          response: { available: false, reason: "時間が足りないため検索しませんでした。店舗名・便名・価格は書かず、これまでの結果か候補日時の案内で組み立て、すぐに submit_timeline で提出してください" },
+          summary: "時間が足りないため Google 検索は省き、これまでの結果で組み立てます",
+        };
+      }
       ctx.webSearchCount = (ctx.webSearchCount ?? 0) + 1;
-      const r = await searchWeb(purpose, query, { requestId: ctx.requestId });
+      const r = await searchWeb(purpose, query, { requestId: ctx.requestId, signal: AbortSignal.timeout(budget) });
       const what = { beauty_salon: "美容サロン", hotel: "宿", flight: "飛行機の便" }[purpose];
       if (!r.available || !r.record) {
         return {
@@ -388,7 +443,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       };
     }
     case "submit_timeline": {
-      const parsed = SubmitSchema.safeParse(args);
+      const parsed = SubmitSchema.safeParse(clampSubmission(args));
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
         // 形式の誤りを挟んだら「同じ指摘が続いた」とは数えない

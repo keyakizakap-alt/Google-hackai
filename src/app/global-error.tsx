@@ -29,12 +29,6 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
           <p style={{ fontSize: 14, lineHeight: 1.7, opacity: 0.8 }}>
             {stale ? "アプリが新しくなったため、読み込み直しています。" : "一時的な問題の可能性があります。読み込み直してください。"}登録したライブはこの端末に残っています。
           </p>
-          {!stale && (
-            <p style={{ fontSize: 11, opacity: 0.55, marginTop: 6 }}>
-              エラーの種類：{error.name || "Error"}
-              {error.digest ? `（番号 ${error.digest}）` : ""}
-            </p>
-          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 18 }}>
             <button type="button" onClick={() => retry()} style={{ minHeight: 44, padding: "0 16px", borderRadius: 12, border: 0, background: "#e88aa2", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
               もう一度表示する

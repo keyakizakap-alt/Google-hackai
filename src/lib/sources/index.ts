@@ -39,8 +39,11 @@ export async function describeSources() {
 export async function collectBusy(range: { from: number; to: number }): Promise<{ source: "calendar" | "demo"; sources: string[]; busy: BusyBlock[] }> {
   const connected = await connectedSources();
   if (connected.length === 0) return { source: "demo", sources: [], busy: [] };
-  const all = await Promise.all(connected.map((s) => s.fetchBusy(range)));
-  return { source: "calendar", sources: connected.map((s) => s.id), busy: sanitizeBusy(all.flat()) };
+  // 連携先の 1 つが失敗しても、ほかの連携先の予定は使う。すべて失敗したときだけ、最初の失敗を伝える
+  const settled = await Promise.allSettled(connected.map((s) => s.fetchBusy(range)));
+  const ok = settled.flatMap((r, i) => (r.status === "fulfilled" ? [{ id: connected[i].id, busy: r.value }] : []));
+  if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
+  return { source: "calendar", sources: ok.map((s) => s.id), busy: sanitizeBusy(ok.flatMap((s) => s.busy)) };
 }
 
 /** 連携中のすべてのカレンダーから、ライブ候補だけを集める（それ以外は各連携先ごとに即破棄） */

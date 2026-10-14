@@ -12,8 +12,8 @@ import type { FunctionDeclaration, Schema } from "@google/genai";
 export const MAX_COMPAT_LEVEL = 2;
 
 export const COMPAT_SUMMARY: Record<number, string> = {
-  1: "AI がリクエストを受け付けなかったため、考える深さの指定を外し、乗り換え案内の道具の定義を互換性の高い形式に変えて作り直します",
-  2: "AI がリクエストを受け付けなかったため、乗り換え案内と Google 検索を外し、道具の定義を互換性の高い形式に変えて作り直します",
+  1: "より確実な方法に切り替えて、プランを作り直しています",
+  2: "より確実な方法に切り替えて、プランを作り直しています（乗り換えは所要時間の目安、Google 検索は使いません）",
 };
 
 const TYPE_MAP: Record<string, string> = {

@@ -18,6 +18,23 @@ const isoDate = z
   .max(40)
   .refine((s) => Number.isFinite(Date.parse(s)), "ISO 8601 形式の日時が必要です");
 
+/** イベントの文字の項目の上限（OshiEventSchema と同じ）。読み取った値はこの長さに切ってから保存する */
+export const EVENT_TEXT_LIMITS = { artist: 60, title: 80, venue: 60, venueStation: 40 } as const;
+
+/**
+ * カレンダーやスクショから読み取った値を、上限の長さに切りそろえる。
+ * 場所欄に住所まで入っている会場などで上限を超えると、保存もプラン作成も「入力内容を確認してください」で通らなくなるため
+ */
+export function clampEventText<T extends { artist: string; title: string; venue: string; venueStation: string }>(e: T): T {
+  return {
+    ...e,
+    artist: e.artist.slice(0, EVENT_TEXT_LIMITS.artist),
+    title: e.title.slice(0, EVENT_TEXT_LIMITS.title),
+    venue: e.venue.slice(0, EVENT_TEXT_LIMITS.venue),
+    venueStation: e.venueStation.slice(0, EVENT_TEXT_LIMITS.venueStation),
+  };
+}
+
 export const OshiEventSchema = z.object({
   id: z.string().max(40),
   artist: z.string().min(1).max(60),

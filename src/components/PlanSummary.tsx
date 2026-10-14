@@ -50,7 +50,7 @@ export function PlanSummaryCard() {
           <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
           {planError && event ? (
             <>
-              <p className="mt-2 text-xs text-rose-500" role="alert">プランを作れませんでした：{planError}</p>
+              <p className="mt-2 text-xs text-rose-500" role="alert">{planError}</p>
               <button onClick={() => void generatePlan()} disabled={busy !== null} className="mt-3 min-h-[40px] rounded-xl border border-line bg-white px-4 text-xs font-bold text-ink hover:bg-lav-50">
                 もう一度作る
               </button>

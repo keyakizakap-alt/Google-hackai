@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { isGeminiConfigured } from "../config";
 import { createGenAI, geminiErrorInfo, generateWithFallback, thinkingConfig } from "../gemini";
 import { fenceText } from "../agent/fence";
+import { clampEventText } from "../agent/types";
 import { logger } from "../logger";
 import { redactText } from "../privacy/mask";
 import { toJstIso } from "../time";
@@ -87,7 +88,7 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
       const start = Date.parse(iso);
       if (!Number.isFinite(start) || start < now) continue;
       const known = matchVenue(`${r.venue} ${r.title}`);
-      events.push({
+      events.push(clampEventText({
         key: createHash("sha256").update(`scan:${r.title}:${iso}`).digest("base64url").slice(0, 12),
         artist: (r.artist || r.title).slice(0, 60),
         title: (r.title || r.artist).slice(0, 80),
@@ -97,7 +98,7 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
         timeUnknown: !hasTime,
         confidence: known ? "high" : "medium",
         source: "gemini",
-      });
+      }));
     }
     logger.info("scan.gemini", { requestId, latencyMs: Date.now() - started, itemCount: events.length, mode: input.image ? "image" : "text" });
     return { events, engine: "gemini" };

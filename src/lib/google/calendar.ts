@@ -32,6 +32,17 @@ export class CalendarAuthError extends Error {
   }
 }
 
+/** Calendar API が混み合っている・応答しない（認証の問題ではないので、再連携は促さない） */
+export class CalendarBusyError extends Error {
+  constructor(readonly httpStatus?: number) {
+    super("カレンダーが混み合っていて、予定を読み込めませんでした。少し時間をおいて、もう一度お試しください");
+    this.name = "CalendarBusyError";
+  }
+}
+
+/** Calendar API 1 回の待ち時間。止まったときに、リクエスト全体（最大 300 秒）を待たせないため */
+const FETCH_TIMEOUT_MS = 10_000;
+
 /**
  * 予定一覧（events.list）をページ送りしながら取得する共通処理。
  * 取得項目は fields で必要最小限に絞る。結果はメモリ上でだけ扱い、呼び出し側ですぐにマスク／破棄する。
@@ -58,22 +69,44 @@ export async function listEventPages<T>(opts: {
     });
     if (pageToken) params.set("pageToken", pageToken);
     const started = Date.now();
-    const res = await fetch(`${eventsEndpoint(opts.calendarId ?? "primary")}?${params}`, {
-      headers: { Authorization: `Bearer ${opts.accessToken}` },
-      cache: "no-store",
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${eventsEndpoint(opts.calendarId ?? "primary")}?${params}`, {
+        headers: { Authorization: `Bearer ${opts.accessToken}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch (e) {
+      logger.warn(`${opts.logEvent}.failed`, { errorCode: (e as Error).name, latencyMs: Date.now() - started });
+      throw new CalendarBusyError();
+    }
     logger.info(opts.logEvent, { httpStatus: res.status, latencyMs: Date.now() - started });
+    // Calendar API は回数の制限も 403 で返す。権限の拒否と分けて、混み合いとして扱う
+    if (res.status === 403 && (await isRateLimited(res))) throw new CalendarBusyError(res.status);
     if (res.status === 401 || res.status === 403 || res.status === 404) {
       throw new CalendarAuthError("カレンダーへのアクセスが拒否されました。", res.status);
     }
+    if (res.status === 429 || res.status >= 500) throw new CalendarBusyError(res.status);
     if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
     const body = (await res.json()) as { items?: T[]; nextPageToken?: string };
     items.push(...(body.items ?? []));
     pageToken = body.nextPageToken;
     if (!pageToken) break;
   }
-  if (pageToken) throw new Error("Calendar results exceeded the supported page limit");
+  // 予定がとても多いカレンダーでは、上限のページまでで打ち切る（日時の早い順なので、近い予定は含まれる）。
+  // 以前は例外にしていたため、取り込みもプラン作成も毎回失敗していた
+  if (pageToken) logger.warn(`${opts.logEvent}.truncated`, { itemCount: items.length });
   return items;
+}
+
+/** 403 の理由が回数の制限か（rateLimitExceeded / userRateLimitExceeded / quotaExceeded） */
+async function isRateLimited(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { error?: { errors?: { reason?: string }[] } };
+    return (body.error?.errors ?? []).some((e) => /rateLimitExceeded|quotaExceeded/i.test(e.reason ?? ""));
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -65,7 +65,7 @@ describe("AI の応答の速さ", () => {
   it("時間切れは「接続できない」ではなく「時間がかかった」と伝える", async () => {
     behavior = "timeout";
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
-    await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "slow" })).rejects.toThrow(/時間がかかり/);
+    await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "slow" })).rejects.toThrow(/時間がかかって/);
   });
 
   it("接続できないときは、理由の種類だけを添える（説明文やプロジェクト名は出さない）", async () => {

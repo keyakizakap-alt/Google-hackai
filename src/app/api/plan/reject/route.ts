@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const parsed = Body.safeParse(await readJson(req));
-    if (!parsed.success) return NextResponse.json({ error: "invalid body" }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "うまく受け取れませんでした。画面を読み込み直して、もう一度お試しください" }, { status: 400 });
     const env = verifyEnvelope(parsed.data.envelope);
     const history = advance(env.history, env.status, "rejected", "user");
     logger.info("plan.transition", { ...meta, planId: env.plan.id, fromStatus: env.status, toStatus: "rejected" });

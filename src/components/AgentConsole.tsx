@@ -4,13 +4,19 @@ import { useEffect, useState } from "react";
 import { CircleCheck, CircleX } from "lucide-react";
 import type { TraceStep } from "@/lib/agent/types";
 
+/**
+ * 文節の区切り（ゼロ幅スペース）を入れてつなぐ。word-break: keep-all と合わせて、文節の切れ目でだけ折り返す。
+ * 区切りを入れないと「確認していま／す」のように、文の途中で 1 文字だけ次の行に落ちることがあるため
+ */
+const phrases = (...parts: string[]) => parts.join("\u200b");
+
 const THINKING = [
-  ["空き時間", "カレンダーの空き時間を確認しています"],
-  ["美容の目安", "美容メニューのベストなタイミングを調べています"],
-  ["サロン", "空き時間に行けるサロンを探しています"],
-  ["混雑", "会場まわりの混み具合を予想しています"],
-  ["移動", "混雑を避けたルートを探しています"],
-  ["最終チェック", "予定どうしが重ならないか確認しています"],
+  ["空き時間", phrases("カレンダーの", "空き時間を", "確認しています")],
+  ["美容の目安", phrases("美容メニューの", "ベストな", "タイミングを", "調べています")],
+  ["サロン", phrases("空き時間に", "行ける", "サロンを", "探しています")],
+  ["混雑", phrases("会場まわりの", "混み具合を", "予想しています")],
+  ["移動", phrases("混雑を", "避けた", "ルートを", "探しています")],
+  ["最終チェック", phrases("予定どうしが", "重ならないか", "確認しています")],
 ] as const;
 
 /** 内部の処理名を、ユーザー向けの短いラベルに言い換える */
@@ -28,8 +34,8 @@ export function friendlyStep(name: string): string {
     submit_timeline: "最終チェック",
     plan: "準備",
     fallback: "切り替え",
-    model_fallback: "予備のAI",
-    compat_mode: "互換モード",
+    model_fallback: "切り替え",
+    compat_mode: "切り替え",
   };
   return map[name] ?? "安全確認";
 }
@@ -77,7 +83,8 @@ export function AgentConsole({ running, trace = [], compact = false, label, agen
               <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/40" />
             )}
             <span className="w-20 shrink-0 font-bold text-rose-300">{l.name}</span>
-            <span className={`min-w-0 text-white/65 ${l.state === "run" ? "caret" : ""}`}>{l.text}</span>
+            {/* 文節の区切りでだけ折り返す（区切りのない文や、幅が足りないときは途中でも折り返す） */}
+            <span className={`min-w-0 text-white/65 [overflow-wrap:anywhere] [word-break:keep-all] ${l.state === "run" ? "caret" : ""}`}>{l.text}</span>
           </li>
         ))}
       </ol>

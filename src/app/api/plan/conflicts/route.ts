@@ -7,7 +7,8 @@ import { collectBusy } from "@/lib/sources";
 
 const Body = z.object({
   items: z
-    .array(z.object({ id: z.string().max(40), start: z.string().max(40), end: z.string().max(40) }))
+    // 予約の ID は「res:ライブ:プラン:項目」とつなげるため長くなる（40 文字では足りず、全件が 400 で弾かれて重なりの確認が止まっていた）
+    .array(z.object({ id: z.string().max(160), start: z.string().max(40), end: z.string().max(40) }))
     .max(20),
 });
 

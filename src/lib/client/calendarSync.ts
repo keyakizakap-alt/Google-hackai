@@ -1,4 +1,4 @@
-import type { OshiEvent } from "../agent/types";
+import { clampEventText, type OshiEvent } from "../agent/types";
 import type { DetectedLiveEvent } from "../eventDetection/detect";
 
 /** カレンダー側でライブの日時が変わったもの */
@@ -44,7 +44,7 @@ export function mergeCalendarEvents(current: readonly OshiEvent[], detected: rea
     // 古い版の取り込み（日時もキーに含めていた）と同じライブなら、重複して追加しない
     const sameAsOld = current.some((e) => e.id.startsWith("cal-") && e.startAt === d.startAt && e.title === d.title);
     if (sameAsOld) continue;
-    next.set(id, {
+    next.set(id, clampEventText({
       id,
       artist: d.artist,
       title: d.title,
@@ -56,7 +56,7 @@ export function mergeCalendarEvents(current: readonly OshiEvent[], detected: rea
       arriveEarlyForGoods: profile.arriveEarlyForGoods,
       source: "calendar",
       timeUnknown: d.timeUnknown,
-    });
+    }));
     added += 1;
   }
 
