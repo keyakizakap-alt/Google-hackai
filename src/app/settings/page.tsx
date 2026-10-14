@@ -206,7 +206,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1 basis-40">
             <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              推しの画像を選ぶと、ホームのチケットの背景に表示します。右のスイッチをオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
+              推しの画像を選ぶと、ホームのチケットの背景に表示します。「この端末に保存」をオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
               共用のパソコンではオフにするか、使い終わったら削除してください。
             </p>
           </div>
@@ -231,7 +231,7 @@ export default function SettingsPage() {
               <p className="text-sm font-bold text-ink">{event.artist} の推し画像</p>
               <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
                 同じアーティストのイベントすべてと、ホームのチケットの背景に表示されます。画像はこの端末の外には送りません。
-                {persistImages ? "この端末に保存されるので、次に開いたときも表示されます。" : "上のスイッチをオンにすると、次に開いたときも表示されます。"}
+                {persistImages ? "この端末に保存されるので、次に開いたときも表示されます。" : "「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
               </p>
             </>
           ) : (
