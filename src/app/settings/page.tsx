@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ImagePlus, Radar, ShieldCheck, TrainFront } from "lucide-react";
+import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ImagePlus, Radar, ShieldCheck, TrainFront, Trash2 } from "lucide-react";
+import { StageScene } from "@/components/StageScene";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
@@ -205,7 +206,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1 basis-40">
             <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              推しの画像を選ぶと、ホームのチケットの背景に表示します。右のスイッチをオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
+              推しの画像を選ぶと、ホームのチケットの背景に表示します。「この端末に保存」をオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
               共用のパソコンではオフにするか、使い終わったら削除してください。
             </p>
           </div>
@@ -223,54 +224,53 @@ export default function SettingsPage() {
           </button>
           </span>
         </div>
-        {/* 推し画像を選ぶ（ホームのチケットにも表示される。推し＝アーティストごとに 1 枚） */}
-        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-line px-4 py-3">
-          <span className="relative grid h-16 w-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-night text-white/60">
+        {/* 推し画像を選ぶ（ホームのチケットにも表示される。推し＝アーティストごとに 1 枚）。イベント画面から移した、大きな見本つきの欄 */}
+        <div className="mt-4 rounded-xl border border-line p-4">
+          {event ? (
+            <>
+              <p className="text-sm font-bold text-ink">{event.artist} の推し画像</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+                同じアーティストのイベントすべてと、ホームのチケットの背景に表示されます。画像はこの端末の外には送りません。
+                {persistImages ? "この端末に保存されるので、次に開いたときも表示されます。" : "「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-ink-soft">
+              ライブを登録すると、推しごとに画像を設定できます。
+              <Link href="/events" className="ml-1 font-bold text-lav-700 underline-offset-2 hover:underline">
+                ライブを登録
+              </Link>
+            </p>
+          )}
+          <div className="relative mt-3 h-44 overflow-hidden rounded-2xl sm:h-56">
             {eventImage ? (
               // eslint-disable-next-line @next/next/no-img-element -- blob URL（端末の中だけ）
-              <img src={eventImage} alt={event ? `${event.artist} の推し画像` : "推し画像"} className="h-full w-full object-cover" />
+              <img src={eventImage} alt={event ? `${event.artist} の推し画像` : "推し画像"} className="kenburns h-full w-full object-cover" />
             ) : (
-              <ImageIcon className="h-5 w-5" />
-            )}
-          </span>
-          <div className="min-w-0 flex-1 basis-40 text-xs text-ink-soft">
-            {event ? (
-              <>
-                <p className="font-bold text-ink">{event.artist} の推し画像</p>
-                <p className="mt-0.5">ホームのチケットの背景に表示します。{persistImages ? "この端末に保存されます。" : "保存がオフのときは、画面を閉じると消えます。"}</p>
-              </>
-            ) : (
-              <p>
-                ライブを登録すると、推しごとに画像を設定できます。
-                <Link href="/events" className="ml-1 font-bold text-lav-700 underline-offset-2 hover:underline">
-                  ライブを登録
-                </Link>
-              </p>
+              <StageScene className="relative h-full w-full" crowd={18} />
             )}
           </div>
-          {event && (
-            <div className="flex shrink-0 gap-2">
-              <label className="btn-primary flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white">
-                <ImagePlus className="h-4 w-4" />
-                {eventImage ? "画像を変更" : "画像を選ぶ"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) setEventImage(f);
-                  }}
-                />
-              </label>
-              {eventImage && (
-                <button type="button" onClick={() => setEventImage(null)} className="min-h-[40px] rounded-lg border border-line bg-white px-3 text-xs text-ink-soft hover:bg-lav-50">
-                  外す
-                </button>
-              )}
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className={`flex min-h-[44px] items-center gap-1.5 rounded-xl border border-line px-4 text-xs font-bold text-ink-soft ${event ? "cursor-pointer hover:bg-lav-50" : "cursor-not-allowed opacity-50"}`}>
+              <ImagePlus className="h-4 w-4" /> {eventImage ? "画像を変更" : "推し画像を選ぶ"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={!event}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) setEventImage(f);
+                }}
+              />
+            </label>
+            {eventImage && (
+              <button type="button" onClick={() => setEventImage(null)} className="flex min-h-[44px] items-center gap-1 rounded-xl px-3 text-xs text-mute hover:text-ink">
+                <Trash2 className="h-4 w-4" /> 外す
+              </button>
+            )}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
           <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです（画面を閉じると消えます）"}</span>
