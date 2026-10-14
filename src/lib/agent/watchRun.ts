@@ -24,8 +24,9 @@ export async function watchPlan(env: PlanEnvelope, now = Date.now()): Promise<{
   let busy = null;
   if (upcoming.length) {
     const to = Math.max(...upcoming.map((i) => Date.parse(i.end))) + 60_000;
-    const fetched = await collectBusy({ from: now, to });
-    busy = fetched.source === "calendar" ? withoutEventBlock(fetched.busy, plan.event.startAt) : null;
+    // カレンダーが読めなくても、天気などほかの見張りは続ける（予定の重なりは「調べなかった」扱い）
+    const fetched = await collectBusy({ from: now, to }).catch(() => null);
+    busy = fetched?.source === "calendar" ? withoutEventBlock(fetched.busy, plan.event.startAt) : null;
   }
   const area = venueArea(plan.event.venue, plan.event.venueStation);
   const forecast = area && Date.parse(plan.event.startAt) > now ? await getForecast(area, plan.event.startAt, now) : undefined;

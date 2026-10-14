@@ -1,4 +1,6 @@
 import "server-only";
+import { CalendarAuthError } from "../google/calendar";
+import { logger } from "../logger";
 import { collectBusy } from "../sources";
 import { redactText } from "../privacy/mask";
 import { MS_DAY } from "../time";
@@ -37,7 +39,18 @@ export async function generatePlan(params: {
 
   // 2) カレンダー取得（メモリ上でマスク済み Busy に変換）
   // すべての連携カレンダーから「時間帯だけ」を集める（共通の安全チェックを通過済み）
-  const fetched = await collectBusy({ from: Date.now(), to: Math.max(Date.now() + 30 * MS_DAY, Date.parse(event.startAt) + MS_DAY) });
+  // カレンダーが一時的に読めない（混み合い・応答なし）ときも、プランは作る。重なりは確認できていないと注意書きで伝える。
+  // 認証が切れたときは、再連携してもらう必要があるのでそのまま伝える
+  let fetched: Awaited<ReturnType<typeof collectBusy>>;
+  let calendarUnavailable = false;
+  try {
+    fetched = await collectBusy({ from: Date.now(), to: Math.max(Date.now() + 30 * MS_DAY, Date.parse(event.startAt) + MS_DAY) });
+  } catch (e) {
+    if (e instanceof CalendarAuthError) throw e;
+    logger.warn("plan.calendar_unavailable", { requestId: params.requestId, errorCode: (e as Error).name });
+    fetched = { source: "demo", sources: [], busy: [] };
+    calendarUnavailable = true;
+  }
   const { source } = fetched;
   // ライブ本体の予定（カレンダーから取り込んだイベント自身）は「埋まり」として扱わない
   const busy = withoutEventBlock(fetched.busy, event.startAt);
@@ -47,6 +60,7 @@ export async function generatePlan(params: {
     event,
     busy,
     calendarSource: source,
+    calendarUnavailable,
     previous: previous?.plan ?? params.basePlan,
     instruction: params.instruction ? redactText(params.instruction) : undefined,
     requestId: params.requestId,

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { redactText } from "../privacy/mask";
 import { toJstIso } from "../time";
+import { clampEventText } from "../agent/types";
 import { matchVenue } from "./venues";
 
 /** 検出に使うカレンダー予定（メモリ上のみ・候補以外は即破棄） */
@@ -82,7 +83,7 @@ export function extractByRules(c: LiveCandidate): DetectedLiveEvent {
   const locationName = c.location.split(/[,，、\n]/)[0]?.trim() ?? "";
   const idx = title.search(ARTIST_STOP);
   const artist = (idx > 0 ? title.slice(0, idx) : title.split(/\s+/)[0]).trim().replace(/[\s:：\-–—]+$/, "");
-  return {
+  return clampEventText({
     key: c.key,
     artist: artist || title.slice(0, 20),
     title: title.slice(0, 80),
@@ -92,5 +93,5 @@ export function extractByRules(c: LiveCandidate): DetectedLiveEvent {
     timeUnknown: c.timeUnknown,
     confidence: venue ? "high" : "medium",
     source: "rules",
-  };
+  });
 }

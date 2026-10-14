@@ -3,6 +3,7 @@ import { isGeminiConfigured } from "../config";
 import { createGenAI, geminiErrorInfo, generateWithFallback, thinkingConfig } from "../gemini";
 import { fenceJson } from "../agent/fence";
 import { logger } from "../logger";
+import { clampEventText } from "../agent/types";
 import { extractByRules, type DetectedLiveEvent, type LiveCandidate } from "./detect";
 import { matchVenue } from "./venues";
 
@@ -85,7 +86,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
       if (!c || !r.isLiveEvent) continue;
       const rules = extractByRules(c);
       const known = matchVenue(`${r.venue} ${c.location} ${c.summary}`);
-      out.push({
+      out.push(clampEventText({
         key: c.key,
         artist: (r.artist || rules.artist).slice(0, 60),
         title: (r.title || rules.title).slice(0, 80),
@@ -95,7 +96,7 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
         timeUnknown: c.timeUnknown,
         confidence: known ? "high" : "medium",
         source: "gemini",
-      });
+      }));
     }
     logger.info("detect.gemini", { requestId, latencyMs: Date.now() - started, itemCount: out.length, model });
     return out;

@@ -4,7 +4,7 @@ import { appBaseUrl, ConfigError } from "./config";
 import { randomId } from "./crypto";
 import { GuardrailError } from "./agent/stateMachine";
 import { AgentUnavailableError } from "./agent/orchestrator";
-import { CalendarAuthError } from "./google/calendar";
+import { CalendarAuthError, CalendarBusyError } from "./google/calendar";
 import { logger, traceFromRequest } from "./logger";
 
 export function requestMeta(req: Request) {
@@ -140,6 +140,10 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
       { error: "ただいまプランを作れない状態です。ご不便をおかけしてすみません。時間をおいて、もう一度お試しください", code: "CONFIG_MISSING", requestId: meta.requestId },
       { status: 503 },
     );
+  }
+  if (e instanceof CalendarBusyError) {
+    logger.warn("calendar.busy", { ...meta, httpStatus: e.httpStatus });
+    return NextResponse.json({ error: e.message, code: "CALENDAR_BUSY" }, { status: 503 });
   }
   if (e instanceof CalendarAuthError) {
     logger.warn("calendar.auth", meta);

@@ -6,7 +6,7 @@ import { ImagePlus, LoaderCircle, RefreshCw, Sparkles, Trash2 } from "lucide-rea
 import { StageScene } from "@/components/StageScene";
 import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
-import { BEAUTY_LABEL, BEAUTY_SERVICES, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
+import { BEAUTY_LABEL, BEAUTY_SERVICES, EVENT_TEXT_LIMITS, OshiEventSchema, type BeautyService, type OshiEvent } from "@/lib/agent/types";
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { ScanImportButton } from "@/components/ScanImport";
@@ -118,10 +118,11 @@ function EventForm({ editing, onSaved }: { editing: OshiEvent | null; onSaved: (
   const { saveEvent, generatePlan, busy, profile, setProfile, aiReady, notify, autoPlan } = useStore();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
-    artist: editing?.artist ?? "",
-    title: editing?.title ?? "",
-    venue: editing?.venue ?? "",
-    venueStation: editing?.venueStation ?? "",
+    // 以前に保存した長すぎる値は、入力欄の上限に切ってから表示する（そのままだと保存できず、理由も分からないため）
+    artist: (editing?.artist ?? "").slice(0, EVENT_TEXT_LIMITS.artist),
+    title: (editing?.title ?? "").slice(0, EVENT_TEXT_LIMITS.title),
+    venue: (editing?.venue ?? "").slice(0, EVENT_TEXT_LIMITS.venue),
+    venueStation: (editing?.venueStation ?? "").slice(0, EVENT_TEXT_LIMITS.venueStation),
     date: editing?.startAt.slice(0, 10) ?? "",
     time: editing?.startAt.slice(11, 16) ?? "18:00",
     homeStation: editing?.homeStation ?? profile.homeStation,

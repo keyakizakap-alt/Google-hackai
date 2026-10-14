@@ -63,6 +63,10 @@ jsonPayload.message="agent.gemini.failed"
 
 自動で作るプラン（ライブを登録した直後など）は、時間切れ・混雑・通信の切断のような一時的な失敗なら、画面側で 3 秒待って 1 回だけ自動でやり直す。権限・設定の誤り（上の表の `SERVICE_DISABLED` など）はやり直さない。
 
+## Google カレンダーが読めないとき（`calendar.busy`）
+
+`jsonPayload.message="calendar.busy"` は、Calendar API が混み合っている（回数の制限・5xx）か、10 秒以内に応答しなかったときに出る。利用者には「少し時間をおいて」と伝え、プラン作成はカレンダーの予定なしで続ける（プランに「カレンダーの予定を読み込めなかったため、重なりは確認できていません」と注意書きが付く。ログは `plan.calendar_unavailable`）。予定がとても多いカレンダーは、上限のページまでで打ち切って続ける（`*.truncated`）。
+
 ## ライブの取り込みが遅い・`detect.gemini.failed` が出るとき
 
 `jsonPayload.message="detect.gemini.failed"` で、`apiStatus` が `DEADLINE_EXCEEDED`（`httpStatus` 504）なら、AI の読み取りが時間切れになっている。読み取りは再試行・予備のモデルも含めて全体 35 秒で打ち切り、ルールで読み取った結果で取り込みを続けるので、ライブの登録は止まらない（アーティスト名・会場名の精度が少し下がる）。続くときは `GEMINI_THINKING_LEVEL` が `LOW`（既定）か `MINIMAL` になっているか確かめる。

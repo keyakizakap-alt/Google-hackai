@@ -17,6 +17,25 @@ import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
 import { executeTool, NATIVE_DECLARATIONS, SUBMIT_RESERVE_MS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
 
+/** プランに入れられる項目の上限（PlanSchema と同じ） */
+const MAX_PLAN_ITEMS = 20;
+
+/**
+ * 項目が上限を超えたら、優先度の低いもの（準備 → 美容 → 宿）の、後ろの方から外す。
+ * 提出は 20 件まで通るが、自動で足す確認項目（乗り換えの確認・雨具）で 22 件になり、保存（署名）の時点で失敗していた
+ */
+export function capItems<T extends { id: string; kind: string }>(items: T[]): T[] {
+  if (items.length <= MAX_PLAN_ITEMS) return items;
+  const drop = new Set<string>();
+  for (const kind of ["prep", "beauty", "stay"]) {
+    for (const it of [...items].reverse()) {
+      if (items.length - drop.size <= MAX_PLAN_ITEMS) break;
+      if (it.kind === kind) drop.add(it.id);
+    }
+  }
+  return items.filter((i) => !drop.has(i.id)).slice(0, MAX_PLAN_ITEMS);
+}
+
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
 import type { OshiEvent, Plan, TimelineItem, TraceStep, WebSearchRecord } from "./types";
@@ -25,6 +44,8 @@ export interface AgentRunInput {
   event: OshiEvent;
   busy: readonly BusyBlock[];
   calendarSource: "calendar" | "demo";
+  /** 連携しているが、一時的に予定を読めなかった（注意書きの言い方を変える） */
+  calendarUnavailable?: boolean;
   previous?: Plan;
   instruction?: string;
   requestId: string;
@@ -177,7 +198,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か確かめられないリンク ${replacedLinks} 件を、公式の検索ページに置き換えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  if (input.calendarUnavailable) warnings.unshift("カレンダーの予定を読み込めなかったため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  else if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
   if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
   if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
     warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
@@ -192,13 +214,14 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     event: input.event,
     summary: ctx.submitted.summary,
     decisions: ctx.submitted.decisions.slice(0, 6),
-    items,
+    items: capItems(items),
     // 検索候補（Search Suggestions）の表示が必要なため、検索で見つけたものを使ったときは検索結果を残す
     // プランが出典として使っている検索結果だけを残す（作り直しても、使っている出典は消えない。封筒も大きくしすぎない）
     ...(webSourced && usedSearches(ctx.webSearches, items).length ? { webSearches: usedSearches(ctx.webSearches, items) } : {}),
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
-    revision: input.previous ? input.previous.revision + 1 : 0,
+    // 版番号には上限（50）があるため、見直しが続いても超えないようにする
+    revision: input.previous ? Math.min(input.previous.revision + 1, 50) : 0,
     createdAt: new Date().toISOString(),
   };
   logger.info("agent.completed", {

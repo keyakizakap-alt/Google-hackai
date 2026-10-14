@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { artistKey, clearImages, deleteImage, downscale, loadAllImages, readPersistPref, saveImage, writePersistPref } from "@/lib/client/imageStore";
 import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/workspaceStore";
 import { mergeCalendarEvents } from "@/lib/client/calendarSync";
-import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
+import { clampEventText, type BookingResult, type OshiEvent, type PlanEnvelope, type TimelineItem, type TraceStep } from "@/lib/agent/types";
 import type { WatchSignal } from "@/lib/agent/watch";
 import { isTransientPlanFailure, PLAN_RETRY_DELAY_MS } from "@/lib/planRetry";
 import { formatJst } from "@/lib/time";
@@ -622,7 +622,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const generatePlanFn = useCallback(
     async (eventOverride?: OshiEvent, opts?: { auto?: boolean }) => {
-      const target = eventOverride ?? event;
+      // 以前に保存した長すぎる値（住所つきの会場名など）があっても、プラン作成で弾かれないように切りそろえる
+      const chosen = eventOverride ?? event;
+      const target = chosen ? clampEventText(chosen) : null;
       if (!target) {
         setError("先にイベントを登録してください");
         return false;
@@ -924,7 +926,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setEvents((prev) =>
           [
             ...prev,
-            ...fresh.map((d) => ({
+            ...fresh.map((d) => clampEventText({
               id: `scan-${d.key}`,
               artist: d.artist,
               title: d.title,
@@ -976,7 +978,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r))),
       removeReservation: (id) => setReservations((prev) => prev.filter((r) => r.id !== id)),
       clearLocalData: async () => {
-        await clearWorkspace();
+        try {
+          await clearWorkspace();
+        } catch {
+          // 保存領域が使えない・壊れているときに、押しても何も起きないように見えないよう知らせる
+          setError("この端末の保存データを削除できませんでした。ブラウザの設定から、このサイトのデータを削除してください");
+          return;
+        }
         setEvents([]);
         setActiveId(null);
         setReservations([]);

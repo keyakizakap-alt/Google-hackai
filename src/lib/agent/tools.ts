@@ -250,6 +250,43 @@ const SubmitSchema = z.object({
 });
 
 const str = (v: unknown, max = 60) => (typeof v === "string" ? v.slice(0, max) : "");
+
+/**
+ * 提出された表示用の文字を、プランの項目の上限の長さに切る（中身の検査はこのあと SubmitSchema で行う）。
+ * AI には見えない上限（タイトル 60 文字など）で差し戻すと、1 回の呼び出しと時間をむだに使い、時間切れの原因になっていた。
+ * 例：ライブ本体の項目のタイトルに、80 文字までの公演名をそのまま入れる
+ */
+export function clampSubmission(args: Record<string, unknown>): Record<string, unknown> {
+  const cut = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : v);
+  const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
+  const list = (v: unknown) => (Array.isArray(v) ? v : undefined);
+  const items = list(args.items)?.map((raw) => {
+    const it = obj(raw);
+    if (!it) return raw;
+    const provider = obj(it.provider);
+    const route = obj(it.route);
+    return {
+      ...it,
+      title: cut(it.title, 60),
+      location: cut(it.location, 60),
+      rationale: cut(it.rationale, 300),
+      ...(provider ? { provider: { ...provider, name: cut(provider.name, 60) } } : {}),
+      ...(route ? { route: { ...route, summary: cut(route.summary, 200) } } : {}),
+    };
+  });
+  const decisions = list(args.decisions)?.slice(0, 6).map((raw) => {
+    const d = obj(raw);
+    return d ? { ...d, topic: cut(d.topic, 40), chosen: cut(d.chosen, 80), reason: cut(d.reason, 200), alternatives: list(d.alternatives)?.slice(0, 3).map((a) => cut(a, 60)) ?? d.alternatives } : raw;
+  });
+  const warnings = list(args.warnings)?.slice(0, 10).map((w) => cut(w, 200));
+  return {
+    ...args,
+    summary: cut(args.summary, 400),
+    ...(items ? { items } : {}),
+    ...(decisions ? { decisions } : {}),
+    ...(warnings ? { warnings } : {}),
+  };
+}
 const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
 export interface ToolOutcome {
@@ -406,7 +443,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       };
     }
     case "submit_timeline": {
-      const parsed = SubmitSchema.safeParse(args);
+      const parsed = SubmitSchema.safeParse(clampSubmission(args));
       if (!parsed.success) {
         ctx.rejectedSubmissions++;
         // 形式の誤りを挟んだら「同じ指摘が続いた」とは数えない
