@@ -16,6 +16,7 @@ import { StageScene } from "@/components/StageScene";
 import { RegenerateButton } from "@/components/RegenerateButton";
 import { STATUS_LABEL } from "@/components/PlanSummary";
 import { useNow } from "@/components/motion";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
 import type { TimelineItem } from "@/lib/agent/types";
 import { formatJst, relativeDayLabel } from "@/lib/time";
@@ -143,11 +144,13 @@ function ItemCard({ item, eventStart, selectable, checked, onToggle, index = 0 }
 function RevisePanel() {
   const { chat, busy, revisePlan, envelope } = useStore();
   const [text, setText] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
-  // 何も返さない（Chrome / Edge 150 から scrollIntoView は Promise を返し、後片付けとして呼ばれて落ちるため）
+  const listRef = useRef<HTMLDivElement>(null);
+  // 会話の枠の中だけを一番下まで送る。scrollIntoView だとページごと動き、開いた直後に画面の下まで飛ばされるため
+  // 何も返さない（React は戻り値を後片付けとして呼ぶため）
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [chat.length]);
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chat.length, busy]);
   const canRevise = Boolean(envelope && ["pending_approval", "approved", "rejected"].includes(envelope.status));
   const suggestions = ["ヘアカットは4日前にしたい", "物販はなし、開演1時間前着で", "サロンは土日の午前がいい"];
   const submit = async (t: string) => {
@@ -162,7 +165,7 @@ function RevisePanel() {
         AIに相談して直す
       </h2>
       <p className="mt-1 text-xs text-mute">AI への要望はここから。修正後も必ずあなたの承認待ちに戻ります。</p>
-      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+      <div ref={listRef} className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
         {chat.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <p
@@ -179,7 +182,6 @@ function RevisePanel() {
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> AIが組み直しています…
           </p>
         )}
-        <div ref={endRef} />
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {suggestions.map((s) => (
@@ -376,11 +378,8 @@ function EmptyPlan() {
   const planning = busy === "planning";
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-display text-xl italic text-mute">Countdown Plan</p>
-        <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[32px]">推し活プラン</h1>
-      </div>
-      <div className="grid overflow-hidden rounded-[22px] bg-night text-white shadow-float lg:grid-cols-[1.1fr_1fr]">
+      <PageHeader eyebrow="Countdown Plan" title="推し活プラン" />
+      <div className="grid overflow-hidden rounded-[22px] bg-night text-white shadow-float lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="relative min-h-[260px]">
           <StageScene className="absolute inset-0" />
           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
@@ -465,7 +464,7 @@ export default function PlanPage() {
   };
 
   return (
-    <div className="space-y-5 px-1">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Link href="/plans" className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-lav-700 hover:underline">
@@ -477,7 +476,7 @@ export default function PlanPage() {
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
             {plan.generatedBy.engine === "gemini" ? "AI が作成" : "かんたん提案で作成"}
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-ink sm:text-[28px]">{plan.event.title} への準備プラン</h1>
+          <h1 className="mt-1 text-2xl font-bold text-ink [word-break:auto-phrase] sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <StatusStepper status={status} />
@@ -498,7 +497,7 @@ export default function PlanPage() {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           <section className="card p-5">
             <p className="text-[15px] leading-relaxed text-ink">{plan.summary}</p>

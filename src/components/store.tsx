@@ -126,6 +126,13 @@ const DEFAULT_PROFILE: Profile = { homeStation: "長崎", beautyServices: ["brow
 const byDate = (a: OshiEvent, b: OshiEvent) => Date.parse(a.startAt) - Date.parse(b.startAt);
 const formatJstShort = (iso: string) => formatJst(iso);
 
+/** サーバーが説明を返さなかったとき（混み合い・再起動中など）に出す文。番号だけでは何が起きたか分からないため */
+function fallbackError(status: number): string {
+  return status >= 500
+    ? `サーバーに一時的につながりませんでした。少し待ってからもう一度お試しください（HTTP ${status}）`
+    : `通信に失敗しました（HTTP ${status}）`;
+}
+
 async function api<T>(path: string, body?: unknown, action?: string): Promise<T> {
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
@@ -134,7 +141,11 @@ async function api<T>(path: string, body?: unknown, action?: string): Promise<T>
     cache: "no-store",
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
+  if (!res.ok) {
+    const { error, reason } = json as { error?: string; reason?: string };
+    // AI に接続できなかった理由の種類（例: PERMISSION_DENIED）を添える。管理者がログを見なくても原因の見当を付けられるように
+    throw new Error(`${error ?? fallbackError(res.status)}${reason ? `（理由: ${reason}）` : ""}`);
+  }
   return json as T;
 }
 

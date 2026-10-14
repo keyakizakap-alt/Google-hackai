@@ -7,12 +7,15 @@
 
 ## ダッシュボードに登録するもの
 
+> 2026-10-13 更新：Google 検索で実在の店・宿・便を探す機能、移動手段の飛行機、ライブごとのプラン一覧、エラー画面の修正を、説明文・図・動作確認の方法・台本・Zenn 記事に反映済み。**公開中の Cloud Run に反映するには再デプロイが必要**（反映前に動画を撮ると、画面と説明文が合わなくなる）。
+
 | # | 提出物 | 必須 | 状態 | 用意するもの・やること |
 |---|---|---|---|---|
 | 1 | GitHub リポジトリの連携 | 必須 | 要操作 | ダッシュボードから GitHub App をインストールし、`keyakizakap-alt/Google-hackai` を連携する（非公開のままでよい） |
-| 2 | デプロイした URL | 必須 | 要操作（課金あり） | Cloud Run の URL（`https://oshiready-…run.app`）。手順は [提出チェックリスト](../submission-checklist.md) の 1〜3。Vercel のプレビュー URL は使わない |
-| 3 | プロジェクトの説明文 | 必須 | **下書きあり** | [project-description.md](project-description.md) をそのまま貼れる形にしてある |
+| 2 | デプロイした URL | 必須 | **公開済み** | https://google-hackai-791850738177.asia-northeast1.run.app （Cloud Run・サービス名 `google-hackai`・asia-northeast1）。手順は [提出チェックリスト](../submission-checklist.md) の 1〜3。Vercel のプレビュー URL は使わない |
+| 3 | プロジェクトの説明文 | 必須 | **下書きあり** | [project-description.md](project-description.md) の「概要（300 字以内）」と「説明（800 字以内）」をそのまま貼る |
 | 4 | システムアーキテクチャ図 | 必須 | **用意済み** | [`docs/architecture.png`](../architecture.png)（3840×2160） |
+| 4b | プロジェクトのイメージ（任意・カバー画像など） | 任意 | **用意済み** | [`docs/project-image.png`](../project-image.png)（3840×2160）。本番の画面を撮影した合成画像（表示中のプランは見本のデータ）。元は `docs/project-image.html` |
 | 5 | デモ動画（約 3 分・YouTube） | 必須 | **台本あり**・撮影は要操作 | [demo-video-script.md](demo-video-script.md) の台本で画面を録画し、YouTube に公開（「限定公開」可かは公式で確認）して URL を登録する |
 | 6 | 動作確認の方法 | 審査員が試すために必要 | **下書きあり** | [how-to-try.md](how-to-try.md)。審査員はログインなしで「デモのカレンダーで試す」から試せる |
 | 7 | Zenn 記事 | 任意 | **下書きあり** | [zenn-article.md](zenn-article.md)。投稿する場合はカテゴリ「Idea」で公開し、URL を登録する |
@@ -23,7 +26,7 @@
 | 条件 | 状態 | 根拠 |
 |---|---|---|
 | Google Cloud の実行プロダクトを使う | Cloud Run | `Dockerfile`・`cloudbuild.yaml`・`scripts/cloud-run-bootstrap.sh` |
-| Google Cloud の AI 技術を使う | Gemini（Vertex AI 経由も可） | `@google/genai`、`src/lib/agent/orchestrator.ts` |
+| Google Cloud の AI 技術を使う | Gemini（Vertex AI 経由も可。Function Calling・構造化出力・Google 検索によるグラウンディング） | `@google/genai`、`src/lib/agent/orchestrator.ts`、`src/lib/services/webSearch.ts` |
 | 日本語で記載する | 対応済み | README・ドキュメント・画面の文言 |
 | OSS のライセンス情報を明記する | 対応済み | README の「ライセンス」、`LICENSE` |
 | どこを開発し、どこがモックかを説明する | 対応済み | README の「開発した範囲とモックの箇所」 |

@@ -24,6 +24,8 @@ bash scripts/cloud-run-bootstrap.sh
 
 - 手動で未来の公演、出発駅、希望する美容メニューを登録してプランを生成する。
 - 画面の生成方法が「Gemini」であり、ツールログと提案が表示されることを確認する。
+- 遠征のライブでは、Google 検索で見つけた店・便に「Google 検索の出典」の札が付く。Google 検索は Gemini と同じ呼び出し先を使うため、追加の API の有効化やシークレットは不要（既定でオン。止めるときは環境変数 `GEMINI_WEB_SEARCH=off`。検索 1 回ごとに費用がかかる）。
+- ナビの「プラン」で、ライブごとのプラン一覧が出ることを確認する。
 - AI 接続エラーの場合は 503 として表示される。Cloud Run ログで `agent.gemini.failed` のエラー種別を確認する。モデルの提供リージョンと利用権限を検証する。
 - 予約は承認して「予約する」を押した項目だけ。既定はデモ予約（`BOOKING_PROVIDERS=demo`）で、実在の店舗には届かず、決済もしない。部品が対応しない項目は予約サイトへ案内する。
 
@@ -33,6 +35,7 @@ bash scripts/cloud-run-bootstrap.sh
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-enable-calendar.sh
 ```
 
@@ -42,6 +45,7 @@ Google連携はログイン必須にしない。審査員は手動登録から�
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-doctor.sh
 ```
 
@@ -52,13 +56,14 @@ API の有効化・直近のビルド・リビジョンの起動状況・設定�
 
 ```bash
 export OSHIREADY_PROJECT_ID='your-project-id'
-SA="$(gcloud run services describe oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')"
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
+SA="$(gcloud run services describe "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" --format='value(spec.template.spec.serviceAccountName)')"
 # まだ無ければ作る（値は画面にもシェル履歴にも出さない）
 gcloud secrets describe oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" >/dev/null 2>&1 || \
   openssl rand -base64 48 | gcloud secrets create oshiready-session-secret --data-file=- --replication-policy=automatic --project "$OSHIREADY_PROJECT_ID"
 gcloud secrets add-iam-policy-binding oshiready-session-secret --project "$OSHIREADY_PROJECT_ID" \
   --member="serviceAccount:${SA}" --role='roles/secretmanager.secretAccessor'
-gcloud run services update oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
+gcloud run services update "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
   --update-secrets=SESSION_SECRET=oshiready-session-secret:latest
 ```
 
@@ -82,6 +87,7 @@ bash scripts/cloud-run-demo-mode.sh off     # 終わったら必ず戻す
 ## 4. 提出前のゲート
 
 - Cloud Run の公開URLで、登録 → 実Gemini生成 → 修正 → 承認 → 予約サイト案内 → 予約メモ → 更新後の復元を確認。
+- プラン一覧（ナビの「プラン」）、Google 検索の出典の札、プラン画面から予約画面へ移ってもエラー画面にならないことを確認。
 - Google カレンダーの実アカウントで、予定取得・連携解除を確認。駅すぱあと MCP は実キーを設定した場合にのみ実結果を主張する。
 - PC とスマートフォンでボタン、エラー、待機表示を確認。
 - コードをデフォルトブランチへ反映し、提出物のURL、アーキテクチャ図、約3分の動画を揃える。

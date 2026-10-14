@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>OshiReady Project Image</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  /* プロジェクトのイメージ（1920×1080）。画面写真は本番（Cloud Run）を撮影したもの。表示しているプランは見本のデータ */
+  :root{
+    --ink:#211f3f; --night:#1b1935; --night-2:#2a2654; --lav-200:#ddd5f1; --lav-300:#c5bbe6; --lav-500:#7a71b5;
+    --rose:#e0679a; --rose-300:#f4a7c4; --gold:#e7c77a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px}
+  body{
+    font-family:"Zen Kaku Gothic New",sans-serif;color:#fff;overflow:hidden;position:relative;
+    background:
+      radial-gradient(900px 620px at 4% 0%, rgba(157,147,207,.42) 0%, transparent 62%),
+      radial-gradient(760px 560px at 98% 104%, rgba(224,103,154,.38) 0%, transparent 60%),
+      linear-gradient(160deg, var(--night) 0%, var(--night-2) 100%);
+  }
+  /* ステージのライト */
+  .beam{position:absolute;top:-200px;width:220px;height:1500px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0));transform:rotate(18deg);filter:blur(2px)}
+  .b1{left:640px}.b2{left:880px;opacity:.55;transform:rotate(-14deg)}
+  .dots{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1.5px);background-size:28px 28px;mask-image:linear-gradient(90deg,#000 0%,transparent 48%);opacity:.5}
+
+  .left{position:absolute;left:88px;top:92px;width:700px}
+  .logo{display:flex;align-items:center;gap:14px;font-family:"Cormorant Garamond",serif;font-size:40px;font-weight:600;letter-spacing:.5px}
+  .logo i{width:44px;height:44px;border-radius:12px;background:#fff;display:grid;place-items:center}
+  .eyebrow{margin-top:54px;font-size:15px;letter-spacing:.32em;color:var(--lav-300);font-weight:700}
+  h1{margin-top:16px;font-size:66px;line-height:1.22;font-weight:900;letter-spacing:.01em}
+  h1 em{font-style:normal;background:linear-gradient(90deg,#ffd1e2,var(--rose-300));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{margin-top:26px;font-size:24px;line-height:1.7;color:rgba(255,255,255,.86)}
+  .points{margin-top:40px;display:grid;gap:14px}
+  .pt{display:flex;gap:16px;align-items:flex-start;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:16px 20px}
+  .pt b{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-family:"Cormorant Garamond",serif;font-size:24px;background:linear-gradient(135deg,var(--rose),#b77be0)}
+  .pt h3{font-size:21px;font-weight:700}
+  .pt p{margin-top:3px;font-size:16px;color:rgba(255,255,255,.72);line-height:1.5}
+  .foot{position:absolute;left:88px;bottom:62px;display:flex;align-items:center;gap:14px;font-size:16px;color:rgba(255,255,255,.75)}
+  .chip{padding:7px 14px;border-radius:99px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);font-weight:700;letter-spacing:.04em}
+  .tagline{position:absolute;right:120px;top:52px;font-family:"Cormorant Garamond",serif;font-style:italic;font-size:34px;color:rgba(255,255,255,.85)}
+
+  /* 画面写真 */
+  .win{position:absolute;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 40px 90px -30px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.12)}
+  .win .bar{height:34px;background:#f1eef8;display:flex;align-items:center;gap:7px;padding:0 14px;border-bottom:1px solid #e4dff0}
+  .win .bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.win .bar i:nth-child(2){background:#febc2e}.win .bar i:nth-child(3){background:#28c840}
+  .win .bar span{margin-left:12px;font-size:12.5px;color:#7a77a0;background:#fff;border-radius:7px;padding:3px 12px;flex:1;max-width:520px}
+  .win img{display:block;width:100%}
+  .w-plan{left:842px;top:120px;width:960px}
+  .w-plans{left:1236px;top:588px;width:600px;transform:rotate(1.2deg)}
+  .card{position:absolute;border-radius:14px;overflow:hidden;box-shadow:0 30px 60px -24px rgba(0,0,0,.6),0 0 0 3px rgba(244,167,196,.55)}
+  .card img{display:block;width:100%}
+  .c-flight{left:812px;top:680px;width:500px;transform:rotate(-1.5deg)}
+  .label{position:absolute;font-size:15px;font-weight:700;padding:6px 12px;border-radius:99px;background:#fff;color:var(--ink);box-shadow:0 10px 24px -10px rgba(0,0,0,.5)}
+  .l1{left:820px;top:636px}
+  .l2{left:1600px;top:556px}
+</style>
+</head>
+<body>
+<div class="beam b1"></div><div class="beam b2"></div><div class="dots"></div>
+
+<div class="left">
+  <div class="logo"><i><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.4 1.1 4.2 2.3l1.4 2 1.4-2C14.2 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z" fill="#e0679a"/><path d="M12 15.4s-3.4-2.1-4.3-4.1c-.6-1.4.3-2.9 1.8-2.9.9 0 1.6.5 1.9 1l.6.9.6-.9c.3-.5 1-1 1.9-1 1.5 0 2.4 1.5 1.8 2.9-.9 2-4.3 4.1-4.3 4.1z" fill="#fff"/></svg></i>OshiReady</div>
+  <p class="eyebrow">AGENTIC AI FOR FANS</p>
+  <h1>推しに会う日を、<br><em>いちばん気持ちよく。</em></h1>
+  <p class="lead">ライブの日から、美容・移動・宿の準備を<br>逆算してくれる AI エージェント。</p>
+  <div class="points">
+    <div class="pt"><b>1</b><div><h3>自分で調べて、自分で直す</h3><p>空き時間・美容の最適日・天気・経路を Gemini が選んで調べ、検証で差し戻されたら組み直す</p></div></div>
+    <div class="pt"><b>2</b><div><h3>実在の店・便を、出典つきで</h3><p>Google 検索で見つけたサロン・宿・飛行機の便と参考価格。裏付けのないものは出さない</p></div></div>
+    <div class="pt"><b>3</b><div><h3>予約は、あなたが承認してから</h3><p>AI に予約・決済の道具は渡さない。承認後も予定と天気の変化を見張って見直し案を作る</p></div></div>
+  </div>
+</div>
+
+<div class="win w-plan"><div class="bar"><i></i><i></i><i></i><span>google-hackai-791850738177.asia-northeast1.run.app/plan</span></div><img src="images/screen-plan.jpg" alt=""></div>
+<div class="win w-plans"><div class="bar"><i></i><i></i><i></i><span>…/plans</span></div><img src="images/screen-plans.jpg" alt=""></div>
+<div class="label l2">ライブごとのプラン一覧</div>
+<div class="card c-flight"><img src="images/card-flight.jpg" alt=""></div>
+<div class="label l1">新幹線と飛行機を比べて、Google 検索で便を探す</div>
+
+<div class="foot"><span class="chip">Cloud Run</span><span class="chip">Gemini</span><span class="chip">Google 検索グラウンディング</span><span class="chip">Human-in-the-loop</span></div>
+<p class="tagline">Good Travel, Good Live ♡</p>
+</body>
+</html>

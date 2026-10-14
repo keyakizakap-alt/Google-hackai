@@ -25,6 +25,7 @@
 | 道具の使わせ方 | `GEMINI_TOOL_MODE`（既定 `AUTO`。`VALIDATED`・`ANY` も選べるが、`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
 | AI 呼び出しの 1 日の上限 | `AGENT_DAILY_LIMIT` |
+| Google 検索（実在の店・宿・便と参考価格を探す） | `GEMINI_WEB_SEARCH`（既定はオン。`off` で止める。検索の呼び出しは 1 回のプラン作成で最大 3 回。課金は Google 側で実行された検索クエリの数で数え、1 回の呼び出しで複数のクエリが走ることがある（公式ドキュメント・2026-10-13 時点）） |
 | 駅すぱあとで使うツール | `EKISPERT_ALLOWED_TOOLS` |
 | アプリの公開 URL | `APP_BASE_URL`（Vercel では未設定でも本番ドメインを自動で使用） |
 | IP の取り出し位置（Cloud Run 等） | `TRUSTED_PROXY_HOPS` |
@@ -41,7 +42,7 @@
 
 ```
 resource.type="cloud_run_revision"
-resource.labels.service_name="oshiready"
+resource.labels.service_name="google-hackai"
 jsonPayload.message="agent.gemini.failed"
 ```
 
@@ -57,6 +58,12 @@ jsonPayload.message="agent.gemini.failed"
 | `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 150 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。
+
+## Google 検索が使えないとき（店名・便・価格が出ない）
+
+ログ エクスプローラで `jsonPayload.message="agent.web_search.failed"` を検索し、`httpStatus`・`errorCode` を見る。検索に失敗しても、プランは店名・価格を出さない形で作られる（利用者には「見つかりませんでした」と出る）。
+`jsonPayload.message="agent.web_search"` は成功した検索 1 回ごとの記録で、`itemCount` が出典の数。検索語は記録しない（出発駅などを含みうるため）。
+権限・課金の失敗は、プラン作成の「AI に接続できないとき」と同じ原因（Vertex AI API・課金・権限）を確かめる。費用を止めたいときは `GEMINI_WEB_SEARCH=off`。
 
 ### 互換モードでも 400 のとき（部品ごとの切り分け）
 

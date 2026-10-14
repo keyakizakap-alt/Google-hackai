@@ -19,7 +19,7 @@ import { executeTool, NATIVE_DECLARATIONS, WEB_SEARCH_TOOL, type AgentContext } 
 
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
-import type { OshiEvent, Plan, TimelineItem, TraceStep } from "./types";
+import type { OshiEvent, Plan, TimelineItem, TraceStep, WebSearchRecord } from "./types";
 
 export interface AgentRunInput {
   event: OshiEvent;
@@ -43,10 +43,27 @@ export interface AgentRunOutput {
 const DEADLINE_MS = 150_000;
 
 export class AgentUnavailableError extends Error {
-  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください") {
+  /**
+   * 失敗の理由の種類（例: PERMISSION_DENIED、HTTP_400 tools[0]…、TypeError）。画面とレスポンスに出して、ログを見なくても原因の見当が付くようにする。
+   * Google の API が返す決まった名前・リクエストの項目名・例外の名前だけで、説明文や利用者のデータは含めない
+   */
+  readonly reason?: string;
+  constructor(message = "AI に接続できませんでした。時間をおいて再試行してください", reason?: string) {
     super(message);
     this.name = "AgentUnavailableError";
+    this.reason = reason;
   }
+}
+
+/** 失敗の理由の種類を、画面に出してよい形（英数字・記号の短い名前）だけで作る */
+export function failureReason(e: unknown): string | undefined {
+  const info = geminiErrorInfo(e);
+  const status = (e as { status?: unknown } | null)?.status;
+  const parts = [
+    info.apiReason ?? info.apiStatus ?? (typeof status === "number" ? `HTTP_${status}` : (e as Error | null)?.name),
+    info.apiField,
+  ].filter((p): p is string => typeof p === "string" && /^[\w.[\]-]{1,120}$/.test(p));
+  return parts.length ? parts.join(" ").slice(0, 160) : undefined;
 }
 
 /** 制限時間内にプランを仕上げられなかった（AI の応答が遅い）。接続の失敗とは分けて扱う */
@@ -124,7 +141,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
           if (status === 400 && usage.modelCalls === 0) {
             await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
           }
-          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined);
+          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined, failureReason(e));
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
@@ -176,7 +193,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     decisions: ctx.submitted.decisions.slice(0, 6),
     items,
     // 検索候補（Search Suggestions）の表示が必要なため、検索で見つけたものを使ったときは検索結果を残す
-    ...(webSourced && ctx.webSearches?.length ? { webSearches: ctx.webSearches.slice(-6) } : {}),
+    // プランが出典として使っている検索結果だけを残す（作り直しても、使っている出典は消えない。封筒も大きくしすぎない）
+    ...(webSourced && usedSearches(ctx.webSearches, items).length ? { webSearches: usedSearches(ctx.webSearches, items) } : {}),
     warnings: warnings.slice(0, 10),
     generatedBy: { engine, model: engine === "gemini" ? model : "rules-v1" },
     revision: input.previous ? input.previous.revision + 1 : 0,
@@ -193,6 +211,17 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     ...usage,
   });
   return { plan, trace, usage, engine };
+}
+
+/** 飛行機の移動か（検索で見つけた便、または目安の主な手段が飛行機）。「飛行機は使わない」のような文では判定しない */
+export function isAirTravel(item: TimelineItem): boolean {
+  return item.category === "flight" || item.route?.source === "web" || /(：|^)飛行機で/.test(item.route?.summary ?? "");
+}
+
+/** プランの項目が出典として使っている検索結果（最大 6 件） */
+function usedSearches(records: readonly WebSearchRecord[] | undefined, items: readonly TimelineItem[]): WebSearchRecord[] {
+  const used = new Set(items.flatMap((i) => [i.provider?.sourceUrl, i.route?.sourceUrl]).filter((u): u is string => Boolean(u)));
+  return (records ?? []).filter((r) => r.sources.some((s) => used.has(s.uri))).slice(-6);
 }
 
 /** Google 検索で見つけたもの（出典あり）でない宿は、実在の施設名を出さず、予約サイトで探す案内にする */
@@ -238,7 +267,7 @@ function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineIt
   const to = item.route?.to ?? (isReturn ? event.homeStation : event.venueStation);
   const byEkispert = item.route?.source === "ekispert";
   // 飛行機（検索で見つけた便・目安で飛行機を使う移動）は、空席と運賃を Google フライトで確かめられるようにする
-  const byAir = item.category === "flight" || item.route?.source === "web" || /飛行機/.test(item.route?.summary ?? "");
+  const byAir = isAirTravel(item);
   if (byAir) {
     const legs = item.route?.legs ?? [];
     // 便が分からない（目安の）ときは、出発駅・会場から空港を推定する。帰りは往路の空港を入れ替える
@@ -285,7 +314,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   const ekispertDeclarations = ekispert ? (compat >= 1 ? toLegacyDeclarations(ekispert.declarations) : ekispert.declarations) : [];
   // 駅すぱあとが使えるときは、経路を調べない予備の道具を渡さない（AI が楽な方を選んで乗り換えを調べないのを防ぐ）
   const nativeBase = NATIVE_DECLARATIONS.filter(
-    (d) => !(ekispertDeclarations.length > 0 && d.name === TRANSIT_FALLBACK_TOOL) && !(d.name === WEB_SEARCH_TOOL && !isWebSearchEnabled()),
+    // 互換モード 2 では Google 検索の道具も外す（最初の呼び出しで形を拒否されたとき、増やした部分を減らして通す）
+    (d) => !(ekispertDeclarations.length > 0 && d.name === TRANSIT_FALLBACK_TOOL) && !(d.name === WEB_SEARCH_TOOL && (!isWebSearchEnabled() || compat >= 2)),
   );
   const native = compat >= 2 ? toLegacyDeclarations(nativeBase) : nativeBase;
   const declarations: FunctionDeclaration[] = [...ekispertDeclarations, ...native];

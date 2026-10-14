@@ -26,6 +26,7 @@
 ```bash
 cd ~/Google-hackai && git pull
 export OSHIREADY_PROJECT_ID='your-project-id'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-enable-demo-calendar.sh
 ```
 

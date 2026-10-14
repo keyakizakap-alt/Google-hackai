@@ -126,8 +126,8 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
     return NextResponse.json({ error: "送られたデータが大きすぎます。画像を小さくするか、内容を減らしてもう一度お試しください。" }, { status: 413 });
   }
   if (e instanceof AgentUnavailableError) {
-    logger.warn("agent.unavailable", meta);
-    return NextResponse.json({ error: e.message, code: "AGENT_UNAVAILABLE" }, { status: 503 });
+    logger.warn("agent.unavailable", { ...meta, errorCode: e.reason?.split(" ")[0] });
+    return NextResponse.json({ error: e.message, code: "AGENT_UNAVAILABLE", reason: e.reason, requestId: meta.requestId }, { status: 503 });
   }
   if (e instanceof GuardrailError) {
     logger.warn("guardrail.blocked", { ...meta, errorCode: e.code });

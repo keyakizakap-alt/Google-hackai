@@ -5,6 +5,7 @@ import { Bot, CalendarCheck, CalendarHeart, ImageIcon, ImagePlus, Radar, ShieldC
 import { GoogleG } from "@/components/brand";
 import { DemoCalendarButton, GoogleConnectButton, useCalendarLinks } from "@/components/CalendarConnect";
 import { OshiColorPicker } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { useStore } from "@/components/store";
 
 /** 状態の札の色。つながっている＝緑、別の手段で代わりに動いている＝紫、未設定・準備中＝灰 */
@@ -40,11 +41,10 @@ export default function SettingsPage() {
   const googleStatus = googleConnected ? "連携中" : demoConnected ? "デモのカレンダーで連携中" : googleReady ? "未連携" : "準備中";
   const googleTone: Tone = googleConnected ? "ok" : demoConnected ? "alt" : "off";
   return (
-    <div className="space-y-5 px-1">
-      <div>
-        <h1 className="text-xl font-bold text-ink">設定</h1>
-        <p className="mt-1 text-sm text-ink-soft">連携サービスの状態とプライバシー設定です。</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader eyebrow="Settings" title="設定">
+        連携サービスの状態とプライバシー設定です。
+      </PageHeader>
 
       <section className="card px-5">
         <ul className="divide-y divide-line">
@@ -202,7 +202,7 @@ export default function SettingsPage() {
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
             <ImageIcon className="h-5 w-5" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-40">
             <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
               推しの画像を選ぶと、ホームのチケットの背景に表示します。右のスイッチをオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
@@ -233,7 +233,7 @@ export default function SettingsPage() {
               <ImageIcon className="h-5 w-5" />
             )}
           </span>
-          <div className="min-w-0 flex-1 text-xs text-ink-soft">
+          <div className="min-w-0 flex-1 basis-40 text-xs text-ink-soft">
             {event ? (
               <>
                 <p className="font-bold text-ink">{event.artist} の推し画像</p>

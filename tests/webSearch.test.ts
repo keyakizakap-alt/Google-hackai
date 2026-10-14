@@ -24,6 +24,8 @@ vi.mock("@google/genai", () => ({
                 groundingMetadata: grounded
                   ? {
                       groundingChunks: [{ web: { title: "example.jp", uri: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc" } }],
+                      // 1 行目だけが出典に裏付けられている（2 行目は裏付けなし）
+                      groundingSupports: [{ segment: { text: "- 眉サロン ルミエール 長崎駅前店／長崎駅 徒歩3分／眉毛ワックス 5,500円" }, groundingChunkIndices: [0] }],
                       searchEntryPoint: { renderedContent: "<div class=\"chip\">長崎駅 眉毛サロン</div>" },
                     }
                   : {},
@@ -62,6 +64,8 @@ describe("Google 検索の部品", () => {
     expect(r.available).toBe(true);
     expect(r.record?.sources[0].uri).toBe(SOURCE);
     expect(r.record?.suggestionsHtml).toContain("chip");
+    // 照合に使うのは、出典に裏付けられた記述だけ
+    expect(r.record?.claims).toEqual([{ text: "- 眉サロン ルミエール 長崎駅前店／長崎駅 徒歩3分／眉毛ワックス 5,500円", uris: [SOURCE] }]);
   });
 
   it("根拠のページがない答えは使わない", async () => {
@@ -97,9 +101,11 @@ describe("Google 検索の部品", () => {
 describe("検索で見つけたものの検査", () => {
   const SALON_SRC = SOURCE;
   const FLIGHT_SRC = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/flight";
+  // 出典が裏付けている記述（groundingSupports）。本文には、裏付けのない「架空ホテル」の行も混ざっている想定
+  const record = (src: string, supported: string[]) => ({ urls: new Set([src]), claims: supported.map((text) => ({ text, uris: [src] })) });
   const records = [
-    { text: "- 眉サロン ルミエール 長崎駅前店／長崎駅 徒歩3分／眉毛ワックス 5,500円\n- ブロウスタジオ ソラ／浜町／7,700円", urls: new Set([SALON_SRC]) },
-    { text: "- JAL 1840便／長崎空港 9:05 → 羽田空港 10:45／運賃 32,000円\n- ANA 664便／長崎空港 11:30 → 羽田空港 13:10／運賃 28,500円", urls: new Set([FLIGHT_SRC]) },
+    record(SALON_SRC, ["- 眉サロン ルミエール 長崎駅前店／長崎駅 徒歩3分／眉毛ワックス 5,500円", "- ブロウスタジオ ソラ／浜町／7,700円"]),
+    record(FLIGHT_SRC, ["- JAL 1840便／長崎空港 9:05 → 羽田空港 10:45／運賃 32,000円", "- ANA 664便／長崎空港 11:30 → 羽田空港 13:10／運賃 28,500円"]),
   ];
   const beauty = (provider: Record<string, unknown>) => ({
     id: "brow-1", kind: "beauty" as const, category: "brow", title: "眉毛サロン",
@@ -133,6 +139,14 @@ describe("検索で見つけたものの検査", () => {
     expect(await check([beauty({ sourceUrl: FLIGHT_SRC })])).toContain("書かれていません");
     // ルミエールに、ブロウスタジオ ソラの価格を付けた
     expect(await check([beauty({ priceJpy: 7700 })])).toContain("価格 7700 円");
+  });
+
+  it("本文にあっても、出典に裏付けられていない記述の店舗名は差し戻す", async () => {
+    const { validateTimeline } = await import("@/lib/agent/validate");
+    // 出典は返っているが、「架空サロン」の行を裏付けるものはない
+    const evidence = { records: [{ urls: new Set([SALON_SRC]), claims: [] }] };
+    const errors = validateTimeline([beauty({ name: "架空サロン" })] as never, event, [], Date.now(), undefined, evidence).errors.join(" ");
+    expect(errors).toContain("書かれていません");
   });
 
   it("出典のない店舗名は今までどおり差し戻す", async () => {
@@ -200,3 +214,23 @@ describe("飛行機の目安", () => {
     expect(e.airports).toBeUndefined();
   });
 });
+
+describe("飛行機の移動とリンク", () => {
+  it("「飛行機で」が主な手段の目安だけを飛行機とみなし、「飛行機は使わない」は含めない", async () => {
+    const { isAirTravel } = await import("@/lib/agent/orchestrator");
+    const base = { id: "t", kind: "transit" as const, title: "移動", start: `${day}T09:00:00+09:00`, end: `${day}T12:00:00+09:00`, rationale: "r", requiresBooking: false };
+    const route = (summary: string) => ({ ...base, route: { from: "長崎", to: "水道橋", summary, legs: [], source: "estimate" as const } });
+    expect(isAirTravel(route("長崎 → 水道橋：飛行機で約 4 時間（目安）"))).toBe(true);
+    expect(isAirTravel(route("新幹線で移動（飛行機は使わない）"))).toBe(false);
+  });
+
+  it("日本語の空港名が長くても、Google フライトのリンクはプランに保存できる", async () => {
+    const { flightSearchUrl } = await import("@/lib/safeUrl");
+    const { TimelineItemSchema } = await import("@/lib/agent/types");
+    const url = flightSearchUrl("東京国際空港（羽田空港）第2ターミナル", "JR長崎駅 → 京セラドーム大阪 最寄りの空港", day);
+    expect(url.length).toBeGreaterThan(300);
+    const item = { id: "f", kind: "transit", title: "飛行機", start: `${day}T09:00:00+09:00`, end: `${day}T11:00:00+09:00`, rationale: "r", requiresBooking: true, provider: { name: "Google フライトで空席と運賃を確認", bookingUrl: url } };
+    expect(TimelineItemSchema.safeParse(item).success).toBe(true);
+  });
+});
+

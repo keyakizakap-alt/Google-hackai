@@ -24,11 +24,15 @@ bash scripts/cloud-run-bootstrap.sh
 
 ```bash
 export OSHIREADY_PROJECT_ID='<プロジェクトID>'
+export OSHIREADY_SERVICE='google-hackai'   # Cloud Run のサービス名（公開中のもの）
 bash scripts/cloud-run-enable-demo-calendar.sh
 ```
 
 - [ ] ホームに「デモのカレンダーで試す」が出て、押すとライブが登録される
 - [ ] シークレットウィンドウで、デモ → プラン作成 → 修正指示 → 承認 → デモ予約 → 予約の管理 → キャンセル、まで通る
+- [ ] ナビの「プラン」で、ライブごとのプラン一覧が出て、そこから各ライブのプランを開ける
+- [ ] 遠征のライブ（例：出発駅が長崎で会場が東京ドーム）のプランで、Google 検索で見つけた店・便に「Google 検索の出典」の札が付き、プランの下に「Google 検索で調べたこと」が出る（検索で何も見つからない場合は、店名・価格を出さない今までの形になる）
+- [ ] プランの画面から予約の画面へ移っても、エラー画面が出ない
 - [ ] 「AI が調べたこと」に、ツールの呼び出しと（起きれば）差し戻し → 再提出が出る
 - [ ] 設定の「AI ができること・できないこと」と、見張りのスイッチが表示される
 
@@ -37,11 +41,12 @@ bash scripts/cloud-run-enable-demo-calendar.sh
 スクリプトの既定は 1 日 25 回（インスタンスごと）。プラン作成・修正・見直し案・ライブの取り込みで 1 回ずつ減る。通しの確認が済んだら、審査に足りる回数へ上げる。
 
 ```bash
-gcloud run services update oshiready --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
+gcloud run services update "$OSHIREADY_SERVICE" --region asia-northeast1 --project "$OSHIREADY_PROJECT_ID" \
   --update-env-vars=AGENT_DAILY_LIMIT=<回数>
 ```
 
 - [ ] 上限を決めて設定した（費用の見積もりは手順 4 の結果で確認できる）
+- [ ] Google 検索（検索の呼び出しは 1 回のプラン作成で最大 3 回。課金は Google 側で実行された検索クエリの数で数え、1 回の呼び出しで複数のクエリが走ることがある（公式ドキュメント・2026-10-13 時点）。Gemini 3 系は月 5,000 クエリまで無料、超えると 1,000 クエリあたり $14。公式の料金表・2026-10-13 時点）も費用に入ることを確認した。止める場合は `--update-env-vars=GEMINI_WEB_SEARCH=off`（止めると、店名・便・価格を出さない今までの動きに戻る）
 - [ ] 提出したら `bash scripts/cloud-run-demo-mode.sh judging` で審査期間用（常に 1 台起動・AI 300 回/日、12/2 まで）に切り替えた → [審査期間の運用](judging-period.md)
 - [ ] デモのカレンダーに 12/2 より後の日付のライブを入れた
 

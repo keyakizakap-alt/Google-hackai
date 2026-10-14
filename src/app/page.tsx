@@ -25,7 +25,7 @@ function TicketHero({ event }: { event: OshiEvent }) {
   const { eventImage, setEventImage } = useStore();
   const cd = useCountdown(event.startAt);
   return (
-    <Reveal as="section" aria-labelledby="next-event" className="glow-border grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_300px]">
+    <Reveal as="section" aria-labelledby="next-event" className="glow-border grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[minmax(0,1fr)_300px]">
       <div className="relative min-h-[300px] overflow-hidden md:min-h-[340px]">
         {eventImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob URL（メモリ上のみ）
@@ -54,14 +54,14 @@ function TicketHero({ event }: { event: OshiEvent }) {
           </div>
           <div>
             <p className="font-display text-lg italic text-white/70">{event.artist}</p>
-            <h2 id="next-event" className="mt-1 text-[26px] font-bold leading-tight tracking-wide sm:text-4xl">
+            <h2 id="next-event" className="mt-1 text-[26px] font-bold leading-tight tracking-wide [word-break:auto-phrase] sm:text-4xl">
               {event.title}
             </h2>
             <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
               <span className="rounded-full bg-white/12 px-3 py-1.5 backdrop-blur">{formatJst(event.startAt)} 開演</span>
-              <span className="flex items-center gap-1 rounded-full bg-white/12 px-3 py-1.5 backdrop-blur">
-                <MapPin className="h-3.5 w-3.5" />
-                {event.venue}
+              <span className="flex min-w-0 max-w-full items-center gap-1 rounded-full bg-white/12 px-3 py-1.5 backdrop-blur">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{event.venue}</span>
               </span>
               <Link href="/events" className="flex items-center gap-1 rounded-full bg-white px-3 py-1.5 font-bold text-ink transition hover:bg-rose-50">
                 詳細を編集 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -163,7 +163,7 @@ function EmptyHero() {
   const importing = busy === "importing";
   const nothingFound = !importing && session?.calendarConnected && lastImport && lastImport.found === 0;
   return (
-    <Reveal as="section" className="relative grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-[1fr_1fr]">
+    <Reveal as="section" className="relative grid overflow-hidden rounded-[22px] bg-night text-white shadow-float md:grid-cols-2">
       <StageScene className="relative min-h-[240px]" />
       <div className="flex flex-col justify-center gap-4 p-7 sm:p-9">
         <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">NO LIVE YET</p>
@@ -221,7 +221,7 @@ function CalendarCard() {
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間」だけから計算します。予定の中身はライブを探すときだけ確認し、保存はしません。</p>
 
-      <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[1fr_1.15fr]">
+      <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="flex flex-col justify-between gap-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-cloud p-3">
@@ -272,6 +272,8 @@ function Setlist() {
     { icon: TrainFront, t: "移動プランを作成", d: "混雑を避けた出発時間・ルート", done: Boolean(envelope) },
   ];
   const doneCount = steps.filter((s) => s.done).length;
+  // まだ終わっていない最初の手順に「NEXT」を付ける（完了の数で数えると、順番どおりでないときにずれる）
+  const nextIndex = steps.findIndex((s) => !s.done);
   const onStep = (i: number) => {
     if (i === 0) return document.getElementById("gcal")?.scrollIntoView({ behavior: "smooth", block: "center" });
     if (!event) return router.push("/events");
@@ -298,7 +300,7 @@ function Setlist() {
         {steps.map((s, i) => (
           <li key={s.t}>
             <button onClick={() => onStep(i)} className="group flex w-full items-center gap-4 py-4 text-left transition">
-              <span className={`font-display w-10 shrink-0 text-2xl italic transition ${s.done ? "text-rose-400" : "text-lav-200 group-hover:text-lav-500"}`}>M{i + 1}</span>
+              <span className={`font-display hidden w-10 shrink-0 text-2xl italic transition sm:block ${s.done ? "text-rose-400" : "text-lav-200 group-hover:text-lav-500"}`}>M{i + 1}</span>
               <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition duration-300 group-hover:scale-110 ${s.done ? "bg-rose-400 text-white" : "bg-lav-50 text-lav-600 group-hover:bg-night group-hover:text-white"}`}>
                 {busy === "planning" && i > 0 ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <s.icon className="h-5 w-5" strokeWidth={1.7} />}
               </span>
@@ -306,7 +308,7 @@ function Setlist() {
                 <span className="block text-[15px] font-bold text-ink transition group-hover:translate-x-1">{s.t}</span>
                 <span className="block text-xs text-mute">{s.d}</span>
               </span>
-              <span className="text-[10px] font-bold tracking-[0.2em] text-mute">{s.done ? "DONE" : i === doneCount ? "NEXT" : ""}</span>
+              <span className="shrink-0 text-[10px] font-bold tracking-[0.2em] text-mute">{s.done ? "DONE" : i === nextIndex ? "NEXT" : ""}</span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-mute transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink" />
             </button>
           </li>
@@ -361,11 +363,11 @@ export default function Home() {
       <ConflictBanner />
       <WatchCard />
       <Hero />
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <CalendarCard />
         <PlanSummaryCard />
       </div>
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <Setlist />
         <RemindersCard />
       </div>

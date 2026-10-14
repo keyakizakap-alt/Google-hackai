@@ -29,13 +29,14 @@ export function validateSummary(summary: string): string[] {
  * （別の検索の出典や価格を組み合わせて通さないため）
  */
 export interface WebEvidence {
-  records: readonly { text: string; urls: ReadonlySet<string> }[];
+  /** claims: 出典が裏付けている記述と、その出典の URL（照合はこれだけで行う） */
+  records: readonly { urls: ReadonlySet<string>; claims: readonly { text: string; uris: readonly string[] }[] }[];
 }
 
 /** Google 検索の結果を、検査で照合できる形にする */
 export function webEvidenceOf(records: readonly WebSearchRecord[] | undefined): WebEvidence | undefined {
   if (!records?.length) return undefined;
-  return { records: records.map((r) => ({ text: r.text, urls: new Set(r.sources.map((s) => s.uri)) })) };
+  return { records: records.map((r) => ({ urls: new Set(r.sources.map((s) => s.uri)), claims: r.claims ?? [] })) };
 }
 
 /** JST の「9:05」の形（検索結果の時刻と照合する） */
@@ -50,7 +51,7 @@ const mentionsClock = (line: string, clock: string) => new RegExp(`(^|[^0-9])0?$
 /**
  * 検索で見つけた店舗・宿・便として書かれた項目の検査（AI に作らせない）。
  * - 出典（sourceUrl）が、この回のどれかの検索結果の URL であること
- * - 名前・便名が、その検索結果の本文の 1 行（1 件）に書かれていること
+ * - 名前・便名が、その出典が裏付けている記述（groundingSupports）の 1 行（1 件）に書かれていること
  * - 価格・空港・発着時刻も、同じ行に書かれていること（別の店舗や便の値を付け替えさせない）
  */
 function checkWebSourced(it: TimelineItem, evidence: WebEvidence | undefined, errors: string[]) {
@@ -60,7 +61,8 @@ function checkWebSourced(it: TimelineItem, evidence: WebEvidence | undefined, er
   const fail = (why: string) => errors.push(`${it.id}: ${why}。search_web の結果に書かれたものだけを使うか、外してください`);
   const record = sourceUrl ? evidence?.records.find((r) => r.urls.has(sourceUrl)) : undefined;
   if (!record) return fail("出典（sourceUrl）が、この回の Google 検索の結果の URL ではありません");
-  const lines = record.text.split(/\n+/).filter((l) => l.trim());
+  // その出典が裏付けている記述だけを見る（AI がまとめた本文の、裏付けのない部分は使わない）
+  const lines = record.claims.filter((c) => c.uris.includes(sourceUrl!)).flatMap((c) => c.text.split(/\n+/)).filter((l) => l.trim());
   // 空や 1 文字の名前は、どの本文にも含まれてしまうので照合に使わない
   const inLine = (line: string, name: string) => normalizeForMatch(name).length >= 2 && normalizeForMatch(line).includes(normalizeForMatch(name));
   const linesOf = (name: string) => lines.filter((l) => inLine(l, name));

@@ -1,7 +1,8 @@
 # 審査期間の運用（〜2026 年 12 月 1 日。余裕をみて 12 月 2 日まで）
 
 提出した状態を保ったまま、審査員がいつ開いても動くようにするための手順。
-すべて Cloud Shell で実行する（`export OSHIREADY_PROJECT_ID='your-project-id'` を先に実行）。
+すべて Cloud Shell で実行する（`export OSHIREADY_PROJECT_ID='your-project-id'` と `export OSHIREADY_SERVICE='google-hackai'` を先に実行）。
+公開中の URL：https://google-hackai-791850738177.asia-northeast1.run.app （サービス名 `google-hackai`・asia-northeast1）
 
 ## 期間中に止まる・壊れる可能性があるもの
 
@@ -13,6 +14,7 @@
 | 費用・請求先 | 請求先アカウントが止まると、アプリも止まる | 予算アラートを設定し、支払い方法・無料トライアルの期限を確認しておく（下の 4） |
 | Google ログインでの連携 | 同意画面が「テスト」のままだと、7 日で連携が切れる | 審査員には「デモのカレンダーで試す」を使ってもらう（サービスアカウントで読むため期限なし） |
 | 駅すぱあと | キーの期限切れ・障害時は経路を検索できない | 自動で所要時間の目安（API なし）に切り替え、出発の目安を入れてプランを作る。移動の項目には Google マップの乗換検索のリンクを付ける。2 分後に自動で再接続する |
+| Google 検索（店・宿・便を探す） | 検索に失敗すると、店名・便・価格を出せない。検索の回数だけ費用がかかる | 失敗してもプランは作れる（店名・価格を出さない今までの形になる）。検索の呼び出しは 1 回のプラン作成で最大 3 回（課金は Google 側で実行された検索クエリの数で数え、1 回の呼び出しで複数のクエリが走ることがある（公式ドキュメント・2026-10-13 時点）。Gemini 3 系は月 5,000 クエリまで無料、超えると 1,000 クエリあたり $14。公式の料金表・2026-10-13 時点）。止めるなら `GEMINI_WEB_SEARCH=off` |
 | AI のモデル | 提供が終わると AI のプランが作れない | `gemini-3.5-flash` は、Gemini API の非推奨ページで「終了日は未発表」（2026-10-10 時点。Vertex AI 側は未確認）。期間中に週 1 回の点検で確認する |
 
 ## 1. デモのカレンダーにライブを入れる（提出前に 1 回）
@@ -46,7 +48,7 @@ bash scripts/cloud-run-demo-mode.sh status    # いまの設定と期限を確�
 git tag submission-2026 <提出したコミット> && git push origin submission-2026
 
 # いま動いているリビジョン名を控える
-gcloud run services describe oshiready --region=asia-northeast1 --format='value(status.latestReadyRevisionName)'
+gcloud run services describe "$OSHIREADY_SERVICE" --region=asia-northeast1 --format='value(status.latestReadyRevisionName)'
 ```
 
 - 期間中は main にマージしない（Dependabot の提案 PR も、期間が終わるまで置いておく）。
@@ -54,7 +56,7 @@ gcloud run services describe oshiready --region=asia-northeast1 --format='value(
 - 万一、変更して壊れたときは、控えたリビジョンに戻す：
 
 ```bash
-gcloud run services update-traffic oshiready --region=asia-northeast1 --to-revisions=<控えたリビジョン名>=100
+gcloud run services update-traffic "$OSHIREADY_SERVICE" --region=asia-northeast1 --to-revisions=<控えたリビジョン名>=100
 ```
 
   戻したあと `judging` などで設定を変える前に、`--to-latest` で最新に向け直すこと（向け直さないと、新しい設定が使われない）。
@@ -67,6 +69,8 @@ bash scripts/cloud-run-demo-mode.sh status     # 常に 1 台・期限の確認
 ```
 
 - スマホで公開 URL を開き、「デモのカレンダーで試す」→ ライブが並ぶ → プランを作る、まで通す。
+- ナビの「プラン」で一覧が出ること、遠征のライブのプランに「Google 検索の出典」の札が出ることを確かめる。
+- ログ エクスプローラで `jsonPayload.message="client.error"`（画面のエラー）と `jsonPayload.message="agent.web_search.failed"`（検索の失敗）が増えていないか見る。
 - Google Cloud の「お支払い」で、今月の費用と予算アラートの状態を確認する。
 
 ## 5. 期間が終わったら（12/3 以降）

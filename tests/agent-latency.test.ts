@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * - 時間切れは「接続できない」ではなく「時間がかかった」と伝える
  */
 const seenThinking: unknown[] = [];
-let behavior: "ok" | "timeout" = "ok";
+let behavior: "ok" | "timeout" | "denied" | "typeerror" = "ok";
 
 vi.mock("@google/genai", () => ({
   FunctionCallingConfigMode: { ANY: "ANY" },
@@ -15,6 +15,10 @@ vi.mock("@google/genai", () => ({
       generateContent: vi.fn(async (req: { config?: { thinkingConfig?: unknown } }) => {
         seenThinking.push(req.config?.thinkingConfig);
         if (behavior === "timeout") throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+        if (behavior === "denied") {
+          throw Object.assign(new Error(JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", message: "Permission denied on project my-secret-project", details: [{ reason: "IAM_PERMISSION_DENIED" }] } })), { status: 403 });
+        }
+        if (behavior === "typeerror") throw new TypeError("x is not a function");
         const call = { name: "get_free_time_slots", args: {} };
         return { functionCalls: [{ id: "c0", ...call }], candidates: [{ content: { role: "model", parts: [{ functionCall: call }] } }] };
       }),
@@ -62,5 +66,20 @@ describe("AI の応答の速さ", () => {
     behavior = "timeout";
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
     await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "slow" })).rejects.toThrow(/時間がかかり/);
+  });
+
+  it("接続できないときは、理由の種類だけを添える（説明文やプロジェクト名は出さない）", async () => {
+    behavior = "denied";
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const err = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "denied" }).catch((e) => e);
+    expect(err.reason).toBe("IAM_PERMISSION_DENIED");
+    expect(JSON.stringify(err.reason)).not.toContain("my-secret-project");
+  });
+
+  it("アプリ側の例外でも、例外の名前を理由として添える", async () => {
+    behavior = "typeerror";
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const err = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "type" }).catch((e) => e);
+    expect(err.reason).toBe("TypeError");
   });
 });

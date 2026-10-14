@@ -6,7 +6,7 @@ set -euo pipefail
 : "${OSHIREADY_BILLING_ACCOUNT:?Set the billing account ID (XXXXXX-XXXXXX-XXXXXX)}"
 
 OSHIREADY_REGION="${OSHIREADY_REGION:-asia-northeast1}"
-OSHIREADY_SERVICE="oshiready"
+OSHIREADY_SERVICE="${OSHIREADY_SERVICE:-oshiready}"  # 既存のサービス名が違うときは export OSHIREADY_SERVICE=google-hackai
 OSHIREADY_RUNTIME="oshiready-runtime"
 OSHIREADY_SECRET="oshiready-session-secret"
 

@@ -9,7 +9,7 @@ set -euo pipefail
 
 : "${OSHIREADY_PROJECT_ID:?Set OSHIREADY_PROJECT_ID}"
 REGION="${OSHIREADY_REGION:-asia-northeast1}"
-SERVICE="oshiready"
+SERVICE="${OSHIREADY_SERVICE:-oshiready}"  # 既存のサービス名が違うときは export OSHIREADY_SERVICE=google-hackai
 SECRET="oshiready-google-client-secret"
 RUNTIME_EMAIL="oshiready-runtime@${OSHIREADY_PROJECT_ID}.iam.gserviceaccount.com"
 P=(--project "$OSHIREADY_PROJECT_ID")
