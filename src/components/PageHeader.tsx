@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 export function PageHeader({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children?: ReactNode }) {
   return (
     <div>
-      <p className="font-display text-lg italic leading-none text-mute">{eyebrow}</p>
-      <h1 className="mt-1.5 text-2xl font-bold leading-snug text-ink [word-break:auto-phrase] sm:text-[28px]">{title}</h1>
-      {children && <p className="mt-1 text-sm leading-relaxed text-ink-soft">{children}</p>}
+      <p className="font-display text-xl italic text-mute">{eyebrow}</p>
+      <h1 className="mt-1 text-2xl font-bold text-ink [word-break:auto-phrase] sm:text-[28px]">{title}</h1>
+      {children && <p className="mt-1 text-sm text-ink-soft">{children}</p>}
     </div>
   );
 }

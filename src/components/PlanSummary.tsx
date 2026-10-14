@@ -6,6 +6,7 @@ import { relativeDayLabel, formatJst } from "@/lib/time";
 import { AgentConsole } from "./AgentConsole";
 import { useNow } from "./motion";
 import { ItemIcon } from "./icons";
+import { RegenerateButton } from "./RegenerateButton";
 import { useStore } from "./store";
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -20,7 +21,7 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 /** ホームの「提案プラン（概要）」カード */
-export function PlanSummaryCard({ className = "" }: { className?: string }) {
+export function PlanSummaryCard() {
   const { envelope, busy, event, planError, generatePlan, aiReady, autoPlan } = useStore();
   const now = useNow();
   const upcoming = event && now !== null ? Date.parse(event.startAt) > now : false;
@@ -29,23 +30,23 @@ export function PlanSummaryCard({ className = "" }: { className?: string }) {
   const items = plan?.items.filter((i) => i.kind === "beauty" || i.kind === "transit").slice(0, 4) ?? [];
 
   return (
-    <section className={`card flex flex-col p-5 ${className}`} aria-labelledby="plan-summary">
-      <div className="flex items-center justify-between gap-3">
+    <section className="card card-lift flex flex-col p-6" aria-labelledby="plan-summary">
+      <div className="flex items-center justify-between">
         <div>
           <p className="font-display text-sm italic text-mute">Countdown Plan</p>
           <h2 id="plan-summary" className="text-[17px] font-bold text-ink">提案プラン</h2>
         </div>
-        <span className="truncate rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-500">
+        <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-500">
           {envelope ? `${byAi ? "AI作成" : "かんたん提案"}・${STATUS_LABEL[envelope.status]}` : byAi ? "AIが作成" : "かんたん提案"}
         </span>
       </div>
 
       {busy === "planning" ? (
-        <div className="mt-4 min-h-0 flex-1 overflow-hidden">
+        <div className="mt-5">
           <AgentConsole running compact />
         </div>
       ) : items.length === 0 ? (
-        <div className="mt-4 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto rounded-2xl border border-dashed border-lav-200 px-4 py-6 text-center">
+        <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lav-200 px-4 py-10 text-center">
           <p className="font-display text-4xl italic text-lav-200">No plan yet</p>
           {planError && event ? (
             <>
@@ -67,8 +68,8 @@ export function PlanSummaryCard({ className = "" }: { className?: string }) {
           )}
         </div>
       ) : (
-        <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto py-1 fit:[mask-image:linear-gradient(to_bottom,#000_calc(100%-20px),transparent)]">
-          <span className="draw-line absolute bottom-3 left-[83px] top-3 w-[2px] rounded bg-gradient-to-b from-rose-300 to-lav-200" aria-hidden />
+        <ol key={`${plan!.id}-${plan!.revision}`} className="relative mt-6 space-y-5">
+          <span className="draw-line absolute bottom-2 left-[83px] top-2 w-[2px] rounded bg-gradient-to-b from-rose-300 to-lav-200" aria-hidden />
           {items.map((it, idx) => (
             <li key={it.id} className="pop-in relative flex items-center gap-3" style={{ "--delay": `${300 + idx * 140}ms` } as React.CSSProperties}>
               <div className="w-[68px] shrink-0 text-right">
@@ -76,7 +77,7 @@ export function PlanSummaryCard({ className = "" }: { className?: string }) {
                 <p className="mt-1 text-[11px] text-mute">{formatJst(it.start, { date: true })}</p>
               </div>
               <span className="relative z-10 h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-rose-400 bg-white shadow-[0_0_0_4px_var(--oshi-50)]" />
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
                 <ItemIcon item={it} />
               </span>
               <div className="min-w-0">
@@ -88,10 +89,12 @@ export function PlanSummaryCard({ className = "" }: { className?: string }) {
         </ol>
       )}
 
-      <Link href={event ? "/plan" : "/events"} className="btn-primary mt-4 flex shrink-0 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold">
+      <Link href={event ? "/plan" : "/events"} className="btn-primary mt-6 flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold">
         {!event ? "イベントを登録する" : envelope || busy === "planning" ? "プランを見る" : "プランを作る"}
         <ChevronRight className="h-4 w-4" />
       </Link>
+      {/* プランがあるときは、ここからも最初から作り直せる */}
+      {event && envelope && busy !== "planning" && <RegenerateButton className="mt-2 w-full" />}
     </section>
   );
 }

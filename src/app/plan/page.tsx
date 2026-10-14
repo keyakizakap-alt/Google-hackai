@@ -379,7 +379,7 @@ function EmptyPlan() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Countdown Plan" title="推し活プラン" />
-      <div className="grid overflow-hidden rounded-[22px] bg-night text-white shadow-float lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid overflow-hidden rounded-[22px] bg-night text-white shadow-float lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="relative min-h-[260px]">
           <StageScene className="absolute inset-0" />
           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
@@ -471,12 +471,12 @@ export default function PlanPage() {
             <ChevronLeft className="h-3.5 w-3.5" />
             プラン一覧
           </Link>
-          <p className="font-display text-lg italic leading-none text-mute">Countdown Plan</p>
-          <p className="mt-1 text-xs text-mute">
+          <p className="font-display text-lg italic text-mute">Countdown Plan</p>
+          <p className="text-xs text-mute">
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
             {plan.generatedBy.engine === "gemini" ? "AI が作成" : "かんたん提案で作成"}
           </p>
-          <h1 className="mt-1 text-2xl font-bold leading-snug text-ink [word-break:auto-phrase] sm:text-[28px]">{plan.event.title} への準備プラン</h1>
+          <h1 className="mt-1 text-2xl font-bold text-ink [word-break:auto-phrase] sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <StatusStepper status={status} />
@@ -497,7 +497,7 @@ export default function PlanPage() {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           <section className="card p-5">
             <p className="text-[15px] leading-relaxed text-ink">{plan.summary}</p>

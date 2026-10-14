@@ -202,7 +202,7 @@ export default function SettingsPage() {
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lav-50 text-lav-600">
             <ImageIcon className="h-5 w-5" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-40">
             <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
               推しの画像を選ぶと、ホームのチケットの背景に表示します。右のスイッチをオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
@@ -233,7 +233,7 @@ export default function SettingsPage() {
               <ImageIcon className="h-5 w-5" />
             )}
           </span>
-          <div className="min-w-0 flex-1 text-xs text-ink-soft">
+          <div className="min-w-0 flex-1 basis-40 text-xs text-ink-soft">
             {event ? (
               <>
                 <p className="font-bold text-ink">{event.artist} の推し画像</p>

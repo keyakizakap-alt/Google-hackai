@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* ホームを一画面に収める配置を使える広さ（横 1280px 以上かつ縦 740px 以上） */
-@custom-variant fit (@media (min-width: 80rem) and (min-height: 46.25rem));
-
 /*
  * OshiReady design tokens
  * コンセプト: 「推しに会う日のステージ照明」。ラベンダーの夜空 × 推しカラーのペンライト。

@@ -290,7 +290,7 @@ export default function EventsPage() {
 
       <RegisteredEvents editingId={targetId} onEdit={setEditingId} />
 
-      <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <EventForm key={editing?.id ?? "new"} editing={editing} onSaved={setEditingId} />
 
         <div className="space-y-5">
