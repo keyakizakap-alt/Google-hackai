@@ -1,7 +1,6 @@
 import "server-only";
-import type { ThinkingLevel } from "@google/genai";
 import { config, isGeminiConfigured } from "../config";
-import { createGenAI } from "../gemini";
+import { createGenAI, thinkingConfig } from "../gemini";
 import { logger } from "../logger";
 import { buildWebSearchPrompt, WEB_SEARCH_INSTRUCTION } from "../agent/prompt";
 import type { WebSearchPurpose, WebSearchRecord } from "../agent/types";
@@ -46,7 +45,7 @@ export async function searchWeb(purpose: WebSearchPurpose, query: string, opts: 
         systemInstruction: WEB_SEARCH_INSTRUCTION,
         tools: [{ googleSearch: {} }],
         // プラン作成と同じ考える深さにする（既定の深さだと遅く、制限時間に近づくため）
-        ...(config.gemini.thinkingLevel ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
+        ...thinkingConfig(),
         abortSignal: opts.signal ?? AbortSignal.timeout(TIMEOUT_MS),
       },
     });

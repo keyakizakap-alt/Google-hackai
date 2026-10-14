@@ -1,6 +1,6 @@
 import "server-only";
 import { isGeminiConfigured } from "../config";
-import { createGenAI, geminiErrorInfo, generateWithFallback } from "../gemini";
+import { createGenAI, geminiErrorInfo, generateWithFallback, thinkingConfig } from "../gemini";
 import { fenceJson } from "../agent/fence";
 import { logger } from "../logger";
 import { extractByRules, type DetectedLiveEvent, type LiveCandidate } from "./detect";
@@ -43,9 +43,17 @@ interface GeminiRow {
   venueStation: string;
 }
 
+/** 1 回の呼び出しの待ち時間 */
+const ATTEMPT_TIMEOUT_MS = 20_000;
+/**
+ * 再試行・予備のモデルも含めた全体の上限。超えたらルールで読み取る。
+ * 取り込みの間は画面が「探しています…」のまま待つため、長く待たせない（以前は 30 秒 × 3 回で約 90 秒かかることがあった）
+ */
+const TOTAL_TIMEOUT_MS = 35_000;
+
 /**
  * ライブ候補からアーティスト名・公演名・会場を抽出する。
- * Gemini（構造化出力）→ 失敗時はルールベース。候補以外の予定はここに届かない。
+ * Gemini（構造化出力）→ 失敗時・時間切れ時はルールベース。候補以外の予定はここに届かない。
  */
 export async function extractLiveEvents(candidates: LiveCandidate[], requestId: string): Promise<DetectedLiveEvent[]> {
   if (candidates.length === 0) return [];
@@ -53,13 +61,19 @@ export async function extractLiveEvents(candidates: LiveCandidate[], requestId: 
 
   const started = Date.now();
   try {
-    const ai = createGenAI(30_000);
+    const ai = createGenAI(ATTEMPT_TIMEOUT_MS);
     const input = candidates.map(({ key, summary, location, startAt }) => ({ key, summary, location, startAt }));
     const { res, model } = await generateWithFallback(
       ai,
       {
         contents: [{ role: "user", parts: [{ text: `<candidates>${fenceJson(input)}</candidates>` }] }],
-        config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA },
+        config: {
+          systemInstruction: SYSTEM,
+          responseMimeType: "application/json",
+          responseJsonSchema: SCHEMA,
+          ...thinkingConfig(),
+          abortSignal: AbortSignal.timeout(TOTAL_TIMEOUT_MS),
+        },
       },
       { requestId, route: "detect" },
     );

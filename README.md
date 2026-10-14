@@ -190,7 +190,7 @@ EVAL_REPEATS=3 npm run eval
 | `GOOGLE_CLIENT_ID/SECRET` | 既存予定は取得できず、公演は手動登録 |
 | `GEMINI_API_KEY` または Vertex 設定 | ルールベースのプランナー（同じツール・同じ検証を通る） |
 | `GEMINI_FALLBACK_MODEL` | 予備のモデルに切り替えない（メインが使えなければエラー） |
-| `GEMINI_THINKING_LEVEL` | `LOW`（AI が考える深さ。道具を何度も呼ぶため、応答の速さを優先） |
+| `GEMINI_THINKING_LEVEL` | `LOW`（AI が考える深さ。プラン作成・ライブやスクショの読み取り・Google 検索で共通。応答の速さを優先） |
 | `GEMINI_TOOL_MODE` | `AUTO`（道具の使わせ方の指定を送らない。`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
 | `GEMINI_WEB_SEARCH` | 既定はオン（`off` で止める）。Google 検索は検索クエリごとに費用がかかるため、検索の呼び出しを 1 回のプラン作成で 3 回までにしている（1 回の呼び出しで複数のクエリが走ることがある）。止めると、店舗名・便・価格を出さない動きに戻る |
 | `EKISPERT_API_KEY` | 移動は所要時間の目安（アプリ内の表・`src/lib/services/travelEstimate.ts`）で計算し、Google マップの乗換検索へのリンクを付ける |

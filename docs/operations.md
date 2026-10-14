@@ -23,7 +23,7 @@
 | 連携するカレンダー | `CALENDAR_SOURCES` |
 | AI のモデル | `GEMINI_MODEL` |
 | 道具の使わせ方 | `GEMINI_TOOL_MODE`（既定 `AUTO`。`VALIDATED`・`ANY` も選べるが、`ANY` は Vertex AI の gemini-3.5-flash で 400 になることを確認） |
-| AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
+| AI が考える深さ（応答の速さ） | `GEMINI_THINKING_LEVEL`（既定 `LOW`。プラン作成・ライブやスクショの読み取り・検索で共通。`MEDIUM`・`HIGH` にすると丁寧になるが遅くなる） |
 | AI 呼び出しの 1 日の上限 | `AGENT_DAILY_LIMIT` |
 | Google 検索（実在の店・宿・便と参考価格を探す） | `GEMINI_WEB_SEARCH`（既定はオン。`off` で止める。検索の呼び出しは 1 回のプラン作成で最大 3 回。課金は Google 側で実行された検索クエリの数で数え、1 回の呼び出しで複数のクエリが走ることがある（公式ドキュメント・2026-10-13 時点）） |
 | 駅すぱあとで使うツール | `EKISPERT_ALLOWED_TOOLS` |
@@ -58,6 +58,12 @@ jsonPayload.message="agent.gemini.failed"
 | `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 150 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。
+
+自動で作るプラン（ライブを登録した直後など）は、時間切れ・混雑・通信の切断のような一時的な失敗なら、画面側で 3 秒待って 1 回だけ自動でやり直す。権限・設定の誤り（上の表の `SERVICE_DISABLED` など）はやり直さない。
+
+## ライブの取り込みが遅い・`detect.gemini.failed` が出るとき
+
+`jsonPayload.message="detect.gemini.failed"` で、`apiStatus` が `DEADLINE_EXCEEDED`（`httpStatus` 504）なら、AI の読み取りが時間切れになっている。読み取りは再試行・予備のモデルも含めて全体 35 秒で打ち切り、ルールで読み取った結果で取り込みを続けるので、ライブの登録は止まらない（アーティスト名・会場名の精度が少し下がる）。続くときは `GEMINI_THINKING_LEVEL` が `LOW`（既定）か `MINIMAL` になっているか確かめる。
 
 ## Google 検索が使えないとき（店名・便・価格が出ない）
 
