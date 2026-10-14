@@ -35,7 +35,16 @@ export interface AgentContext {
   webSearchCount?: number;
   /** ログをつなぐための ID */
   requestId?: string;
+  /** プラン作成全体の締め切り（epoch ミリ秒）。時間のかかる道具（Google 検索）は、これを超えないように打ち切る */
+  deadline?: number;
 }
+
+/** 提出（submit_timeline）と検証のために、最後に残しておく時間 */
+export const SUBMIT_RESERVE_MS = 40_000;
+/** これより残りが少ないときは Google 検索を始めない（検索だけで締め切りを使い切らないように） */
+const MIN_TIME_FOR_WEB_SEARCH_MS = 15_000;
+/** Google 検索 1 回の待ち時間の上限 */
+const WEB_SEARCH_TIMEOUT_MS = 25_000;
 
 /** Google 検索の道具の名前（設定で止めたときは AI に渡さない） */
 export const WEB_SEARCH_TOOL = "search_web";
@@ -365,8 +374,17 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
           summary: "Google 検索の回数の上限に達したため、これまでの結果で組み立てます",
         };
       }
+      // 締め切りが近いときは検索しない。提出の時間を残すため、検索は「残り時間 − 提出の分」までで打ち切る
+      const budget = ctx.deadline ? Math.min(WEB_SEARCH_TIMEOUT_MS, ctx.deadline - Date.now() - SUBMIT_RESERVE_MS) : WEB_SEARCH_TIMEOUT_MS;
+      if (budget < MIN_TIME_FOR_WEB_SEARCH_MS) {
+        return {
+          ok: true,
+          response: { available: false, reason: "時間が足りないため検索しませんでした。店舗名・便名・価格は書かず、これまでの結果か候補日時の案内で組み立て、すぐに submit_timeline で提出してください" },
+          summary: "時間が足りないため Google 検索は省き、これまでの結果で組み立てます",
+        };
+      }
       ctx.webSearchCount = (ctx.webSearchCount ?? 0) + 1;
-      const r = await searchWeb(purpose, query, { requestId: ctx.requestId });
+      const r = await searchWeb(purpose, query, { requestId: ctx.requestId, signal: AbortSignal.timeout(budget) });
       const what = { beauty_salon: "美容サロン", hotel: "宿", flight: "飛行機の便" }[purpose];
       if (!r.available || !r.record) {
         return {

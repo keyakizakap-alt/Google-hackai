@@ -15,7 +15,7 @@ import { runRuleBasedPlanner } from "./fallback";
 import { COMPAT_SUMMARY, shouldRetryInCompat, toLegacyDeclarations } from "./compat";
 import { probeGeminiRequest } from "./probe";
 import { buildUserPrompt, SYSTEM_INSTRUCTION } from "./prompt";
-import { executeTool, NATIVE_DECLARATIONS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
+import { executeTool, NATIVE_DECLARATIONS, SUBMIT_RESERVE_MS, WEB_SEARCH_TOOL, type AgentContext } from "./tools";
 
 /** 乗り換えの待機系（所要時間の目安）の道具。主系（駅すぱあと）が使えるときは AI に渡さない */
 const TRANSIT_FALLBACK_TOOL = "estimate_travel_time";
@@ -115,6 +115,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   if (isGeminiConfigured()) {
     engine = "gemini";
     const deadline = Date.now() + DEADLINE_MS;
+    ctx.deadline = deadline;
     const models = modelCandidates();
     let compat = 0;
     for (let i = 0; i < models.length; i++) {
@@ -341,8 +342,8 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
   for (let step = 0; step < config.gemini.maxSteps; step++) {
     if (Date.now() > deadline) throw new AgentDeadlineError();
     const started = Date.now();
-    // 残り 2 回になったら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
-    const mustSubmit = step >= config.gemini.maxSteps - 2;
+    // 残り 2 回になったら、または締め切りが近づいたら提出だけを許可し、調べものの途中で打ち切られて何も返せない事態を防ぐ
+    const mustSubmit = step >= config.gemini.maxSteps - 2 || deadline - Date.now() < SUBMIT_RESERVE_MS;
     const res = await ai.models.generateContent({
       model,
       contents,
@@ -373,15 +374,27 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     }
     contents.push(modelContent);
 
-    const responseParts: Part[] = [];
-    for (const call of calls) {
+    const run = async (call: (typeof calls)[number]) => {
       const name = call.name ?? "";
       const t0 = Date.now();
       const outcome = allowed.has(name)
         ? await executeTool(name, (call.args ?? {}) as Record<string, unknown>, ctx)
         : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
-      trace.push({ step: trace.length + 1, type: allowed.has(name) ? "tool" : "guardrail", name, ok: outcome.ok, latencyMs: Date.now() - t0, summary: outcome.summary });
-      logger.info("agent.tool", { requestId: input.requestId, tool: name, toolOk: outcome.ok, latencyMs: Date.now() - t0 });
+      return { call, name, outcome, latencyMs: Date.now() - t0 };
+    };
+    // 調べものの道具は互いに独立しているので、同時に実行する（Google 検索 3 件を順番に待つと、それだけで 1 分以上かかり時間切れになっていた）。
+    // 提出（submit_timeline）は、同じ回の調べものの結果（天気・検索の出典）を使って検証するため、そのあとで実行する
+    const research = calls.filter((c) => c.name !== "submit_timeline");
+    const submits = calls.filter((c) => c.name === "submit_timeline");
+    const results = await Promise.all(research.map(run));
+    for (const c of submits) results.push(await run(c));
+    const byCall = new Map(results.map((r) => [r.call, r]));
+    const responseParts: Part[] = [];
+    // 記録と応答は、AI が呼んだ順に並べる
+    for (const call of calls) {
+      const { name, outcome, latencyMs } = byCall.get(call)!;
+      trace.push({ step: trace.length + 1, type: allowed.has(name) ? "tool" : "guardrail", name, ok: outcome.ok, latencyMs, summary: outcome.summary });
+      logger.info("agent.tool", { requestId: input.requestId, tool: name, toolOk: outcome.ok, latencyMs });
       responseParts.push({ functionResponse: { id: call.id, name, response: outcome.response } });
     }
     contents.push({ role: "user", parts: responseParts });
