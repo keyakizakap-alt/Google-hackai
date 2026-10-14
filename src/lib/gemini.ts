@@ -1,5 +1,5 @@
 import "server-only";
-import { GoogleGenAI, type GenerateContentParameters, type GenerateContentResponse, type HttpRetryOptions } from "@google/genai";
+import { GoogleGenAI, type GenerateContentParameters, type GenerateContentResponse, type HttpRetryOptions, type ThinkingLevel } from "@google/genai";
 import { config } from "./config";
 import { logger } from "./logger";
 
@@ -20,6 +20,15 @@ export const GEMINI_RETRY: HttpRetryOptions = {
   jitter: 1,
   httpStatusCodes: [408, 429, 500, 502, 503, 504],
 };
+
+/**
+ * 考える深さの指定（GEMINI_THINKING_LEVEL。既定 LOW）。空文字のときは送らず、モデルの既定値を使う。
+ * 指定しないとモデルの既定（深く考える）になり、短い抽出でも 30 秒を超えて時間切れ（504 DEADLINE_EXCEEDED）になることがあった
+ */
+export function thinkingConfig(): { thinkingConfig?: { thinkingLevel: ThinkingLevel } } {
+  const level = config.gemini.thinkingLevel;
+  return level ? { thinkingConfig: { thinkingLevel: level as ThinkingLevel } } : {};
+}
 
 /** 1 回の呼び出しの待ち時間（ミリ秒）を指定してクライアントを作る */
 export function createGenAI(timeoutMs: number): GoogleGenAI {

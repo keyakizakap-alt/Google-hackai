@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { isGeminiConfigured } from "../config";
-import { createGenAI, geminiErrorInfo, generateWithFallback } from "../gemini";
+import { createGenAI, geminiErrorInfo, generateWithFallback, thinkingConfig } from "../gemini";
 import { fenceText } from "../agent/fence";
 import { logger } from "../logger";
 import { redactText } from "../privacy/mask";
@@ -71,7 +71,11 @@ export async function scanForEvents(input: { image?: { mime: string; data: Buffe
 
     const { res } = await generateWithFallback(
       ai,
-      { contents: [{ role: "user", parts }], config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA } },
+      {
+        contents: [{ role: "user", parts }],
+        // 考える深さを指定し、再試行・予備のモデルを含めても 55 秒で打ち切る（画面を長く待たせない）
+        config: { systemInstruction: SYSTEM, responseMimeType: "application/json", responseJsonSchema: SCHEMA, ...thinkingConfig(), abortSignal: AbortSignal.timeout(55_000) },
+      },
       { requestId, route: "scan" },
     );
     const rows = (JSON.parse(res.text ?? "{}") as { events?: Row[] }).events ?? [];

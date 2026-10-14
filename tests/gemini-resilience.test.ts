@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const constructed: { httpOptions?: { retryOptions?: { attempts?: number; httpStatusCodes?: number[] } } }[] = [];
 const calledModels: string[] = [];
+const calledConfigs: { thinkingConfig?: { thinkingLevel?: string }; abortSignal?: AbortSignal }[] = [];
 /** モデル名ごとの振る舞い。投げる値を返すと失敗、配列を返すとその関数呼び出しを返す */
 let behavior: (model: string) => { throw: unknown } | { calls: { name: string; args: Record<string, unknown> }[] } = () => ({ calls: [] });
 
@@ -16,8 +17,9 @@ vi.mock("@google/genai", () => ({
       constructed.push(opts);
     }
     models = {
-      generateContent: vi.fn(async (req: { model: string }) => {
+      generateContent: vi.fn(async (req: { model: string; config?: (typeof calledConfigs)[number] }) => {
         calledModels.push(req.model);
+        calledConfigs.push(req.config ?? {});
         const b = behavior(req.model);
         if ("throw" in b) throw b.throw;
         return {
@@ -49,6 +51,7 @@ const apiError = (status: number) => Object.assign(new Error(`HTTP ${status}`), 
 beforeEach(() => {
   constructed.length = 0;
   calledModels.length = 0;
+  calledConfigs.length = 0;
 });
 
 describe("自動の再試行", () => {
@@ -147,5 +150,25 @@ describe("失敗の理由をログに残す", () => {
     expect(geminiErrorInfo(new Error("fetch failed"))).toEqual({});
     expect(geminiErrorInfo(new Error(JSON.stringify({ error: { status: "denied for user@example.com" } })))).toEqual({ apiStatus: undefined, apiReason: undefined });
     expect(geminiErrorInfo("not an error")).toEqual({});
+  });
+});
+
+describe("ライブの抽出を長く待たせない", () => {
+  const candidate = { key: "k1", summary: "LUMIRISE 京セラドーム公演", location: "京セラドーム大阪", startAt: `${day}T18:00:00+09:00`, timeUnknown: false };
+
+  it("考える深さ（既定 LOW）と、全体の制限時間を指定して呼ぶ", async () => {
+    behavior = () => ({ calls: [] });
+    const { extractLiveEvents } = await import("@/lib/eventDetection/extract");
+    await extractLiveEvents([candidate], "think");
+    expect(calledConfigs[0]?.thinkingConfig?.thinkingLevel).toBe("LOW");
+    expect(calledConfigs[0]?.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("時間切れ（504 DEADLINE_EXCEEDED）でも取り込みは止めず、ルールで読み取った結果を返す", async () => {
+    behavior = () => ({ throw: Object.assign(new Error(JSON.stringify({ error: { code: 504, status: "DEADLINE_EXCEEDED" } })), { name: "ApiError", status: 504 }) });
+    const { extractLiveEvents } = await import("@/lib/eventDetection/extract");
+    const out = await extractLiveEvents([candidate], "deadline");
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe("rules");
   });
 });

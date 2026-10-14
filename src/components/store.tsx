@@ -6,6 +6,7 @@ import { clearWorkspace, loadWorkspace, saveWorkspace } from "@/lib/client/works
 import { mergeCalendarEvents } from "@/lib/client/calendarSync";
 import type { BookingResult, OshiEvent, PlanEnvelope, TimelineItem, TraceStep } from "@/lib/agent/types";
 import type { WatchSignal } from "@/lib/agent/watch";
+import { isTransientPlanFailure, PLAN_RETRY_DELAY_MS } from "@/lib/planRetry";
 import { formatJst } from "@/lib/time";
 
 /** 公演と予約メモはこのブラウザの IndexedDB に保存する。OAuth トークンは保存しない。 */
@@ -133,6 +134,14 @@ function fallbackError(status: number): string {
     : `通信に失敗しました（HTTP ${status}）`;
 }
 
+/** サーバーが断ったときのエラー。状態コードと理由の種類を持たせ、やり直してよいかの判断に使う */
+class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly reason?: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function api<T>(path: string, body?: unknown, action?: string): Promise<T> {
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
@@ -144,7 +153,7 @@ async function api<T>(path: string, body?: unknown, action?: string): Promise<T>
   if (!res.ok) {
     const { error, reason } = json as { error?: string; reason?: string };
     // AI に接続できなかった理由の種類（例: PERMISSION_DENIED）を添える。管理者がログを見なくても原因の見当を付けられるように
-    throw new Error(`${error ?? fallbackError(res.status)}${reason ? `（理由: ${reason}）` : ""}`);
+    throw new ApiError(`${error ?? fallbackError(res.status)}${reason ? `（理由: ${reason}）` : ""}`, res.status, reason);
   }
   return json as T;
 }
@@ -619,12 +628,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!opts?.auto) setError(null);
       let r: PlanResponse | undefined;
       try {
-        r = await api<PlanResponse>("/api/agent/plan", { event: target });
-      } catch (e) {
-        const message = (e as Error).message;
-        setPlanError(message);
-        // 自分で押したときだけポップアップでも知らせる（自動作成の失敗はプラン欄に表示）
-        if (!opts?.auto) setError(message);
+        for (let attempt = 0; ; attempt++) {
+          try {
+            r = await api<PlanResponse>("/api/agent/plan", { event: target });
+            break;
+          } catch (e) {
+            // 自動で作るときの一時的な失敗（時間切れ・混雑・通信の切断）は、1 回だけ自動でやり直す。
+            // 初回は起動直後や混雑で失敗しやすく、そのままだと「もう一度作る」を押すまでプランができないため
+            const failure = e instanceof ApiError ? { status: e.status, reason: e.reason } : {};
+            if (opts?.auto && attempt === 0 && isTransientPlanFailure(failure)) {
+              await new Promise((done) => setTimeout(done, PLAN_RETRY_DELAY_MS));
+              continue;
+            }
+            const message = (e as Error).message;
+            setPlanError(message);
+            // 自分で押したときだけポップアップでも知らせる（自動作成の失敗はプラン欄に表示）
+            if (!opts?.auto) setError(message);
+            break;
+          }
+        }
       } finally {
         setBusy(null);
       }
