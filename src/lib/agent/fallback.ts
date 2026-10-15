@@ -48,8 +48,8 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
           location: taken.nearestStation,
           provider: { name: taken.salonName, bookingUrl: taken.bookingUrl },
           rationale: ideal.includes(d)
-            ? `${g.note}。予定上の候補日時です。店舗の空席と価格は予約サイトで確認してください。`
-            : `推奨（${minD}〜${maxD}日前）から外れた候補日時です。店舗の空席と価格は予約サイトで確認してください。`,
+            ? `${g.note}。予定が空いている日時です。お店の空きと料金は予約サイトで確かめてください。`
+            : `おすすめの${minD}〜${maxD}日前からは外れますが、予定が空いている日時です。お店の空きと料金は予約サイトで確かめてください。`,
           requiresBooking: true,
         });
         const label = g.label.split("（")[0];
@@ -58,8 +58,8 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
           chosen: formatJst(taken.start),
           alternatives: order.filter((x) => x !== d).slice(0, 3).map((x) => `${x}日前`),
           reason: ideal.includes(d)
-            ? `仕上がりが落ち着く推奨（${minD}〜${maxD}日前）の範囲で、カレンダーの予定と重ならない最初の空き時間です。`
-            : `推奨（${minD}〜${maxD}日前）の日は空き時間がなかったため、いちばん近い日にしました。`,
+            ? `仕上がりが落ち着く${minD}〜${maxD}日前のうち、予定と重ならないいちばん早い空き時間です。`
+            : `おすすめの${minD}〜${maxD}日前は空きがなかったので、いちばん近い日にしました。`,
         });
         break;
       }
@@ -72,8 +72,8 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
   decisions.push({
     topic: "現地に着く時刻",
     chosen: `${formatJst(toJstIso(arriveBy))} ごろ`,
-    alternatives: event.arriveEarlyForGoods ? ["開演 90 分前（物販に間に合わない）", "開演直前（入場の列が最も混む）"] : ["開演直前（入場の列が最も混む）"],
-    reason: `${event.arriveEarlyForGoods ? "物販に並ぶ時間を確保し、" : ""}混雑の予想（${crowd.summary}）をもとに、入場が集中する前に着くようにしました。`,
+    alternatives: event.arriveEarlyForGoods ? ["開演 90 分前だと物販に間に合いません", "開演直前だと入場の列がいちばん混みます"] : ["開演直前だと入場の列がいちばん混みます"],
+    reason: `${event.arriveEarlyForGoods ? "物販に並ぶ時間をとって、" : ""}入場の列が混む前に着くようにしました。${crowd.summary}。`,
   });
   // 往路：所要時間の目安（アプリ内の表）で、着きたい時刻から出発の目安を逆算する
   const est = (await call("estimate_travel_time", { from_station: event.homeStation, to_station: event.venueStation, arrive_by: toJstIso(arriveBy) })).response as unknown as TravelEstimate;
@@ -86,7 +86,7 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
       start: toJstIso(departBy),
       end: toJstIso(arriveBy),
       route: { from: event.homeStation, to: event.venueStation, summary: est.summary, legs: [], source: "estimate" },
-      rationale: `${est.summary}。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くよう、遅めの見積もりから出発の目安を決めました。乗る電車はリンクから確かめてください。`,
+      rationale: `${est.summary}。${formatJst(toJstIso(arriveBy))} ごろ会場に着けるよう、余裕をみて出発の時刻を決めました。乗る電車はリンクから確かめてください。`,
       requiresBooking: true,
     });
   }
@@ -100,8 +100,8 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     end: toJstIso(checkAt + MS_MIN),
     provider: { name: "Google マップで乗り換えを検索", bookingUrl: transitSearchUrl(event.homeStation, event.venueStation) },
     rationale: est.available
-      ? `移動の所要時間は目安です（${est.summary.replace(/^.*?：/, "")}）。乗る電車・運賃を確かめてください。`
-      : `乗り換えの目安を出せませんでした。${formatJst(toJstIso(arriveBy))} ごろに会場へ着くことを目安に、乗る電車・かかる時間・運賃を確かめてください。`,
+      ? `かかる時間は${est.summary.replace(/^.*?：/, "")}です。乗る電車と運賃を確かめてください。`
+      : `移動時間の目安が出せませんでした。${formatJst(toJstIso(arriveBy))} ごろ会場に着けるよう、乗る電車とかかる時間・運賃を確かめてください。`,
     requiresBooking: true,
   });
 
@@ -117,9 +117,9 @@ export async function runRuleBasedPlanner(ctx: AgentContext, trace: TraceStep[])
     requiresBooking: false,
   });
   await call("submit_timeline", {
-    summary: `${event.title} に向けて、美容 ${items.filter((i) => i.kind === "beauty").length} 件の候補日時を選びました。移動のしかたと、泊まりが必要かどうかは乗り換え案内で確かめてください。`,
+    summary: `${event.title} に向けて、美容の候補日時を ${items.filter((i) => i.kind === "beauty").length} 件選びました。移動の方法と、泊まりが必要かどうかは乗り換え案内で確かめてください。`,
     items,
-    warnings: ["サロンの空きや料金、移動のしかたはまだ確認できていません。予約の前に確かめてください。"],
+    warnings: ["サロンの空きや料金、移動の方法はまだ調べていません。予約の前に確かめてください。"],
     decisions,
   });
 }

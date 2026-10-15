@@ -27,8 +27,8 @@ export default function ErrorPage({ error, retry }: { error: Error & { digest?: 
       <h1 className="mt-2 text-lg font-bold text-ink">{stale ? "新しい版に切り替えています…" : "この画面を表示できませんでした"}</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-soft">
         {stale
-          ? "アプリが新しくなったため、画面を読み込み直しています。数秒たっても変わらないときは、下のボタンを押してください。"
-          : "一時的な問題の可能性があります。もう一度表示するか、ホームに戻ってください。作成中のプランや登録したライブは消えていません。"}
+          ? "アプリが新しくなったので、読み込み直しています。数秒たっても変わらなければ、下のボタンを押してください。"
+          : "一時的なエラーかもしれません。もう一度表示するか、ホームに戻ってください。作成中のプランや登録したライブは残っています。"}
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <button

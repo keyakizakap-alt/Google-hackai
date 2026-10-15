@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     let image: { mime: string; data: Buffer } | undefined;
     if (parsed.data.image) {
       const m = parsed.data.image.match(/^data:(image\/(?:png|jpeg|webp|heic|heif));base64,(.+)$/);
-      if (!m) return NextResponse.json({ error: "対応していない画像形式です（PNG・JPEG・WebP）" }, { status: 400 });
+      if (!m) return NextResponse.json({ error: "この画像の形式には対応していません。PNG・JPEG・WebP でお試しください" }, { status: 400 });
       const data = Buffer.from(m[2], "base64");
       if (data.length > MAX_IMAGE_BYTES) return NextResponse.json({ error: "画像が大きすぎます" }, { status: 400 });
       image = { mime: m[1], data };

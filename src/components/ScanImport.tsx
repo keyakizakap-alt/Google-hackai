@@ -51,7 +51,7 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ image: image ?? undefined, text: text.trim() || undefined }),
       });
       const json = (await res.json().catch(() => ({}))) as { events?: DetectedLiveEvent[]; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "読み取りに失敗しました");
+      if (!res.ok) throw new Error(json.error ?? "うまく読み取れませんでした");
       const list = json.events ?? [];
       setFound(list);
       setChecked(new Set(list.map((e) => e.key)));
@@ -96,7 +96,7 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
         {state !== "result" && (
           <>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              カレンダーやチケット画面のスクリーンショット、当選メールの文章から、ライブの日時・会場を読み取ります。TimeTree や iPhone のカレンダーでも使えます。
+              カレンダーやチケット画面のスクショ、当選メールの文章から、ライブの日時と会場を読み取ります。TimeTree や iPhone のカレンダーでも使えます。
             </p>
 
             <label className="mt-5 flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-lav-200 bg-cloud p-4 text-center transition hover:border-rose-300">
@@ -107,7 +107,7 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
                 <>
                   <Camera className="h-7 w-7 text-lav-500" strokeWidth={1.6} />
                   <span className="text-sm font-bold text-ink">スクショ・写真を選ぶ</span>
-                  <span className="text-[11px] text-mute">カレンダー画面／電子チケット／当選メール など</span>
+                  <span className="text-[11px] text-mute">カレンダー・電子チケット・当選メールなど</span>
                 </>
               )}
               <input
@@ -170,14 +170,14 @@ function ScanDialog({ onClose }: { onClose: () => void }) {
             {found.length === 0 ? (
               <div className="mt-5 rounded-2xl bg-cloud p-6 text-center">
                 <p className="font-bold text-ink">ライブの予定が見つかりませんでした</p>
-                <p className="mt-1 text-xs text-mute">日付と公演名が写っている画像か、文章でもう一度お試しください。</p>
+                <p className="mt-1 text-xs text-mute">日付と公演名が写った画像か、文章でもう一度試してみてください。</p>
                 <button onClick={() => setState("input")} className="mt-4 min-h-[44px] rounded-xl border border-line bg-white px-5 text-sm font-bold text-ink">
                   やり直す
                 </button>
               </div>
             ) : (
               <>
-                <p className="mt-2 text-sm text-ink-soft">{found.length} 件見つかりました。内容を確認して登録してください（あとから編集もできます）。</p>
+                <p className="mt-2 text-sm text-ink-soft">{found.length} 件見つかりました。内容を見て登録してください。あとから直すこともできます。</p>
                 <ul className="mt-4 space-y-2">
                   {found.map((e) => {
                     const on = checked.has(e.key);

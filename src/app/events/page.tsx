@@ -60,17 +60,17 @@ function RegisteredEvents({ formTarget, onOpen }: { formTarget: FormTarget; onOp
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mute">
         {session?.calendarConnected
-          ? "カレンダーの今後 6 か月の予定から、ライブ・公演らしい予定だけを見つけて登録します。それ以外の予定の内容はすぐに捨て、どこにも保存しません。削除した取り込みイベントは、次の取り込みで戻ってきません。"
-          : "連携前は、スクショ・文章からの追加か手動で公演を登録できます。カレンダーの空き時間は連携後に確認します。"}
+          ? "今後 6 か月の予定から、ライブらしいものだけを登録します。ほかの予定はすぐに捨てて、どこにも保存しません。削除したライブは、次に取り込んでも戻ってきません。"
+          : "スクショや文章、手入力でも登録できます。空き時間は、カレンダーをつないでから確かめます。"}
       </p>
       {lastImport && (
         <p className="pop-in mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-ink">
-          {lastImport.scanned} 件の予定を確認 → ライブ <b>{lastImport.found}</b> 件を検出（新規登録 {lastImport.added} 件）
+          予定 {lastImport.scanned} 件から、ライブが <b>{lastImport.found}</b> 件見つかりました。新しく登録したのは {lastImport.added} 件です。
         </p>
       )}
 
       <ul className="mt-4 divide-y divide-line">
-        {events.length === 0 && <li className="py-6 text-center text-sm text-mute">{importing ? "取り込み中…" : "まだイベントはありません"}</li>}
+        {events.length === 0 && <li className="py-6 text-center text-sm text-mute">{importing ? "取り込み中…" : "まだライブはありません"}</li>}
         {events.map((e, i) => {
           const active = e.id === event?.id;
           return (
@@ -122,7 +122,7 @@ function RegisteredEvents({ formTarget, onOpen }: { formTarget: FormTarget; onOp
         <EventForm key="new" editing={null} onClose={events.length > 0 ? () => onOpen(null) : undefined} />
       ) : (
         <button onClick={() => onOpen("new")} className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-lav-200 text-sm text-ink-soft hover:border-rose-300 hover:bg-rose-50/40">
-          <Plus className="h-4 w-4" /> 手動でイベントを追加
+          <Plus className="h-4 w-4" /> ライブを手入力で追加
         </button>
       )}
     </section>
@@ -174,11 +174,11 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
       timeUnknown: false,
     });
     if (!parsed.success) {
-      setErr("未入力の項目があります");
+      setErr("まだ入っていない欄があります");
       return null;
     }
     if (Date.parse(parsed.data.startAt) < Date.now()) {
-      setErr("イベント日時は未来の日付を指定してください");
+      setErr("日時は、これから先の日付にしてください");
       return null;
     }
     setErr(null);
@@ -194,7 +194,7 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-display text-sm italic text-mute">{editing ? "Edit" : "New"}</p>
-          <h3 id={`event-form-${editing?.id ?? "new"}`} className="text-[16px] font-bold text-ink">{editing ? `「${editing.title}」を編集` : "イベントを手動で追加"}</h3>
+          <h3 id={`event-form-${editing?.id ?? "new"}`} className="text-[16px] font-bold text-ink">{editing ? `「${editing.title}」を編集` : "ライブを手入力で追加"}</h3>
         </div>
         {onClose && (
           <button type="button" onClick={onClose} aria-label="フォームを閉じる" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-mute hover:bg-white">
@@ -202,7 +202,7 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
           </button>
         )}
       </div>
-      {(editing?.source === "calendar" || editing?.source === "scan") && <p className="mt-1 text-xs text-mute">自動で読み取った内容です。違っていれば修正してください。</p>}
+      {(editing?.source === "calendar" || editing?.source === "scan") && <p className="mt-1 text-xs text-mute">自動で読み取った内容です。違うところがあれば直してください。</p>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink-soft">
               アーティスト
@@ -226,7 +226,7 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
                 className={field}
                 value={form.venue}
                 list="venue-list"
-                placeholder="会場名を入力 / 候補から選択"
+                placeholder="会場名を入れるか、候補から選ぶ"
                 onChange={(e) => {
                   const v = e.target.value;
                   const known = matchVenue(v);
@@ -247,13 +247,13 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
               <input className={field} value={form.venueStation} onChange={(e) => set("venueStation", e.target.value)} maxLength={40} />
             </label>
             <label className="text-xs font-semibold text-ink-soft sm:col-span-2">
-              出発駅（全イベント共通・サロンもこの周辺で探します）
+              出発駅（全ライブ共通。サロンもこの近くで探します）
               <input className={field} value={form.homeStation} onChange={(e) => set("homeStation", e.target.value)} maxLength={40} />
             </label>
           </div>
 
           <fieldset className="mt-6">
-            <legend className="text-xs font-semibold text-ink-soft">事前に行きたい美容メニュー</legend>
+            <legend className="text-xs font-semibold text-ink-soft">ライブ前に行きたい美容メニュー</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {BEAUTY_SERVICES.map((s) => {
                 const on = form.beautyServices.includes(s);
@@ -274,14 +274,14 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
 
           <label className="mt-5 flex items-center gap-2 text-sm text-ink-soft">
             <input type="checkbox" className="h-4 w-4 accent-[#655da3]" checked={form.arriveEarlyForGoods} onChange={(e) => set("arriveEarlyForGoods", e.target.checked)} />
-            物販に並ぶため早めに現地入りしたい
+            物販に並ぶので、早めに会場へ行きたい
           </label>
 
           {err && <p className="mt-4 text-sm text-rose-500">{err}</p>}
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => {
-                if (save()) notify(autoPlan ? "保存しました。AI が準備プランを作り始めます" : "保存しました");
+                if (save()) notify(autoPlan ? "保存しました。準備プランを作り始めます" : "保存しました");
               }}
               className="rounded-xl border border-line px-6 py-3 text-sm font-semibold text-ink-soft hover:bg-lav-50"
             >
@@ -299,13 +299,13 @@ function EventForm({ editing, onClose }: { editing: OshiEvent | null; onClose?: 
               className="btn-primary flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white"
             >
               {busy === "planning" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {aiReady ? "保存して AI に任せる" : "保存してプランを作る"}
+              {aiReady ? "保存しておまかせで作る" : "保存してプランを作る"}
             </button>
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-mute">
             {autoPlan
-              ? "どちらのボタンでも、保存すると AI が空き時間・美容・移動を自分で調べて準備プランを作ります。予約はあなたが承認するまで進みません。"
-              : "自動作成はオフです。「保存して AI に任せる」を押すとプランを作ります（設定で自動作成をオンにできます）。"}
+              ? "どちらで保存しても、空き時間・美容・移動を調べて準備プランを作ります。予約は、あなたが承認するまで進みません。"
+              : `いまは自動作成がオフです。「${aiReady ? "保存しておまかせで作る" : "保存してプランを作る"}」を押すと作ります。設定でオンにもできます。`}
           </p>
           {onClose && (
             <button type="button" onClick={onClose} className="mt-3 text-xs font-semibold text-ink-soft underline-offset-2 hover:underline">
@@ -325,7 +325,7 @@ export default function EventsPage() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Events" title="イベント">
-        Google カレンダーからライブを自動で取り込めます。取り込んだ内容は画面上部のティッカーやホームにすぐ反映されます。
+        Google カレンダーやスクショから、ライブを登録できます。登録したライブは、ホームと画面上部の帯にすぐ出ます。
       </PageHeader>
 
       <RegisteredEvents formTarget={formTarget} onOpen={setTarget} />

@@ -37,7 +37,7 @@ export function PlanSummaryCard() {
           <h2 id="plan-summary" className="text-[17px] font-bold text-ink">提案プラン</h2>
         </div>
         <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-500">
-          {envelope ? `${byAi ? "AI作成" : "かんたん提案"}・${STATUS_LABEL[envelope.status]}` : byAi ? "AIが作成" : "かんたん提案"}
+          {envelope ? `${byAi ? "おまかせ作成" : "かんたん提案"}・${STATUS_LABEL[envelope.status]}` : byAi ? "おまかせ作成" : "かんたん提案"}
         </span>
       </div>
 
@@ -56,14 +56,14 @@ export function PlanSummaryCard() {
               </button>
             </>
           ) : envelope ? (
-            <p className="mt-2 text-xs text-mute">このプランには美容・移動の予定がありません。詳しくはプラン画面で確認できます。</p>
+            <p className="mt-2 text-xs text-mute">美容や移動の予定は入っていません。中身はプラン画面で見られます。</p>
           ) : (
             <p className="mt-2 text-xs text-mute">
               {!event
-                ? "イベントを登録すると、AI が準備プランを作ってここに表示します。"
+                ? "イベントを登録すると、準備プランを自動で作ってここに出します。"
                 : autoPlan && upcoming
-                  ? "AI がまもなく準備プランを作ります。"
-                  : "まだプランがありません。下の「プランを作る」から作成できます。"}
+                  ? "まもなく準備プランができます。"
+                  : "まだプランはありません。下の「プランを作る」から作れます。"}
             </p>
           )}
         </div>

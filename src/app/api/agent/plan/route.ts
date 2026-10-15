@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const parsed = Body.safeParse(await readJson(req, 64 * 1024));
     if (!parsed.success) return NextResponse.json({ error: "入力内容を確認してください" }, { status: 400 });
     if (Date.parse(parsed.data.event.startAt) < Date.now()) {
-      return NextResponse.json({ error: "イベント日時が過去です" }, { status: 400 });
+      return NextResponse.json({ error: "ライブの日時がもう過ぎています" }, { status: 400 });
     }
     const out = await generatePlan({ event: parsed.data.event, ...meta });
     return NextResponse.json(out);

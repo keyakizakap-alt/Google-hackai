@@ -22,10 +22,10 @@ export function assertSameOrigin(req: Request, requiredAction?: string): NextRes
   const base = appBaseUrl();
   const allowed = new Set([base ? new URL(base).host : null, host].filter(Boolean));
   if (!origin || !allowed.has(originHost(origin))) {
-    return NextResponse.json({ error: "この操作は OshiReady の画面からのみ行えます" }, { status: 403 });
+    return NextResponse.json({ error: "この操作は OshiReady の画面からお願いします" }, { status: 403 });
   }
   if (requiredAction && req.headers.get("x-oshiready-action") !== requiredAction) {
-    return NextResponse.json({ error: "この操作にはあなたの確認が必要です" }, { status: 403 });
+    return NextResponse.json({ error: "この操作には、画面でのあなたの確認が必要です" }, { status: 403 });
   }
   return null;
 }
@@ -116,7 +116,7 @@ export function rateLimit(req: Request, key: string, limit: number, windowMs = 6
     return null;
   }
   b.count++;
-  if (b.count > limit) return NextResponse.json({ error: "操作が続いたため、少しお休みしています。1 分ほど待ってからもう一度お試しください。" }, { status: 429 });
+  if (b.count > limit) return NextResponse.json({ error: "操作が続いたので、少し間をあけています。1 分ほどしてからもう一度お試しください。" }, { status: 429 });
   return null;
 }
 
@@ -137,7 +137,7 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
     // 秘密の値そのものは出さず、どの設定が足りないかだけを伝える
     logger.error("config.missing", { ...meta, errorCode: e.setting });
     return NextResponse.json(
-      { error: "ただいまプランを作れない状態です。ご不便をおかけしてすみません。時間をおいて、もう一度お試しください", code: "CONFIG_MISSING", requestId: meta.requestId },
+      { error: "ただいまプランを作れない状態です。すみませんが、時間をおいてもう一度お試しください", code: "CONFIG_MISSING", requestId: meta.requestId },
       { status: 503 },
     );
   }
@@ -150,7 +150,7 @@ export function errorResponse(e: unknown, meta: { requestId: string; trace?: str
     return NextResponse.json({ error: e.message, code: "CALENDAR_AUTH" }, { status: 401 });
   }
   logger.error("unhandled", { ...meta, errorCode: e instanceof Error ? e.name : "unknown" });
-  return NextResponse.json({ error: "うまく処理できませんでした。もう一度お試しください。登録したライブや予約の記録はそのまま残っています", requestId: meta.requestId }, { status: 500 });
+  return NextResponse.json({ error: "うまくいきませんでした。登録したライブや予約の記録は残っているので、もう一度お試しください", requestId: meta.requestId }, { status: 500 });
 }
 
 /**
@@ -165,7 +165,7 @@ export function dailyAgentCap(): NextResponse | null {
   if (daily.day !== day) daily = { day, count: 0 };
   daily.count++;
   if (daily.count > limit) {
-    return NextResponse.json({ error: "本日の AI 利用回数の上限に達しました。明日もう一度お試しください。" }, { status: 429 });
+    return NextResponse.json({ error: "今日の利用回数の上限に達しました。また明日お試しください。" }, { status: 429 });
   }
   return null;
 }

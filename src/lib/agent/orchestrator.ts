@@ -75,7 +75,7 @@ export class AgentUnavailableError extends Error {
    * Google の API が返す決まった名前・リクエストの項目名・例外の名前だけで、説明文や利用者のデータは含めない
    */
   readonly reason?: string;
-  constructor(message = "AI が混み合っていて、プランを作れませんでした。少し時間をおいて、もう一度お試しください。登録したライブはそのまま残っています", reason?: string) {
+  constructor(message = "いま混み合っていて、プランを作れませんでした。登録したライブは残っているので、少し時間をおいてもう一度お試しください", reason?: string) {
     super(message);
     this.name = "AgentUnavailableError";
     this.reason = reason;
@@ -108,7 +108,7 @@ function isTimeout(e: unknown): boolean {
 }
 
 /** AI の応答が遅く、ルールで組み立てたときの説明（画面の進み具合と注意書きに出す） */
-const RULE_FALLBACK_SUMMARY = "混み合っていたため、決まった手順で組み立てました";
+const RULE_FALLBACK_SUMMARY = "混み合っていたので、決まった手順で組み立てました";
 
 /** 予備のモデルで作り直すのに最低限ほしい残り時間 */
 const MIN_TIME_FOR_FALLBACK_MS = 30_000;
@@ -179,7 +179,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
-        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "AI が混み合っていたため、別の AI で作り直しています" });
+        trace.push({ step: trace.length + 1, type: "guardrail", name: "model_fallback", ok: true, latencyMs: 0, summary: "混み合っていたので、別の方法で作り直しています" });
       }
     }
   }
@@ -188,7 +188,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       // 通信はできたが、決められた回数内にタイムラインを提出できなかった（検証で差し戻され続けた等）。
       // 乗っ取られたモデルが言い張り続ける場合もあるため、ここではルールに切り替えずに止める
       logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model });
-      throw new AgentUnavailableError("うまくプランを仕上げられませんでした。もう一度お試しください。登録したライブはそのまま残っています");
+      throw new AgentUnavailableError("プランをうまく仕上げられませんでした。登録したライブは残っているので、もう一度お試しください");
     }
     if (isGeminiConfigured()) {
       // AI の時間切れでの切り替え。途中の調べものの結果は使わず、最初から組み立てる
@@ -213,22 +213,22 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
       return withTransitSearchLink({ ...it, provider: { ...it.provider, bookingUrl: fallback } }, input.event);
     });
   if (replacedLinks > 0) {
-    trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か確かめられないリンク ${replacedLinks} 件を、公式の検索ページに置き換えました` });
+    trace.push({ step: trace.length + 1, type: "guardrail", name: "link_check", ok: true, latencyMs: 0, summary: `安全か分からないリンクが ${replacedLinks} 件あったので、公式の検索ページに差し替えました` });
   }
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
-  if (input.calendarUnavailable) warnings.unshift("カレンダーの予定を読み込めなかったため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
-  else if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  if (input.calendarUnavailable) warnings.unshift("カレンダーを読み込めなかったので、ほかの予定と重なっていないかは見られていません。日時はご自分の予定と見比べてください。");
+  else if (input.calendarSource === "demo") warnings.unshift("カレンダーとつないでいないので、ほかの予定と重なっていないかは見られていません。日時はご自分の予定と見比べてください。");
   // いちばん大事な知らせなので先頭に置く
   if (engine === "rule-based" && isGeminiConfigured()) {
-    warnings.unshift("混み合っていたため、今回は決まった手順で組み立てました。お店や宿の候補は入っていません。少し時間をおいて「AIに相談して直す」から頼むと、お店や宿まで調べ直せます。");
+    warnings.unshift("混み合っていたので、今回は決まった手順で組み立てました。お店や宿の候補はまだ入っていません。少し時間をおいて「AIに相談して直す」から頼むと、お店や宿も探し直せます。");
   }
-  if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
+  if (!items.some((i) => i.kind === "transit")) warnings.push("移動の方法とかかる時間は、まだ調べられていません。乗り換え案内で確かめてください。");
   if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
-    warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
+    warnings.push("移動時間は目安です。電車の時刻や運賃は調べていないので、移動の項目のリンクから確かめてください。");
   }
   const webSourced = items.some((i) => i.provider?.sourceUrl || i.route?.source === "web");
   if (webSourced) {
-    warnings.push("Google 検索で見つけた店舗・宿・便と価格は、検索した時点の参考です。空席・空室と最新の価格は、出典や予約サイトで必ず確かめてください。");
+    warnings.push("お店・宿・便と価格は、Google 検索で見つけた時点のものです。空きと最新の価格は、出典や予約サイトで確かめてください。");
   }
 
   const plan: Plan = {
@@ -340,10 +340,10 @@ function withTransitSearchLink(item: TimelineItem, event: OshiEvent): TimelineIt
 function transitNote(status: EkispertStatus | "compat"): string {
   switch (status) {
     case "ready":
-      return "乗り換えは駅すぱあとで調べます。使えなければ所要時間の目安に切り替えます";
+      return "乗り換えは駅すぱあとで調べます。つながらないときは目安の時間で計算します";
     // 使えない理由（キーの設定・接続の状態）は開発者向けの情報なので画面には出さない（ログで確かめる）
     default:
-      return "乗り換えは、所要時間の目安で計算します";
+      return "乗り換えは目安の時間で計算します";
   }
 }
 
@@ -367,7 +367,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
     name: "plan",
     ok: true,
     latencyMs: 0,
-    summary: `AI が調べものを始めました（${transitNote(ekispert ? "ready" : compat >= 2 && getEkispertStatus() === "ready" ? "compat" : getEkispertStatus())}）`,
+    summary: `調べものを始めました。${transitNote(ekispert ? "ready" : compat >= 2 && getEkispertStatus() === "ready" ? "compat" : getEkispertStatus())}`,
   });
 
   const contents: Content[] = [
@@ -419,7 +419,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
       const t0 = Date.now();
       const outcome = allowed.has(name)
         ? await executeTool(name, (call.args ?? {}) as Record<string, unknown>, ctx)
-        : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
+        : { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "許可されていない操作だったので、実行しませんでした" };
       return { call, name, outcome, latencyMs: Date.now() - t0 };
     };
     // 調べものの道具は互いに独立しているので、同時に実行する（Google 検索 3 件を順番に待つと、それだけで 1 分以上かかり時間切れになっていた）。
