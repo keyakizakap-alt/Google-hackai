@@ -104,8 +104,13 @@ class AgentDeadlineError extends Error {
 /** 時間切れ（全体の制限時間・1 回の呼び出しの待ち時間）による失敗か */
 function isTimeout(e: unknown): boolean {
   const name = (e as { name?: unknown } | null)?.name;
-  return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError";
+  const status = (e as { status?: unknown } | null)?.status;
+  // Gemini 側で打ち切られた場合（408・504、DEADLINE_EXCEEDED）も時間切れとして扱う
+  return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError" || status === 408 || status === 504 || geminiErrorInfo(e).apiStatus === "DEADLINE_EXCEEDED";
 }
+
+/** 見直し（作り直しの依頼・見張り）の途中で時間切れになったときの知らせ。今のプランはそのまま残す */
+const REVISE_SLOW_MESSAGE = "見直しに時間がかかってしまいました。今のプランはそのままです。少し時間をおいて、もう一度お試しください";
 
 /** AI の応答が遅く、ルールで組み立てたときの説明（画面の進み具合と注意書きに出す） */
 const RULE_FALLBACK_SUMMARY = "混み合っていたので、決まった手順で組み立てました";
@@ -170,8 +175,10 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
           if (status === 400 && usage.modelCalls === 0) {
             await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
           }
-          // 時間切れは、AI の代わりにルールで組み立てて必ずプランを返す（AI で作ったようには見せない）
+          // 最初のプラン作成での時間切れは、AI の代わりにルールで組み立てて必ずプランを返す（AI で作ったようには見せない）。
+          // 見直しの依頼はルールでは反映できないため、作り直さずに今のプランを残す
           if (timeout) {
+            if (input.previous || input.instruction) throw new AgentUnavailableError(REVISE_SLOW_MESSAGE, failureReason(e));
             engine = "rule-based";
             break;
           }
@@ -192,7 +199,8 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
     }
     if (isGeminiConfigured()) {
       // AI の時間切れでの切り替え。途中の調べものの結果は使わず、最初から組み立てる
-      Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, lastRejection: undefined, deadline: undefined });
+      // AI が途中で調べた天気も捨てる（残すと、雨の備えを入れないルールの案が検証で差し戻され、プランが出なくなる）
+      Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, lastRejection: undefined, deadline: undefined, ekispertSucceeded: undefined, forecast: undefined });
       trace.push({ step: trace.length + 1, type: "guardrail", name: "rule_fallback", ok: true, latencyMs: 0, summary: RULE_FALLBACK_SUMMARY });
     }
     await runRuleBasedPlanner(ctx, trace);
