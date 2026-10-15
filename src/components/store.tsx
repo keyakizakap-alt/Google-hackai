@@ -133,10 +133,10 @@ const formatJstShort = (iso: string) => formatJst(iso);
  */
 function fallbackError(status: number): string {
   return status >= 500
-    ? "ただいま混み合っています。少し時間をおいて、もう一度お試しください。登録したライブやプランはそのまま残っています"
-    : "うまく通信できませんでした。もう一度お試しください。登録したライブやプランはそのまま残っています";
+    ? "ただいま混み合っています。ライブやプランは残っているので、少し時間をおいてもう一度お試しください"
+    : "うまく通信できませんでした。ライブやプランは残っているので、もう一度お試しください";
 }
-const OFFLINE_ERROR = "インターネットにつながっていないようです。電波の良い場所で、もう一度お試しください。登録したライブやプランはそのまま残っています";
+const OFFLINE_ERROR = "インターネットにつながっていないようです。ライブやプランは残っているので、電波の良い場所でもう一度お試しください";
 
 /** サーバーが断ったときのエラー。状態コードと理由の種類を持たせ、やり直してよいかの判断に使う */
 class ApiError extends Error {
@@ -396,7 +396,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!restored) return;
     const timer = setTimeout(() => {
-      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed, watched, plans }).catch(() => setError("この端末に保存できませんでした。端末の空き容量を確認してください"));
+      void saveWorkspace({ events, activeId, profile, reservations, envelope, dismissed, watched, plans }).catch(() => setError("この端末に保存できませんでした。空き容量を確かめてみてください"));
     }, 200);
     return () => clearTimeout(timer);
   }, [restored, events, activeId, profile, reservations, envelope, dismissed, watched, plans]);
@@ -453,7 +453,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (asked.length > 0) setCalendarChanges((prev) => [...prev.filter((c) => !asked.some((a) => a.eventId === c.eventId)), ...asked]);
       if (merged.updated.length > 0) {
         const first = merged.updated[0].after;
-        setNotice(`カレンダーで「${first.title}」の日時が ${formatJst(first.startAt)} に変わったため、ライブを更新しました`);
+        setNotice(`カレンダーで「${first.title}」が ${formatJst(first.startAt)} に変わっていたので、ライブの日時を合わせました`);
       }
       const result = { source: r.source, scanned: r.scanned, found: r.events.length, added: merged.added };
       if (!silent) setLastImport(result);
@@ -626,7 +626,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chosen = eventOverride ?? event;
       const target = chosen ? clampEventText(chosen) : null;
       if (!target) {
-        setError("先にイベントを登録してください");
+        setError("先にライブを登録してください");
         return false;
       }
       autoTried.current.add(planSignature(target));
@@ -701,9 +701,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const r = await run("revising", () => api<PlanResponse>("/api/agent/revise", { envelope, instruction }));
       if (r) {
         applyPlan(r);
-        setChat((c) => [...c, { role: "agent", text: `修正しました（改訂 ${r.envelope.plan.revision}）。${r.envelope.plan.summary}` }]);
+        setChat((c) => [...c, { role: "agent", text: `プランを直しました。${r.envelope.plan.summary}` }]);
       } else {
-        setChat((c) => [...c, { role: "system", text: "修正に失敗しました。もう一度お試しください。" }]);
+        setChat((c) => [...c, { role: "system", text: "うまく直せませんでした。もう一度お試しください。" }]);
       }
     },
     [envelope, run, applyPlan],
@@ -789,7 +789,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const r = await api<{ proposal: PlanResponse | null; signals: WatchSignal[] }>("/api/agent/review", { envelope: target });
       setWatch((w) => ({ ...w, reviewing: false, signals: r.signals, proposal: r.proposal ? { ...r.proposal, signals: r.signals } : null }));
-      if (r.proposal) setNotice("見張りで変化を見つけたので、AI が見直し案を作りました。今のプランはそのままです");
+      if (r.proposal) setNotice("予定や天気に変化があったので、見直し案を作りました。今のプランはそのままです");
     } catch (e) {
       setWatch((w) => ({ ...w, reviewing: false, error: (e as Error).message || "見直し案を作れませんでした" }));
     }
@@ -1032,7 +1032,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const p = watch.proposal;
         if (!p) return;
         applyPlan(p);
-        setChat((c) => [...c, { role: "agent", text: `見張りで変化を見つけたので見直しました（改訂 ${p.envelope.plan.revision}）。${p.envelope.plan.summary}` }]);
+        setChat((c) => [...c, { role: "agent", text: `変化があったので見直しました。${p.envelope.plan.summary}` }]);
         setWatch({ signals: [], proposal: null, reviewing: false, error: null });
       },
       dismissProposal: () => setWatch((w) => ({ ...w, proposal: null })),
@@ -1044,7 +1044,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await revisePlanFn(`カレンダーに新しい予定が入り、次の項目と時間が重なりました：${list}。重ならない時間に組み直してください。`);
         } else if (event) {
           const ok = await generatePlanFn(event);
-          if (ok) setNotice("今のカレンダーで準備プランを作り直しました。予約済みのものは予約の管理で見直してください");
+          if (ok) setNotice("今のカレンダーに合わせてプランを作り直しました。予約済みのものは予約の管理で見直してください");
         }
       },
       approve: async (itemIds) => {
@@ -1095,7 +1095,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const reserved = added.filter((a) => a.status === "reserved").length;
           setNotice(
             reserved > 0
-              ? `${reserved} 件を予約しました${added.some((a) => a.demo) ? "（デモ予約）" : ""}。リマインドも自動で設定されます`
+              ? `${reserved} 件を予約しました${added.some((a) => a.demo) ? "（デモ予約）" : ""}。リマインドも入れておきました`
               : `${added.length} 件を予約リストに追加しました`,
           );
         }

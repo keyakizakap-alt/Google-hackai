@@ -44,7 +44,7 @@ export function DemoCalendarButton({ className = "", label = "デモのカレン
   return (
     <button type="button" onClick={() => void connectDemoCalendar()} disabled={busy !== null} className={`inline-flex items-center justify-center gap-2 disabled:opacity-60 ${className}`}>
       {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarHeart className="h-4 w-4" />}
-      {connecting ? "デモのカレンダーを確認中…" : label}
+      {connecting ? "デモのカレンダーを読み込み中…" : label}
     </button>
   );
 }
@@ -53,11 +53,11 @@ const MESSAGES: Record<string, { tone: "ok" | "ng"; text: string }> = {
   connected: { tone: "ok", text: "Google カレンダーと連携しました。ライブの予定を探しています…" },
   oauth_not_configured: {
     tone: "ng",
-    text: "Google カレンダー連携の準備がまだ整っていません。アプリの管理者が最初に一度だけ設定すると、ボタンを押すだけで連携できるようになります。いまはスクショや文章からライブを登録できます。",
+    text: "Google カレンダーとの連携は、まだ準備中です。管理者の設定が済めば、ボタンひとつでつなげます。いまはスクショや文章からライブを登録できます。",
   },
-  oauth_denied: { tone: "ng", text: "連携はキャンセルされました。もう一度「Google で連携する」を押すと、いつでもやり直せます。" },
+  oauth_denied: { tone: "ng", text: "連携を取りやめました。「Google で連携する」から、いつでもやり直せます。" },
   oauth_state: { tone: "ng", text: "連携の途中で時間が切れました。もう一度「Google で連携する」を押してください。" },
-  oauth_token: { tone: "ng", text: "Google から許可を受け取れませんでした。少し待ってから、もう一度お試しください。" },
+  oauth_token: { tone: "ng", text: "Google から許可を受け取れませんでした。少し待って、もう一度試してください。" },
 };
 
 /** 連携後に戻ってきたときの結果を、画面上部に一度だけ表示する */

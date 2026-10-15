@@ -55,7 +55,7 @@ jsonPayload.message="agent.gemini.failed"
 | `INVALID_ARGUMENT`（`httpStatus` 400） | 送ったリクエストの形がモデルに受け付けられなかった（コードかモデル設定の問題） | アプリが自動で互換モードに切り替えて作り直す（1: 駅すぱあと・考える深さを外す、2: 引数定義を従来の形式にする）。`agent.gemini.compat_ok` の `mode`（`compat-1` / `compat-2`）で、どの段階で通ったか分かる。`apiField`・`apiMessage` に不正な項目が出ることもある |
 | `NOT_FOUND`（`httpStatus` 404） | モデル名・場所の誤り | `GEMINI_MODEL` と `GOOGLE_CLOUD_LOCATION`（`global`）を確認する |
 | `RESOURCE_EXHAUSTED`（429） | 利用枠の不足・混雑 | 少し待つ。`GEMINI_FALLBACK_MODEL` を設定する |
-| `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（約 150 秒）内に仕上がらなかった | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
+| `mode` が `timeout`（`errorCode` が `AgentDeadlineError` / `TimeoutError`） | AI の応答が遅く、制限時間（120 秒。1 回の呼び出しは 45 秒）内に仕上がらなかった。利用者には決まった手順で組み立てたプランを返している（`agent.completed` の `mode` が `rule-based`） | `GEMINI_THINKING_LEVEL` を `LOW`（既定）か `MINIMAL` にする。`agent.model.turn` の `latencyMs` で 1 回ごとの時間を確かめる |
 
 ログには理由の名前だけを残し、エラーの説明文（プロジェクト名などを含む）は出さない。入力の誤り（400）のときだけ、不正な項目名と短い説明文（URL を除く）を残す。
 
@@ -69,7 +69,7 @@ jsonPayload.message="agent.gemini.failed"
 
 ## ライブの取り込みが遅い・`detect.gemini.failed` が出るとき
 
-`jsonPayload.message="detect.gemini.failed"` で、`apiStatus` が `DEADLINE_EXCEEDED`（`httpStatus` 504）なら、AI の読み取りが時間切れになっている。読み取りは再試行・予備のモデルも含めて全体 35 秒で打ち切り、ルールで読み取った結果で取り込みを続けるので、ライブの登録は止まらない（アーティスト名・会場名の精度が少し下がる）。続くときは `GEMINI_THINKING_LEVEL` が `LOW`（既定）か `MINIMAL` になっているか確かめる。
+`jsonPayload.message="detect.gemini.failed"` で、`apiStatus` が `DEADLINE_EXCEEDED`（`httpStatus` 504）なら、AI の読み取りが時間切れになっている。読み取りは再試行・予備のモデルも含めて全体 20 秒で打ち切り、ルールで読み取った結果で取り込みを続けるので、ライブの登録は止まらない（アーティスト名・会場名の精度が少し下がる）。続くときは `GEMINI_THINKING_LEVEL` が `LOW`（既定）か `MINIMAL` になっているか確かめる。
 
 ## Google 検索が使えないとき（店名・便・価格が出ない）
 

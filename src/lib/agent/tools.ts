@@ -313,13 +313,13 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         dayStartHour: num(args.day_start_hour, 9),
         dayEndHour: num(args.day_end_hour, 21),
       }).slice(0, 40);
-      return { ok: true, response: { slots, note: "予定の内容は非公開。時間帯のみ" }, summary: `${fromKey.slice(5).replace("-", "/")}〜${toKey.slice(5).replace("-", "/")} の空き時間を ${slots.length} 件見つけました` };
+      return { ok: true, response: { slots, note: "予定の内容は非公開。時間帯のみ" }, summary: `${fromKey.slice(5).replace("-", "/")}〜${toKey.slice(5).replace("-", "/")} に空き時間が ${slots.length} 件ありました` };
     }
     case "get_beauty_guideline": {
       const svc = str(args.service, 20) as keyof typeof BEAUTY_GUIDELINES;
       const g = BEAUTY_GUIDELINES[svc];
       if (!g) return { ok: false, response: { error: "unknown service" }, summary: "対応していないメニューでした" };
-      return { ok: true, response: { service: svc, ...g }, summary: `${g.label}は${g.idealDaysBefore[0]}〜${g.idealDaysBefore[1]}日前がおすすめ` };
+      return { ok: true, response: { service: svc, ...g }, summary: `${g.label}は${g.idealDaysBefore[0]}〜${g.idealDaysBefore[1]}日前がおすすめです` };
     }
     case "search_beauty_salons": {
       const svc = str(args.service, 20) as keyof typeof BEAUTY_GUIDELINES;
@@ -334,12 +334,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       return {
         ok: true,
         response: { slots: slots.slice(0, 6), source: "calendar-candidates", note: "店舗の空席や価格は未確認。予約サイトで確認してください" },
-        summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の候補日時を ${Math.min(slots.length, 6)} 件見つけました（店舗の空席は未確認）`,
+        summary: `${BEAUTY_GUIDELINES[svc].label.split("（")[0]}の候補日時を ${Math.min(slots.length, 6)} 件見つけました。お店の空きはまだ分かりません`,
       };
     }
     case "estimate_crowd": {
       const r = estimateCrowd({ eventStart: ctx.event.startAt, at: str(args.at, 40) });
-      return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前の混み具合: ${r.level === "high" ? "とても混雑" : r.level === "medium" ? "やや混雑" : "比較的空いている"}` };
+      return { ok: true, response: r, summary: `開演${r.minutesBeforeStart}分前は${r.level === "high" ? "とても混みそうです" : r.level === "medium" ? "やや混みそうです" : "わりと空いていそうです"}` };
     }
     case "get_weather_forecast": {
       if (!ctx.venueArea) {
@@ -394,7 +394,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         response: est.available
           ? { ...est, howToUse: ESTIMATE_HOW_TO_USE }
           : { ...est, howToUse: "目安を出せなかった。kind=prep, category=transit-check の確認項目を入れる（検索リンクはアプリが付ける）" },
-        summary: est.available ? `移動の目安：${est.summary.replace(/^.*?：/, "")}` : "乗り換えの目安を出せなかったため、検索リンクでご案内します",
+        summary: est.available ? `移動は${est.summary.replace(/^.*?：/, "")}です` : "移動時間の目安が出せなかったので、検索リンクを付けておきます",
       };
     }
     case WEB_SEARCH_TOOL: {
@@ -408,7 +408,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return {
           ok: true,
           response: { available: false, reason: "このプランで使える Google 検索の回数を使い切りました。これまでの結果か、候補日時の案内で組み立ててください" },
-          summary: "Google 検索の回数の上限に達したため、これまでの結果で組み立てます",
+          summary: "検索できる回数を使い切ったので、ここまでの結果で組み立てます",
         };
       }
       // 締め切りが近いときは検索しない。提出の時間を残すため、検索は「残り時間 − 提出の分」までで打ち切る
@@ -417,7 +417,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         return {
           ok: true,
           response: { available: false, reason: "時間が足りないため検索しませんでした。店舗名・便名・価格は書かず、これまでの結果か候補日時の案内で組み立て、すぐに submit_timeline で提出してください" },
-          summary: "時間が足りないため Google 検索は省き、これまでの結果で組み立てます",
+          summary: "時間が足りないので検索はやめて、ここまでの結果で組み立てます",
         };
       }
       ctx.webSearchCount = (ctx.webSearchCount ?? 0) + 1;
@@ -439,7 +439,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
           sources: r.record.sources.map((s) => ({ title: s.title, uri: s.uri })),
           howToUse: WEB_HOW_TO_USE[purpose],
         },
-        summary: `Google 検索で${what}を探しました（出典 ${r.record.sources.length} 件）`,
+        summary: `Google 検索で${what}を探しました。出典は ${r.record.sources.length} 件です`,
       };
     }
     case "submit_timeline": {
@@ -449,7 +449,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         // 形式の誤りを挟んだら「同じ指摘が続いた」とは数えない
         ctx.lastRejection = undefined;
         const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`);
-        return { ok: false, response: { accepted: false, errors: issues }, summary: `見直す点が見つかったので作り直します（${issues.length}件）` };
+        return { ok: false, response: { accepted: false, errors: issues }, summary: `直したほうがいい点が ${issues.length} 件あったので、作り直します` };
       }
       const { errors, warnings } = checkSubmission(parsed.data.items, parsed.data.summary, ctx);
       if (errors.length > 0) {
@@ -471,26 +471,26 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
             ok: true,
             done: true,
             response: { accepted: true, status: "pending_approval" },
-            summary: `同じ点を AI が直せなかったため、${repaired.notes.length} 件を調整して仕上げました（内容はプランの注意書きを確認してください）`,
+            summary: `同じところが直らなかったので、${repaired.notes.length} 件をこちらで調整して仕上げました。くわしくは注意書きをご覧ください`,
           };
         }
         ctx.rejectedSubmissions++;
         return {
           ok: false,
           response: { accepted: false, errors, hint: "errors を解消して submit_timeline を再度呼び出してください。同じ内容で出し直さず、指摘された項目の時刻を変えるか、外してください" },
-          summary: `見直す点が見つかったので作り直します（${errors.length}件）：${displayError(errors[0])}`,
+          summary: `直したほうがいい点が ${errors.length} 件あったので、作り直します。${displayError(errors[0])}`,
         };
       }
       ctx.lastRejection = undefined;
       ctx.submitted = { summary: parsed.data.summary, items: parsed.data.items, warnings: [...parsed.data.warnings, ...warnings], decisions: parsed.data.decisions };
-      return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `スケジュール ${parsed.data.items.length} 件が完成しました` };
+      return { ok: true, done: true, response: { accepted: true, status: "pending_approval" }, summary: `${parsed.data.items.length} 件の予定でプランができました` };
     }
     default:
       if (name.startsWith(EKISPERT_PREFIX)) {
         const r = (await callEkispertTool(name, args)) as Record<string, unknown>;
         if (!r.error && !r.isError) {
           ctx.ekispertSucceeded = true;
-          return { ok: true, response: r, summary: "乗換案内でルートを調べました" };
+          return { ok: true, response: r, summary: "駅すぱあとで経路を調べました" };
         }
         // フェールオーバー：主系（駅すぱあと）が答えられなかったら、待機系（所要時間の目安）をその場で計算して渡す。
         // 失敗した検索の向き（往路・帰り）と時刻を引数から読み取り、同じ移動の目安にする
@@ -504,10 +504,10 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
               ? `駅すぱあとで調べられなかったため、fallback（${fallback.direction}の所要時間の目安）で、この移動だけを組み立てる（route.source は estimate）`
               : "駅すぱあとで調べられなかった。kind=prep, category=transit-check の確認項目を入れる",
           },
-          summary: fallback.available ? "乗り換え案内に接続できなかったため、所要時間の目安に切り替えました" : "乗り換え案内に接続できなかったため、検索リンクでご案内します",
+          summary: fallback.available ? "乗り換え案内につながらなかったので、所要時間の目安に切り替えました" : "乗り換え案内につながらなかったので、検索リンクを付けておきます",
         };
       }
-      return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "安全のため、許可されていない操作は実行しませんでした" };
+      return { ok: false, response: { error: `tool ${name} is not allowed` }, summary: "許可されていない操作だったので、実行しませんでした" };
   }
 }
 
@@ -611,7 +611,7 @@ export function repairTimeline(
   };
   let next = items.filter((it) => {
     if (!isNamed(it.id) || it.kind === "event" || it.kind === "transit") return true;
-    notes.push(`「${it.title}」は時間が合わなかったため外しました。必要なら「AIに相談して直す」から追加してください`);
+    notes.push(`「${it.title}」は時間が合わなかったため外しました。入れたいときは「AIに相談して直す」から頼んでください`);
     const label = it.kind === "beauty" && it.category && it.category in BEAUTY_GUIDELINES ? BEAUTY_GUIDELINES[it.category as keyof typeof BEAUTY_GUIDELINES].label : undefined;
     removed.push({ title: it.title, keywords: [it.title, ...(label ? [label] : [])] });
     return false;
@@ -624,21 +624,21 @@ export function repairTimeline(
       id: "transit-check-auto", kind: "prep", category: "transit-check",
       title: `${ctx.event.homeStation}から${ctx.event.venueStation}への移動を確認`,
       start: toJstIso(s), end: toJstIso(s + 15 * MS_MIN),
-      rationale: "乗り換えの情報はまだ調べられていません。開演に余裕をもって着く電車・かかる時間・運賃を確かめてください。",
+      rationale: "乗り換えはまだ調べられていません。開演に余裕をもって着ける電車と、かかる時間・運賃を確かめてください。",
       requiresBooking: false,
     }];
-    notes.push("移動の確認の項目を追加しました");
+    notes.push("移動を確かめる項目を足しました");
   }
   if (errors.some((e) => e.startsWith("公演日は雨・雪"))) {
     const s = at(6 * 60 * MS_MIN);
     next = [...next, {
       id: "rain-gear-auto", kind: "prep", category: "selfcare",
-      title: "雨・雪の対策（傘・濡れ対策）を準備",
+      title: "傘など雨・雪の対策を準備",
       start: toJstIso(s), end: toJstIso(s + 15 * MS_MIN),
-      rationale: "公演日は雨・雪の予報です。傘と、ヘアセットが濡れないための対策を持って出かけてください。",
+      rationale: "公演日は雨か雪の予報です。傘と、ヘアセットが濡れないための対策を持っていきましょう。",
       requiresBooking: false,
     }];
-    notes.push("雨・雪の対策の項目を追加しました");
+    notes.push("雨・雪の対策を項目に足しました");
   }
   if (next.length === items.length && notes.length === 0) return undefined;
   // 直したあとも、提出時と同じ検査（駅すぱあとの経路の出どころを含む）を通ったときだけ使う

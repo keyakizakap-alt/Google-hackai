@@ -3,10 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * 応答の速さに関わる設定と、時間切れの扱いを確かめる。
  * - 既定では「考える深さ」を LOW にして送る（道具を何度も呼ぶため、深く考えると制限時間を超えやすい）
- * - 時間切れは「接続できない」ではなく「時間がかかった」と伝える
+ * - 時間切れでも、決まった手順で組み立てたプランを返す
  */
 const seenThinking: unknown[] = [];
-let behavior: "ok" | "timeout" | "denied" | "typeerror" = "ok";
+let behavior: "ok" | "timeout" | "denied" | "typeerror" | "deadline504" | "rainThenTimeout" = "ok";
+let calls = 0;
+
+// 公演日は雨の予報（AI が天気を調べたあとに時間切れになる場合を試す）
+vi.mock("@/lib/signals/weather", async (orig) => ({
+  ...(await orig<typeof import("@/lib/signals/weather")>()),
+  getForecast: vi.fn(async (_area: string, iso: string) => ({ date: iso.slice(0, 10), sky: "rain", text: "雨", needsRainGear: true })),
+}));
 
 vi.mock("@google/genai", () => ({
   FunctionCallingConfigMode: { ANY: "ANY" },
@@ -14,7 +21,15 @@ vi.mock("@google/genai", () => ({
     models = {
       generateContent: vi.fn(async (req: { config?: { thinkingConfig?: unknown } }) => {
         seenThinking.push(req.config?.thinkingConfig);
-        if (behavior === "timeout") throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+        calls += 1;
+        if (behavior === "deadline504") {
+          throw Object.assign(new Error(JSON.stringify({ error: { code: 504, status: "DEADLINE_EXCEEDED", message: "Deadline expired" } })), { status: 504 });
+        }
+        if (behavior === "rainThenTimeout" && calls === 1) {
+          const call = { name: "get_weather_forecast", args: {} };
+          return { functionCalls: [{ id: "w0", ...call }], candidates: [{ content: { role: "model", parts: [{ functionCall: call }] } }] };
+        }
+        if (behavior === "timeout" || behavior === "rainThenTimeout") throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
         if (behavior === "denied") {
           throw Object.assign(new Error(JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", message: "Permission denied on project my-secret-project", details: [{ reason: "IAM_PERMISSION_DENIED" }] } })), { status: 403 });
         }
@@ -38,6 +53,7 @@ describe("AI の応答の速さ", () => {
   beforeEach(() => {
     seenThinking.length = 0;
     behavior = "ok";
+    calls = 0;
     vi.resetModules();
     delete process.env.GEMINI_THINKING_LEVEL;
   });
@@ -62,10 +78,48 @@ describe("AI の応答の速さ", () => {
     expect(seenThinking[0]).toBeUndefined();
   });
 
-  it("時間切れは「接続できない」ではなく「時間がかかった」と伝える", async () => {
+  it("時間切れでも、決まった手順で組み立てたプランを返す（AI で作ったようには見せない）", async () => {
     behavior = "timeout";
     const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
-    await expect(runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "slow" })).rejects.toThrow(/時間がかかって/);
+    const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "slow" });
+    expect(out.engine).toBe("rule-based");
+    expect(out.plan.generatedBy.engine).toBe("rule-based");
+    expect(out.plan.items.length).toBeGreaterThan(0);
+    expect(out.plan.warnings[0]).toMatch(/決まった手順/);
+    expect(out.trace.some((t) => t.name === "rule_fallback")).toBe(true);
+  });
+
+  it("Gemini 側の時間切れ（504 DEADLINE_EXCEEDED）でも、決まった手順で組み立てたプランを返す", async () => {
+    behavior = "deadline504";
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "504" });
+    expect(out.engine).toBe("rule-based");
+  });
+
+  it("AI が雨の予報を調べたあとに時間切れになっても、プランを返す（途中の天気は使わない）", async () => {
+    behavior = "rainThenTimeout";
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const out = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "rain" });
+    expect(out.engine).toBe("rule-based");
+    expect(out.plan.items.length).toBeGreaterThan(0);
+  });
+
+  it("見直しの途中で時間切れになったら、頼まれた直しを無視したプランに置き換えず、今のプランを残す", async () => {
+    behavior = "timeout";
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    const first = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "base" });
+    const err = await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "revise", previous: first.plan, instruction: "ネイルは土曜日にしたい" }).catch((e) => e);
+    expect(err.name).toBe("AgentUnavailableError");
+    expect(err.message).toMatch(/今のプランはそのまま/);
+  });
+
+  it("1 回の呼び出しは 45 秒で打ち切る（1 回の遅い応答で持ち時間を使い切らない）", async () => {
+    behavior = "timeout";
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    const { runPlanningAgent } = await import("@/lib/agent/orchestrator");
+    await runPlanningAgent({ event, busy: [], calendarSource: "demo", requestId: "cap" });
+    expect(Math.max(...spy.mock.calls.map((c) => c[0] as number))).toBeLessThanOrEqual(45_000);
+    spy.mockRestore();
   });
 
   it("接続できないときは、理由の種類だけを添える（説明文やプロジェクト名は出さない）", async () => {

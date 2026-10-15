@@ -168,12 +168,12 @@ function EmptyHero() {
       <div className="flex flex-col justify-center gap-4 p-7 sm:p-9">
         <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">NO LIVE YET</p>
         <h2 className="text-2xl font-bold leading-snug">
-          {importing ? "カレンダーからライブを探しています…" : nothingFound ? "カレンダーにライブの予定が見つかりませんでした" : "まだイベントが登録されていません"}
+          {importing ? "カレンダーからライブを探しています…" : nothingFound ? "カレンダーにライブの予定が見つかりませんでした" : "まだライブが登録されていません"}
         </h2>
         <p className="text-sm leading-relaxed text-white/65">
           {nothingFound
-            ? `今後 6 か月の予定 ${lastImport.scanned} 件を確認しました。予定のタイトルに公演名や会場名（例: 東京ドーム）が入っていると見つけやすくなります。スクショや手入力でも登録できます。`
-            : "Google カレンダーを連携するか、カレンダーやチケット画面のスクショを選ぶだけで、ライブを自動で登録します。"}
+            ? `今後 6 か月の予定を ${lastImport.scanned} 件見ました。予定の名前に公演名や「東京ドーム」などの会場名があると、見つけやすくなります。スクショや手入力でも登録できます。`
+            : "Google カレンダーをつなぐか、チケットやカレンダーのスクショを選ぶだけ。ライブの予定を見つけて登録します。"}
         </p>
         <div className="flex flex-wrap gap-2">
           {!session?.calendarConnected ? (
@@ -219,7 +219,7 @@ function CalendarCard() {
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${connected ? "bg-rose-50 text-rose-500" : "bg-lav-50 text-lav-600"}`}>{demoConnected ? "デモ表示中" : connected ? "連携済み" : "未連携"}</span>
       </div>
-      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の「時間」だけから計算します。予定の中身はライブを探すときだけ確認し、保存はしません。</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">空き時間は予定の時間だけで計算します。予定の中身はライブを探すときに見るだけで、保存はしません。</p>
 
       <div className="mt-4 grid flex-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="flex flex-col justify-between gap-3">
@@ -239,15 +239,15 @@ function CalendarCard() {
               {demoAvailable && <DemoCalendarButton className="min-h-[44px] rounded-xl border border-line px-4 text-xs font-bold text-ink hover:bg-lav-50" />}
             </div>
           ) : demoConnected ? (
-            <p className="text-[11px] leading-relaxed text-mute">デモのカレンダー（架空の予定）を表示しています</p>
+            <p className="text-[11px] leading-relaxed text-mute">架空の予定が入ったデモのカレンダーを表示中です</p>
           ) : (
-            <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定を見るだけで、書き換えることはありません" : "未連携のため、既存予定との重なりは確認できません"}</p>
+            <p className="text-[11px] leading-relaxed text-mute">{connected ? "予定は見るだけで、書き換えません" : "カレンダーをつなぐと、予定との重なりも分かります"}</p>
           )}
         </div>
         {event ? (
           <MiniCalendar availability={connected ? availability : null} eventDate={event.startAt} scanning={scanning} />
         ) : (
-          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">イベントを登録すると、空き時間のカレンダーが表示されます</div>
+          <div className="grid place-items-center rounded-2xl bg-cloud p-4 text-center text-xs text-mute">ライブを登録すると、ここに空き時間のカレンダーが出ます</div>
         )}
       </div>
 
@@ -267,9 +267,9 @@ function Setlist() {
   const { availability, envelope, busy, generatePlan, session, event } = useStore();
   const router = useRouter();
   const steps = [
-    { icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーと連携して空き時間を確認", done: Boolean(availability && session?.calendarConnected) },
-    { icon: Sparkles, t: "美容プランを作成", d: "美容・施術の候補を逆算して提案", done: Boolean(envelope) },
-    { icon: TrainFront, t: "移動プランを作成", d: "混雑を避けた出発時間・ルート", done: Boolean(envelope) },
+    { icon: CalendarPlus, t: "空き時間を確認", d: "カレンダーをつないで、空いている日を見る", done: Boolean(availability && session?.calendarConnected) },
+    { icon: Sparkles, t: "美容プランを作成", d: "ライブの日から逆算して、美容の日を決める", done: Boolean(envelope) },
+    { icon: TrainFront, t: "移動プランを作成", d: "混雑を避けて、出発時間とルートを決める", done: Boolean(envelope) },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   // まだ終わっていない最初の手順に「NEXT」を付ける（完了の数で数えると、順番どおりでないときにずれる）

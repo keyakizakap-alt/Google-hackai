@@ -61,15 +61,15 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const parsed = Body.safeParse(await readJson(req));
-    if (!parsed.success) return NextResponse.json({ error: "ユーザーの確認が必要です" }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "予約にはあなたの確認が必要です" }, { status: 400 });
     const env = verifyEnvelope(parsed.data.envelope);
     if (env.status !== "approved" || !hasUserApproval(env.history)) {
-      throw new GuardrailError("承認されていないプランは予約の手続きに進めません", "USER_ACTION_REQUIRED");
+      throw new GuardrailError("承認していないプランは予約に進めません", "USER_ACTION_REQUIRED");
     }
     let history = advance(env.history, "approved", "booking", "user");
     // 同じ承認での 2 回目は受け付けない（二重予約の防止）
     if (!claimApproval(env.sig, env.expiresAt)) {
-      throw new GuardrailError("このプランは、すでに予約の手続きをしました。予約の管理で確認してください", "INVALID_TRANSITION");
+      throw new GuardrailError("このプランは、すでに予約の手続きが済んでいます。予約の管理で確かめてください", "INVALID_TRANSITION");
     }
     const approved = new Set(env.approvedItemIds);
     const targets = env.plan.items.filter((i) => i.requiresBooking && approved.has(i.id));

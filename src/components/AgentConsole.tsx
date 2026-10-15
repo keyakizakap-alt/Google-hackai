@@ -12,10 +12,10 @@ const phrases = (...parts: string[]) => parts.join("\u200b");
 
 const THINKING = [
   ["空き時間", phrases("カレンダーの", "空き時間を", "確認しています")],
-  ["美容の目安", phrases("美容メニューの", "ベストな", "タイミングを", "調べています")],
+  ["美容の目安", phrases("美容メニューに", "ちょうどいい", "時期を", "調べています")],
   ["サロン", phrases("空き時間に", "行ける", "サロンを", "探しています")],
   ["混雑", phrases("会場まわりの", "混み具合を", "予想しています")],
-  ["移動", phrases("混雑を", "避けた", "ルートを", "探しています")],
+  ["移動", phrases("混みにくい", "ルートを", "探しています")],
   ["最終チェック", phrases("予定どうしが", "重ならないか", "確認しています")],
 ] as const;
 
@@ -36,6 +36,7 @@ export function friendlyStep(name: string): string {
     fallback: "切り替え",
     model_fallback: "切り替え",
     compat_mode: "切り替え",
+    rule_fallback: "切り替え",
   };
   return map[name] ?? "安全確認";
 }
@@ -64,12 +65,12 @@ export function AgentConsole({ running, trace = [], compact = false, label, agen
       trace.map((t) => ({ key: `${t.step}`, name: friendlyStep(t.name), text: t.summary, state: t.ok ? ("ok" as const) : ("ng" as const) }));
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-night text-[12px] text-white/80 shadow-float" role="log" aria-live="polite" aria-label="AIが調べたこと">
+    <div className="overflow-hidden rounded-2xl bg-night text-[12px] text-white/80 shadow-float" role="log" aria-live="polite" aria-label="AI が調べたこと">
       <div className="flex items-center gap-1.5 border-b border-white/10 px-4 py-2.5">
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
         <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
-        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? (label ?? "AI が調べながら考えています…") : `${agentic ? "AI が調べたこと" : "確認したこと"}（${trace.length}件）`}</span>
+        <span className="ml-3 text-[11px] tracking-wider text-white/55">{running ? (label ?? "調べながら考えています…") : `${agentic ? "AI が調べたこと" : "確認したこと"}（${trace.length}件）`}</span>
         {running && <span className="pulse-ring relative ml-auto h-2 w-2 rounded-full bg-rose-400" />}
       </div>
       <ol className={`space-y-1.5 px-4 py-3 ${compact ? "max-h-44" : "max-h-80"} overflow-y-auto`}>

@@ -25,7 +25,7 @@ export function WebSearchSources({ records }: { records?: WebSearchRecord[] }) {
         Google 検索で調べたこと
       </h2>
       <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-        店舗・宿・便と価格は、検索した時点の参考です。空き・最新の価格は出典や予約サイトで確かめてください。出典のリンクは、作成から 30 日ほどで開けなくなることがあります。
+        お店・宿・便と価格は、検索したときの情報です。空きや最新の価格は、出典か予約サイトで確かめてください。出典のリンクは 30 日ほどで開けなくなることがあります。
       </p>
       <ul className="mt-3 space-y-4">
         {records.map((r, i) => (

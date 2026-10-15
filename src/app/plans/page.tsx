@@ -33,7 +33,7 @@ export default function PlansPage() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="My Plans" title="プラン一覧">
-        ライブごとに、準備プランをまとめて見られます。開くと、内容の確認・承認・予約に進めます。
+        ライブごとの準備プランです。開いて中身を見たら、承認や予約に進めます。
       </PageHeader>
 
       {events.length === 0 ? (
@@ -141,7 +141,7 @@ function PlanRow({ event, envelope: saved, muted }: { event: OshiEvent; envelope
             )}
           </>
         ) : (
-          <p className="mt-2 text-xs text-mute">{planning ? "AI がプランを作っています…" : "まだプランがありません。"}</p>
+          <p className="mt-2 text-xs text-mute">{planning ? "プランを作っています…" : "まだプランがありません。"}</p>
         )}
 
         <div className="mt-3 flex flex-wrap gap-2">

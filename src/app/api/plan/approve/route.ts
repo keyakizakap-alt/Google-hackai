@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const env = verifyEnvelope(parsed.data.envelope);
     const bookable = new Set(env.plan.items.filter((i) => i.requiresBooking).map((i) => i.id));
     const ids = [...new Set(parsed.data.approvedItemIds)];
-    if (ids.some((id) => !bookable.has(id))) throw new GuardrailError("予約対象外の項目が含まれています", "INVALID_TRANSITION");
+    if (ids.some((id) => !bookable.has(id))) throw new GuardrailError("予約できない項目が入っています", "INVALID_TRANSITION");
 
     const history = advance(env.history, env.status, "approved", "user");
     const next = signEnvelope({ plan: env.plan, status: "approved", approvedItemIds: ids, history });

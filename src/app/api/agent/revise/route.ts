@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const parsed = Body.safeParse(await readJson(req));
-    if (!parsed.success) return NextResponse.json({ error: "修正内容を入力してください" }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "直したい内容を入力してください" }, { status: 400 });
     // 期限切れのプランも、内容を参考にした作り直しには使える。ただし古い承認は引き継がず、新しい承認待ちとして作る
     const env = verifyEnvelope(parsed.data.envelope, Date.now(), { allowExpired: true });
     const expired = Date.parse(env.expiresAt) < Date.now();

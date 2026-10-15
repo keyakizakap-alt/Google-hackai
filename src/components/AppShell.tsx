@@ -80,7 +80,7 @@ function LiveTicker() {
     upcoming.length === 0
       ? [
           { text: busy === "importing" ? "カレンダーからライブを探しています…" : "イベント未登録", strong: true },
-          { text: "Google カレンダーを連携すると、ライブ・公演を自動で取り込みます" },
+          { text: "Google カレンダーをつなぐと、ライブを自動で取り込みます" },
           { text: "推しに会う日は、もっと特別に ♡" },
         ]
       : upcoming.flatMap((e, i) => [
@@ -121,9 +121,9 @@ function BusyIndicator() {
   if (!busy) return null;
   const text =
     aiReady && busy === "planning"
-      ? "AI が調べながらプランを作っています…"
+      ? "調べながらプランを作っています…"
       : aiReady && busy === "revising"
-        ? "AI がプランを見直しています…"
+        ? "変化に合わせてプランを見直しています…"
         : BUSY_LABEL[busy];
   return (
     <div role="status" aria-live="polite" className="pop-in pointer-events-none fixed left-1/2 top-[4.5rem] z-50 lg:top-12 flex -translate-x-1/2 items-center gap-2 rounded-full bg-night/95 px-4 py-2 text-xs font-bold text-white shadow-float backdrop-blur">
@@ -206,7 +206,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <br />
               <span className="pl-5">Good Live ♡</span>
             </p>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">カレンダーの予定は保存しません。公演と予約メモはこの端末にだけ保存します。</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">カレンダーの予定は保存しません。公演と予約メモは、この端末にだけ残します。</p>
           </div>
         </div>
       </aside>

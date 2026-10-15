@@ -5,8 +5,8 @@ import { StoreProvider } from "@/components/store";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OshiReady — 推しに会う日を、いちばん気持ちよく迎える。",
-  description: "カレンダーの空き時間から、推し活の遠征・美容スケジュールを逆算して提案する AI プランナー。予約はあなたが確認してから。",
+  title: "OshiReady｜推しに会う日を、いちばん気持ちよく迎える。",
+  description: "ライブの日から逆算して、美容や遠征の準備を組み立てます。予約はあなたが確認してから。",
 };
 
 export const viewport: Viewport = {

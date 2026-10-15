@@ -123,7 +123,7 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
       {mode === "cancel" && canCancelInApp && (
         <div className="pop-in mt-4 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
           <p className="text-xs leading-relaxed text-ink">
-            この予約をアプリ内でキャンセルします。{r.demo ? "デモ予約のため、実在の店舗への連絡や料金は発生しません。" : "キャンセル料は予約先の規定にしたがいます。"}
+            この予約をキャンセルします。{r.demo ? "デモ予約なので、実在のお店への連絡も料金もありません。" : "キャンセル料は予約先の決まりによります。"}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => setMode("view")} disabled={busy !== null} className="min-h-[44px] rounded-xl border border-line bg-white px-4 text-xs">
@@ -146,7 +146,7 @@ function ReservationCard({ r: raw, index }: { r: Reservation; index: number }) {
       {mode === "cancel" && !canCancelInApp && (
         <div className="pop-in mt-4 rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
           <p className="text-xs leading-relaxed text-ink">
-            キャンセルは予約したサイトで手続きしてください。サイトでキャンセルが完了したら「キャンセルした」を押すと、ここに記録されます。
+            キャンセルは予約したサイトでお願いします。済んだら「キャンセルした」を押してください。ここに記録します。
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {r.url && (
@@ -187,8 +187,8 @@ export default function BookingsPage() {
       <div className="flex items-start gap-3 rounded-2xl bg-lav-50 px-4 py-3 text-xs leading-relaxed text-ink-soft">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-lav-600" />
         <p>
-          プランで承認して「予約する」を押したものは、アプリ内で予約され、ここからキャンセルできます{session?.booking?.demo ? "（いまはデモ予約：実在の店舗には届きません）" : ""}。
-          アプリ内で予約できないものは「予約サイトを開く」から各サイトで予約し、終わったら「予約できた」を押して記録してください。支払いが発生することはありません。予約と予約メモはこの端末に保存されます。
+          プランを承認して「予約する」を押したものは、アプリの中で予約され、ここからキャンセルできます。{session?.booking?.demo ? "いまはデモ予約なので、実在のお店には届きません。" : ""}
+          それ以外は「予約サイトを開く」から予約して、済んだら「予約できた」を押してください。支払いは発生しません。予約とメモはこの端末に保存します。
         </p>
       </div>
 
@@ -219,7 +219,7 @@ export default function BookingsPage() {
         <div className="card flex flex-col items-center px-6 py-14 text-center">
           <p className="font-display text-4xl italic text-lav-200">No reservations</p>
           <p className="mt-3 font-bold text-ink">まだ予約はありません</p>
-          <p className="mt-1 max-w-sm text-sm text-ink-soft">プランを確認して承認すると、予約が必要なもの（サロン・新幹線・宿泊など）がここに並びます。</p>
+          <p className="mt-1 max-w-sm text-sm text-ink-soft">プランを承認すると、サロンや新幹線、宿など、予約が必要なものがここに並びます。</p>
           <Link href="/plan" className="btn-primary mt-6 rounded-xl px-6 py-3 text-sm font-bold">
             プランを確認する
           </Link>

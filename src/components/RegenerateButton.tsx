@@ -10,14 +10,14 @@ import { useStore } from "./store";
  *   予約は取り消さず、承認済みのプランは見張りの対象として残る）
  */
 export function RegenerateButton({ variant = "outline", className = "" }: { variant?: "outline" | "light"; className?: string }) {
-  const { envelope, event, busy, generatePlan, aiReady } = useStore();
+  const { envelope, event, busy, generatePlan } = useStore();
   if (!event) return null;
   const planning = busy === "planning";
   const forThisEvent = envelope?.plan.event.id === event.id;
   const decided = forThisEvent && (envelope?.status === "approved" || envelope?.status === "booked");
-  const label = planning ? "作り直しています…" : aiReady ? "AI に最初から作り直してもらう" : "最初から作り直す";
+  const label = planning ? "作り直しています…" : "最初から作り直す";
   const onClick = () => {
-    if (decided && !window.confirm("承認済みのプランを、新しく作るプラン（承認待ち）に置き換えます。予約はそのまま残ります。よろしいですか？")) return;
+    if (decided && !window.confirm("承認済みのプランを、新しいプランに置き換えます。新しいプランはもう一度あなたの確認待ちになり、予約はそのまま残ります。よろしいですか？")) return;
     void generatePlan(event);
   };
   const styles =

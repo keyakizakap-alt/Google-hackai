@@ -76,9 +76,9 @@ export function ReminderAgent() {
         try {
           new Notification(r.title, { body: r.body, tag: r.id, icon: "/favicon.ico" });
         } catch {
-          notify(`${r.title} — ${r.body}`);
+          notify(`${r.title}。${r.body}`);
         }
-      } else notify(`${r.title} — ${r.body}`);
+      } else notify(`${r.title}。${r.body}`);
     }
     writeFired(fired.current);
   }, [now, reminders, notify]);
@@ -107,7 +107,7 @@ export function AddToCalendarButton({ className = "", label = "カレンダー�
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notify(plan ? "予定とリマインドをカレンダー用ファイルにしました。開くとカレンダーに追加できます" : "公演をカレンダー用ファイルにしました（プランを承認すると準備の予定も入ります）");
+    notify(plan ? "予定とリマインドをカレンダー用ファイルにしました。開くとカレンダーに追加できます" : "公演をカレンダー用ファイルにしました。プランを承認すると、準備の予定も入ります");
   };
   return (
     <button type="button" onClick={onClick} className={`inline-flex items-center justify-center gap-2 ${className}`}>
@@ -172,7 +172,7 @@ export function RemindersCard() {
         )}
       </div>
       <p className="mt-1 text-xs leading-relaxed text-mute">
-        公演の前日・予約の前日と 2 時間前・まだ予約していないものをお知らせします。アプリを閉じていても知らせてほしいときは「カレンダーに追加」を使ってください（スマホのカレンダーが通知します）。
+        公演の前日、予約の前日と 2 時間前、まだ予約していないものをお知らせします。アプリを閉じていても知りたいときは「カレンダーに追加」をどうぞ。スマホのカレンダーが知らせてくれます。
       </p>
       {list.length === 0 ? (
         <p className="mt-4 rounded-2xl bg-cloud px-4 py-6 text-center text-xs text-mute">これからのリマインドはありません</p>

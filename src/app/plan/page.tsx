@@ -25,7 +25,7 @@ import { safeExternalUrl } from "@/lib/safeUrl";
 const FLOW = ["generating", "pending_approval", "approved", "booked"] as const;
 const HISTORY_LABEL: Record<string, string> = {
   draft: "作成開始",
-  generating: "AIが作成",
+  generating: "自動で作成",
   pending_approval: "確認待ち",
   revising: "見直し",
   approved: "承認",
@@ -164,7 +164,7 @@ function RevisePanel() {
         <Bot className="h-5 w-5 text-lav-600" />
         AIに相談して直す
       </h2>
-      <p className="mt-1 text-xs text-mute">AI への要望はここから。修正後も必ずあなたの承認待ちに戻ります。</p>
+      <p className="mt-1 text-xs text-mute">直してほしいことを書いてください。直したあとも、もう一度あなたの確認を待ちます。</p>
       <div ref={listRef} className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
         {chat.map((m, i) => (
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -179,7 +179,7 @@ function RevisePanel() {
         ))}
         {busy === "revising" && (
           <p className="flex items-center gap-2 text-xs text-mute">
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> AIが組み直しています…
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> 組み直しています…
           </p>
         )}
       </div>
@@ -209,7 +209,7 @@ function RevisePanel() {
           placeholder={canRevise ? "例: 眉毛サロンは土曜の午前がいい" : "予約完了後は修正できません"}
           disabled={!canRevise || busy !== null}
           className="min-w-0 flex-1 rounded-xl border border-line bg-cloud px-3 py-2.5 text-sm outline-none focus:border-lav-400 focus:bg-white"
-          aria-label="AIへの相談内容"
+          aria-label="相談したいこと"
         />
         <button type="submit" disabled={!canRevise || busy !== null || !text.trim()} className="btn-primary grid w-11 place-items-center rounded-xl text-white" aria-label="送信">
           <Send className="h-4 w-4" />
@@ -227,7 +227,7 @@ function TracePanel() {
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Activity className="h-4 w-4 text-lav-600" />
         <h2 id="trace" className="text-sm font-bold text-ink">{envelope?.plan.generatedBy.engine === "gemini" ? "AI が調べたこと" : "確認したこと"}</h2>
-        <span className="ml-auto text-[11px] text-mute">予定の中身や画像は記録していません</span>
+        <span className="ml-auto text-[11px] text-mute">予定の中身や画像は残していません</span>
       </div>
       <AgentConsole key={`${envelope?.plan.id}-${envelope?.plan.revision}`} running={false} trace={trace} agentic={envelope?.plan.generatedBy.engine === "gemini"} />
       {envelope && (
@@ -237,7 +237,7 @@ function TracePanel() {
               {i > 0 && <span aria-hidden>→</span>}
               <span>
                 {formatJst(h.at, { time: true })} {HISTORY_LABEL[h.status] ?? h.status}
-                <span className="text-lav-400">（{h.actor === "user" ? "あなた" : h.actor === "agent" ? "AI" : "アプリ"}）</span>
+                <span className="text-lav-400">（{h.actor === "user" ? "あなた" : h.actor === "agent" ? "自動" : "アプリ"}）</span>
               </span>
             </li>
           ))}
@@ -271,10 +271,10 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
       </h2>
       <div className="mt-3 rounded-xl bg-lav-50/70 p-3 text-xs leading-relaxed text-ink-soft">
         <p className="flex items-center gap-1.5 font-semibold text-ink">
-          <Lock className="h-3.5 w-3.5" /> あなたが承認して「予約する」を押すまで、予約は一切行われません。
+          <Lock className="h-3.5 w-3.5" /> 承認して「予約する」を押すまで、予約はされません。
         </p>
-        <p className="mt-1">AI は提案するだけで、勝手に予約・キャンセル・支払いをすることはありません。</p>
-        {inApp && demo && <p className="mt-1 font-semibold text-rose-500">いまはデモ予約です。予約番号は発行されますが、実在の店舗・交通機関・宿には届きません。</p>}
+        <p className="mt-1">AI は提案するだけです。勝手に予約・キャンセル・支払いをすることはありません。</p>
+        {inApp && demo && <p className="mt-1 font-semibold text-rose-500">いまはデモ予約です。予約番号は出ますが、実在の店舗・交通機関・宿には届きません。</p>}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <dt className="text-ink-soft">予約対象</dt>
@@ -303,8 +303,8 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
 
       {status === "approved" && expired && (
         <p className="mt-4 rounded-xl border border-line bg-cloud px-3 py-2.5 text-xs leading-relaxed text-ink-soft" role="status">
-          承認から 2 時間が過ぎたため、このプランでは予約に進めません（古い提案のまま予約しないためです）。
-          「AIに相談して直す」で今の状況に合わせて作り直し、もう一度承認してください。
+          承認から 2 時間たったので、このプランでは予約できません。古い内容のまま予約しないためです。
+          「AIに相談して直す」で今の状況に合わせてから、もう一度承認してください。
         </p>
       )}
 
@@ -322,9 +322,9 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
             <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
               <p className="text-xs leading-relaxed text-ink">
                 {inAppCount > 0
-                  ? `${inAppCount} 件をアプリ内で予約します${demo ? "（デモ予約：実在の店舗には届きません）" : ""}。予約後は「予約の管理」からキャンセルでき、前日と 2 時間前にリマインドします。支払いは発生しません。`
+                  ? `${inAppCount} 件をアプリ内で予約します。${demo ? "デモ予約なので、実在の店舗には届きません。" : ""}支払いはありません。キャンセルは「予約の管理」からできます。前日と 2 時間前にお知らせします。`
                   : ""}
-                {guideCount > 0 ? `${inAppCount > 0 ? "残りの " : ""}${guideCount} 件は予約ではなく確認が必要なもので、「予約の管理」に案内サイトと一緒に追加します。` : ""}
+                {guideCount > 0 ? `${inAppCount > 0 ? "残りの " : ""}${guideCount} 件はご自身での確認が必要です。案内サイトと一緒に「予約の管理」に入れておきます。` : ""}
               </p>
               <ul className="mt-2 list-inside list-disc text-xs text-ink-soft">
                 {selectedItems.map((i) => (
@@ -351,12 +351,12 @@ function ApprovalPanel({ selected }: { selected: Set<string> }) {
               </div>
             </div>
           )}
-          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約なしで承認しました。予約したいものがあれば「AIに相談して直す」で見直すと、もう一度選べます。</p>}
+          {selectedItems.length === 0 && <p className="text-[11px] text-mute">予約なしで承認しました。あとで予約したくなったら、「AIに相談して直す」で見直すと選び直せます。</p>}
         </div>
       )}
       {status === "rejected" && (
         <div className="mt-4 space-y-2">
-          <p className="text-xs text-ink-soft">このプランは見送りました。最初から作り直すか、「AIに相談して直す」で直し方を伝えてください。</p>
+          <p className="text-xs text-ink-soft">このプランは見送りました。最初から作り直すか、「AIに相談して直す」で直してほしいことを伝えてください。</p>
           <RegenerateButton className="w-full" />
         </div>
       )}
@@ -385,14 +385,14 @@ function EmptyPlan() {
           <div className="absolute inset-0 bg-gradient-to-r from-transparent to-night/70" />
         </div>
         <div className="relative flex flex-col justify-center p-7 sm:p-10">
-          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">{aiReady ? "AI PLANNER" : "PLANNER"}</p>
+          <p className="text-[10px] font-bold tracking-[0.3em] text-white/50">{aiReady ? "AUTO PLANNER" : "PLANNER"}</p>
           <p className="mt-2 text-2xl font-bold leading-snug">
             {event ? event.title : "イベントが未登録です"}
             <span className="block text-base font-medium text-white/70">{event ? "に向けたプランを逆算します" : "先にイベントを登録してください"}</span>
           </p>
           <p className="mt-3 text-sm leading-relaxed text-white/65">
-            空き時間・美容のベストなタイミング・混雑を避けたルートを{aiReady ? " AI が調べて" : "決まった目安にそって"}、スケジュールを提案します。予約はあなたが確認してからです。
-            {!availability && "（空き時間はプラン作成時に自動で確認します）"}
+            空き時間や、美容にちょうどいい時期、混みにくいルートを{aiReady ? " AI が調べて" : "決まった目安で考えて"}、スケジュールを組みます。予約は、あなたが確認してからです。
+            {!availability && "空き時間は、作るときに自動で確かめます。"}
           </p>
           {planError && !planning && event && (
             <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs leading-relaxed text-rose-200" role="alert">
@@ -402,7 +402,7 @@ function EmptyPlan() {
           {planning ? (
             <div className="mt-6">
               <AgentConsole running label={aiReady ? undefined : "プランを組み立てています…"} />
-              <p className="mt-2 text-[11px] text-white/50">{aiReady ? "AI が調べものをしながら作るため、30 秒〜1 分ほどかかります。" : "数秒で完成します。"}</p>
+              <p className="mt-2 text-[11px] text-white/50">{aiReady ? "調べながら作るので、30 秒〜1 分ほどかかります。" : "数秒で完成します。"}</p>
             </div>
           ) : !event ? (
             <Link href="/events" className="btn-primary mt-7 flex w-fit items-center gap-2 rounded-xl px-8 py-4 text-[15px] font-bold ring-1 ring-white/20">
@@ -474,7 +474,7 @@ export default function PlanPage() {
           <p className="font-display text-lg italic text-mute">Countdown Plan</p>
           <p className="text-xs text-mute">
             {plan.revision === 0 ? "最初の提案" : `${plan.revision}回目の見直し`} ・ {STATUS_LABEL[status]} ・{" "}
-            {plan.generatedBy.engine === "gemini" ? "AI が作成" : "かんたん提案で作成"}
+            {plan.generatedBy.engine === "gemini" ? "おまかせで作成" : "かんたん提案で作成"}
           </p>
           <h1 className="mt-1 text-2xl font-bold text-ink [word-break:auto-phrase] sm:text-[28px]">{plan.event.title} への準備プラン</h1>
         </div>
@@ -492,7 +492,7 @@ export default function PlanPage() {
         <div className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-ink" role="status">
           <span className="mt-1.5 h-2 w-2 shrink-0 animate-pulse rounded-full bg-rose-400" />
           <p className="flex-1">
-            <b>あなたの確認待ち</b> — 内容を見て、予約したいものにチェックを入れて承認してください。気になるところは「AIに相談して直す」から伝えられます。合わなければ最初から作り直せます。
+            <b>あなたの確認待ちです。</b>予約したいものにチェックを入れて、承認してください。直したいところは「AIに相談して直す」からどうぞ。最初から作り直すこともできます。
           </p>
         </div>
       )}

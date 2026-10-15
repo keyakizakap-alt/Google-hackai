@@ -44,7 +44,7 @@ export function FirstSteps() {
   const steps = [
     {
       title: "ライブを登録する",
-      desc: demoAvailable ? "デモのカレンダーから、架空のライブを読み込みます（ログイン不要）" : "公演名・日時・会場を入れるか、チケットのスクショから読み取ります",
+      desc: demoAvailable ? "ログインなしで、デモのカレンダーから架空のライブを読み込みます" : "公演名・日時・会場を入れるか、チケットのスクショから読み取ります",
       done: hasEvent,
       action: demoAvailable && !demoConnected ? (
         <DemoCalendarButton className="btn-primary min-h-[40px] rounded-xl px-3 text-xs font-bold text-white" />
@@ -56,7 +56,7 @@ export function FirstSteps() {
     },
     {
       title: "AI にプランを作ってもらう",
-      desc: "空き時間・美容のタイミング・混雑・天気を AI が調べ、検証で差し戻されたら自分で直します",
+      desc: "空き時間・美容のタイミング・混雑・天気を調べて作ります。おかしな所はチェックで見つけて直します",
       done: hasPlan,
       action: (
         <Link href="/plan" className="flex min-h-[40px] items-center gap-1 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink hover:bg-lav-50">
@@ -66,7 +66,7 @@ export function FirstSteps() {
     },
     {
       title: "確認して承認する",
-      desc: "承認して「予約する」を押したものだけ予約します（デモ予約：実在の店舗には届きません）",
+      desc: "承認して「予約する」を押したものだけを予約します。デモ予約なので、実在のお店には届きません",
       done: decided,
       action: (
         <Link href="/plan" className="flex min-h-[40px] items-center gap-1 rounded-xl border border-line bg-white px-3 text-xs font-bold text-ink hover:bg-lav-50">
@@ -84,7 +84,7 @@ export function FirstSteps() {
       </button>
       <p className="text-[11px] font-bold tracking-[0.25em] text-mute">GETTING STARTED</p>
       <h2 id="first-steps" className="mt-1 text-[15px] font-bold text-ink">
-        はじめての方へ：3 ステップで試せます
+        はじめての方は、この 3 ステップで試せます
       </h2>
       <ol className="mt-4 grid gap-3 md:grid-cols-3">
         {steps.map((s, i) => (

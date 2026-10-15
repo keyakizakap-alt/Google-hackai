@@ -44,7 +44,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Settings" title="設定">
-        連携サービスの状態とプライバシー設定です。
+        つないでいるサービスと、プライバシーの設定です。
       </PageHeader>
 
       <section className="card px-5">
@@ -54,9 +54,9 @@ export default function SettingsPage() {
             title="Google カレンダー"
             status={googleStatus}
             tone={googleTone}
-            desc={`予定を見るだけで、書き換えることはありません。空き時間は予定の時間だけから計算します。ライブを探すときだけ予定の名前・場所・日時を確認し、ライブ以外の予定はすぐに捨てます。${
-              !googleConnected && demoConnected ? "いまはデモのカレンダーとつながっているので、ライブの取り込みや空き時間はデモの予定で動いています。ご自分の予定で使うときは「Google で連携」を押してください。" : ""
-            }${!googleReady ? "ご自分の Google カレンダーとの連携は、管理者の設定が終わると使えるようになります。" : ""}`}
+            desc={`予定は見るだけで、書き換えません。空き時間は予定の時間だけで計算します。予定の名前・場所・日時はライブ探しにだけ使い、ほかの予定はすぐに捨てます。${
+              !googleConnected && demoConnected ? "いまはデモのカレンダーにつながっていて、取り込みも空き時間もデモの予定を使っています。ご自分の予定で使うときは「Google で連携する」を押してください。" : ""
+            }${!googleReady ? "ご自分の Google カレンダーは、管理者の設定が済むとつなげるようになります。" : ""}`}
             action={
               googleConnected ? (
                 <button onClick={() => void disconnect()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
@@ -73,7 +73,7 @@ export default function SettingsPage() {
               title="デモのカレンダー"
               status={demoConnected ? "連携中" : "未使用"}
               tone={demoConnected ? "ok" : "off"}
-              desc="ログインなしで、架空の予定が入ったデモ用カレンダーとの連携を体験できます。ライブの自動取り込みや空き時間の表示を、実際の連携と同じ流れで試せます。"
+              desc="架空の予定が入ったカレンダーで、ログインなしに試せます。ライブの取り込みも空き時間の表示も、本番と同じ流れです。"
               action={
                 demoConnected ? (
                   <button onClick={() => void stopDemoCalendar()} className="rounded-xl border border-line px-4 py-2 text-xs text-ink-soft hover:bg-lav-50">
@@ -87,10 +87,10 @@ export default function SettingsPage() {
           )}
           <Row
             icon={<Bot className="h-5 w-5" />}
-            title="AI プランナー"
+            title="プラン作成（Gemini）"
             status={session?.gemini.configured ? "利用中" : "かんたん提案"}
             tone={session?.gemini.configured ? "ok" : "alt"}
-            desc="Google の AI が空き時間と施術候補日時を調べてプランを作ります。店舗の空席・料金と経路は確認できた場合のみ表示します。AI を使えないときは、美容や移動の一般的な目安にそって提案します。"
+            desc="Gemini が空き時間や美容の候補日を調べて、プランを作ります。お店・料金・経路は、調べられたときだけ出します。Gemini を使えないときは、美容や移動の一般的な目安で提案します。"
           />
           <Row
             icon={<ShieldCheck className="h-5 w-5" />}
@@ -98,8 +98,8 @@ export default function SettingsPage() {
             status={session?.booking?.inApp ? (session.booking.demo ? "デモ予約" : "利用中") : "予約サイトへ案内"}
             desc={
               session?.booking?.inApp
-                ? `プランを承認して「予約する」を押したものだけ、アプリ内で予約し、予約の管理からキャンセルできます。AI が勝手に予約・キャンセルすることはありません。${session.booking.demo ? "いまはデモ予約のため、予約番号は発行されますが実在の店舗・交通機関・宿には届きません。" : ""}`
-                : "予約は各予約サイトで行い、アプリでは手続きの状況を管理します。"
+                ? `承認して「予約する」を押したものだけを予約します。キャンセルは「予約の管理」からできます。AI が勝手に予約やキャンセルをすることはありません。${session.booking.demo ? "いまはデモ予約です。予約番号は出ますが、実在のお店・交通機関・宿には届きません。" : ""}`
+                : "予約はそれぞれのサイトで行い、進み具合をアプリに記録します。"
             }
           />
           <Row
@@ -107,7 +107,7 @@ export default function SettingsPage() {
             title="乗換案内（駅すぱあと）"
             status={session?.ekispert.mode === "mcp" ? "利用中" : "目安で計算"}
             tone={session?.ekispert.mode === "mcp" ? "ok" : "alt"}
-            desc="乗り換えの情報を調べられたときだけ、時刻・乗り換え・運賃を表示します。調べられないときは乗り換え案内のサイトをご案内します。"
+            desc="調べられたときは、時刻・乗り換え・運賃を出します。調べられないときは、乗換案内のサイトを案内します。"
           />
         </ul>
       </section>
@@ -118,7 +118,7 @@ export default function SettingsPage() {
           AI ができること・できないこと
         </h2>
         <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-          AI には「調べて提案する」道具だけを渡しています。決めること・実行することは、あなたの操作でしか進みません（仕組みとテストで確かめています）。
+          AI ができるのは、調べて提案するところまでです。決めたり実行したりするのは、あなたが操作したときだけです。仕組みとテストで確かめています。
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[480px] text-left text-xs">
@@ -145,7 +145,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card p-5" aria-label="推しカラー">
-        <p className="mb-3 text-xs leading-relaxed text-ink-soft">アプリ全体のアクセントカラーを推しの色にできます。選んだ色はこの端末に記憶されます。</p>
+        <p className="mb-3 text-xs leading-relaxed text-ink-soft">アプリの差し色を推しの色にできます。選んだ色はこの端末に残ります。</p>
         <OshiColorPicker light />
       </section>
 
@@ -157,7 +157,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="auto-plan" className="font-bold text-ink">準備プランを自動で作る</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              イベントが登録されると、AI が空き時間・美容のタイミング・混雑と移動を自分で調べて、準備プランを自動で作ります。予約はあなたが確認して承認するまで進みません。
+              ライブを登録すると、空き時間や美容のタイミング、混雑と移動を調べて、準備プランを自動で作ります。予約は、あなたが承認するまで進みません。
             </p>
           </div>
           <button
@@ -181,8 +181,8 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1">
             <h2 id="auto-review" className="font-bold text-ink">承認したあとも見張って、見直し案を作る</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              承認したプランと、カレンダーに後から入った予定・公演日の天気を見比べます（調べるだけなら AI は使いません）。
-              困ることが見つかったら、AI が見直し案を作ります（同じ変化につき 1 回）。今のプランや予約は変えず、切り替えるかはあなたが決めます。
+              承認したプランを、あとから入った予定や公演日の天気と見比べます。
+              困りそうなことがあれば、見直し案を作ります。同じ変化で作るのは 1 回だけです。今のプランや予約はそのままで、切り替えるかはあなたが決めます。
             </p>
           </div>
           <button
@@ -206,8 +206,8 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1 basis-40">
             <h2 id="img-save" className="font-bold text-ink">推し画像</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-              推しの画像を選ぶと、ホームのチケットの背景に表示します。「この端末に保存」をオンにすると、この端末の中だけに保存し、次に開いたときも表示します。端末の外には送りません。
-              共用のパソコンではオフにするか、使い終わったら削除してください。
+              選んだ画像は、ホームのチケットの背景になります。「この端末に保存」をオンにすると、次に開いたときも出ます。画像は端末の外に送りません。
+              共用のパソコンでは、オフにするか、使い終わったら消してください。
             </p>
           </div>
           <span className="flex shrink-0 items-center gap-2 text-xs font-bold text-ink-soft">
@@ -230,13 +230,13 @@ export default function SettingsPage() {
             <>
               <p className="text-sm font-bold text-ink">{event.artist} の推し画像</p>
               <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-                同じアーティストのイベントすべてと、ホームのチケットの背景に表示されます。画像はこの端末の外には送りません。
-                {persistImages ? "この端末に保存されるので、次に開いたときも表示されます。" : "「この端末に保存」をオンにすると、次に開いたときも表示されます。"}
+                同じアーティストのライブすべてで、チケットの背景に使います。画像は端末の外に送りません。
+                {persistImages ? "この端末に保存するので、次に開いたときも出ます。" : "「この端末に保存」をオンにすると、次に開いたときも出ます。"}
               </p>
             </>
           ) : (
             <p className="text-xs text-ink-soft">
-              ライブを登録すると、推しごとに画像を設定できます。
+              ライブを登録すると、推しごとに画像を選べます。
               <Link href="/events" className="ml-1 font-bold text-lav-700 underline-offset-2 hover:underline">
                 ライブを登録
               </Link>
@@ -273,7 +273,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cloud px-4 py-3 text-xs text-ink-soft">
-          <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです（画面を閉じると消えます）"}</span>
+          <span>{persistImages ? `保存中の推し画像：${saved} 枚` : "保存はオフです。画面を閉じると消えます"}</span>
           <button
             type="button"
             onClick={() => {
@@ -293,10 +293,10 @@ export default function SettingsPage() {
         </h2>
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-soft">
           <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />公演・プラン・予約メモはこの端末に保存します。Google カレンダーの予定は保存しません。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約・キャンセル・支払いをすることはありません。提案は必ずあなたの確認待ちで止まります。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中だけで作ります。予定を端末の外に送ったり保存したりしません。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />あなたが承認していないプランは、予約の手続きに進めない仕組みになっています。</li>
-          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携は、鍵をかけてこの端末にだけ記録し、24 時間で自動的に切れます。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />AI が勝手に予約・キャンセル・支払いをすることはありません。提案はいつも、あなたの確認待ちで止まります。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />リマインドはこの端末の中で作ります。予定を外に送ったり、保存したりはしません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />承認していないプランは、予約に進めません。</li>
+          <li className="flex gap-2"><CalendarCheck className="mt-1 h-4 w-4 shrink-0 text-lav-500" />Google との連携の情報は、暗号化してこの端末にだけ置きます。24 時間で自動で切れます。</li>
         </ul>
         <button type="button" onClick={() => {
           if (window.confirm("この端末に保存した公演・プラン・予約メモを削除しますか？")) void clearLocalData();
@@ -311,12 +311,12 @@ export default function SettingsPage() {
 /** [操作, AI, 見張り, あなた]。値は「○」「×」か、条件つきの短い説明 */
 const PERMISSIONS: readonly (readonly [string, string, string, string])[] = [
   ["カレンダーを読む", "○ 時間帯だけ", "○ 時間帯だけ", "○"],
-  ["カレンダーに書き込む", "×", "×", "× アプリにその権限がありません"],
+  ["カレンダーに書き込む", "×", "×", "× その権限がありません"],
   ["天気・乗り換え・立ち寄り先を調べる", "○", "○ 天気", "—"],
   ["プランを作る・直す", "○ 提案まで", "○ 変化があるときだけ見直し案", "○"],
   ["承認・見送り", "×", "×", "○"],
-  ["予約・キャンセル", "×", "×", "○ 確認のうえ（同じ承認は 1 回まで）"],
-  ["支払い", "×", "×", "× アプリに機能がありません"],
+  ["予約・キャンセル", "×", "×", "○ 確認してから。1 つの承認で 1 回まで"],
+  ["支払い", "×", "×", "× その機能がありません"],
   ["予約サイトのリンクを出す", "許可したサイトだけ", "—", "—"],
 ];
 
