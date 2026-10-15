@@ -36,6 +36,7 @@ export function friendlyStep(name: string): string {
     fallback: "切り替え",
     model_fallback: "切り替え",
     compat_mode: "切り替え",
+    rule_fallback: "切り替え",
   };
   return map[name] ?? "安全確認";
 }

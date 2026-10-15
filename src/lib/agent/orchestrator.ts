@@ -60,8 +60,14 @@ export interface AgentRunOutput {
   engine: "gemini" | "rule-based";
 }
 
-/** プラン作成全体の制限時間。Cloud Run のリクエストのタイムアウト（既定 300 秒）より十分短くする */
-const DEADLINE_MS = 150_000;
+/**
+ * AI（Gemini）に使わせる時間。API の上限（180 秒）・Cloud Run のタイムアウト（既定 300 秒）より十分短くし、
+ * 残りは、時間切れのときにルールでプランを組み立てる分として残す（ルールは数秒で終わる）。
+ * 本番で AI の応答が遅く 150 秒を使い切り、プランを 1 件も返せないことがあったため
+ */
+const AI_DEADLINE_MS = 120_000;
+/** 1 回の呼び出しの上限。1 回の遅い応答で持ち時間をすべて使わないようにする */
+const MODEL_CALL_TIMEOUT_MS = 45_000;
 
 export class AgentUnavailableError extends Error {
   /**
@@ -101,7 +107,8 @@ function isTimeout(e: unknown): boolean {
   return e instanceof AgentDeadlineError || name === "TimeoutError" || name === "AbortError";
 }
 
-const SLOW_MESSAGE = "プラン作りに時間がかかってしまいました。もう一度お試しください。登録したライブはそのまま残っています";
+/** AI の応答が遅く、ルールで組み立てたときの説明（画面の進み具合と注意書きに出す） */
+const RULE_FALLBACK_SUMMARY = "混み合っていたため、決まった手順で組み立てました";
 
 /** 予備のモデルで作り直すのに最低限ほしい残り時間 */
 const MIN_TIME_FOR_FALLBACK_MS = 30_000;
@@ -135,7 +142,7 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
 
   if (isGeminiConfigured()) {
     engine = "gemini";
-    const deadline = Date.now() + DEADLINE_MS;
+    const deadline = Date.now() + AI_DEADLINE_MS;
     ctx.deadline = deadline;
     const models = modelCandidates();
     let compat = 0;
@@ -163,7 +170,12 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
           if (status === 400 && usage.modelCalls === 0) {
             await probeGeminiRequest({ requestId: input.requestId, model, systemInstruction: SYSTEM_INSTRUCTION, userPrompt: firstUserPrompt(input, ctx), declarations: NATIVE_DECLARATIONS, toolConfig: toolConfigFor(false) }).catch(() => undefined);
           }
-          throw new AgentUnavailableError(timeout ? SLOW_MESSAGE : undefined, failureReason(e));
+          // 時間切れは、AI の代わりにルールで組み立てて必ずプランを返す（AI で作ったようには見せない）
+          if (timeout) {
+            engine = "rule-based";
+            break;
+          }
+          throw new AgentUnavailableError(undefined, failureReason(e));
         }
         // 予備のモデルで最初から作り直す。途中の会話には前のモデル専用の情報（思考の署名）が含まれるため引き継がない
         Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, ekispertSucceeded: undefined, forecast: undefined, lastRejection: undefined });
@@ -173,9 +185,15 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   }
   if (!ctx.submitted) {
     if (engine === "gemini") {
-      // 通信はできたが、決められた回数内にタイムラインを提出できなかった
+      // 通信はできたが、決められた回数内にタイムラインを提出できなかった（検証で差し戻され続けた等）。
+      // 乗っ取られたモデルが言い張り続ける場合もあるため、ここではルールに切り替えずに止める
       logger.error("agent.gemini.incomplete", { ...logBase, steps: config.gemini.maxSteps, model });
       throw new AgentUnavailableError("うまくプランを仕上げられませんでした。もう一度お試しください。登録したライブはそのまま残っています");
+    }
+    if (isGeminiConfigured()) {
+      // AI の時間切れでの切り替え。途中の調べものの結果は使わず、最初から組み立てる
+      Object.assign(ctx, { submitted: undefined, rejectedSubmissions: 0, lastRejection: undefined, deadline: undefined });
+      trace.push({ step: trace.length + 1, type: "guardrail", name: "rule_fallback", ok: true, latencyMs: 0, summary: RULE_FALLBACK_SUMMARY });
     }
     await runRuleBasedPlanner(ctx, trace);
   }
@@ -200,6 +218,10 @@ export async function runPlanningAgent(input: AgentRunInput): Promise<AgentRunOu
   const warnings = [...new Set(ctx.submitted.warnings)].slice(0, 10);
   if (input.calendarUnavailable) warnings.unshift("カレンダーの予定を読み込めなかったため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
   else if (input.calendarSource === "demo") warnings.unshift("カレンダー未連携のため、既存予定との重なりは確認できていません。提案日時を必ず確認してください。");
+  // いちばん大事な知らせなので先頭に置く
+  if (engine === "rule-based" && isGeminiConfigured()) {
+    warnings.unshift("混み合っていたため、今回は決まった手順で組み立てました。お店や宿の候補は入っていません。少し時間をおいて「AIに相談して直す」から頼むと、お店や宿まで調べ直せます。");
+  }
   if (!items.some((i) => i.kind === "transit")) warnings.push("移動のしかたとかかる時間は、まだ確認できていません。乗り換え案内のサイトで確かめてください。");
   if (items.some((i) => i.route?.source === "estimate" || i.route?.source === "mock")) {
     warnings.push("移動の所要時間は目安です（列車・時刻・運賃は調べていません）。乗る電車は移動の項目のリンクから必ず確かめてください。");
@@ -371,7 +393,7 @@ async function runGeminiLoop(input: AgentRunInput, ctx: AgentContext, trace: Tra
         tools: [{ functionDeclarations: mustSubmit ? declarations.filter((d) => d.name === "submit_timeline") : declarations }],
         // AUTO のときは指定を送らない（ANY は一部の環境で拒否されるため既定にしない。config.ts 参照）
         ...(toolConfigFor(mustSubmit) ? { toolConfig: toolConfigFor(mustSubmit) } : {}),
-        abortSignal: AbortSignal.timeout(Math.max(5_000, deadline - Date.now())),
+        abortSignal: AbortSignal.timeout(Math.min(MODEL_CALL_TIMEOUT_MS, Math.max(5_000, deadline - Date.now()))),
         ...(config.gemini.thinkingLevel && compat === 0 ? { thinkingConfig: { thinkingLevel: config.gemini.thinkingLevel as ThinkingLevel } } : {}),
       },
     });
